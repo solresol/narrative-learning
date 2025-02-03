@@ -22,5 +22,7 @@ create table if not exists inferences (
   creation_time datetime default current_timestamp,
   patient_id text references medical_treatment_data(patientid),
   narrative_text text,
-  prediction text
+  llm_stderr text,
+  prediction text,
+  primary key (round_id, patient_id)
 );
