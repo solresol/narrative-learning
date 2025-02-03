@@ -1,62 +1,139 @@
-import pandas as pd
+#!/usr/bin/env python3
+import argparse
 import sqlite3
+import pandas as pd
 import uuid
+import sys
 
-# Load the dataset
-titanic_df = pd.read_csv("titanic.csv")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Import Titanic CSV data into the medical treatment database."
+    )
+    parser.add_argument(
+        "--database", default="titanic_medical.sqlite",
+        help="Path to the SQLite database file."
+    )
+    parser.add_argument(
+        "--schema", default="schema.sql",
+        help="SQL file containing schema initialisation commands (default: schema.sql)."
+    )
+    parser.add_argument(
+        "--source", default="titanic.csv",
+        help="CSV source file (default: titanic.csv)."
+    )
+    parser.add_argument(
+        "--prompt", default="Choose randomly",
+        help="Prompt to insert into the rounds table (default: 'Choose randomly')."
+    )
+    args = parser.parse_args()
 
-medical_df = pd.DataFrame({})
+    # Connect to the database.
+    try:
+        conn = sqlite3.connect(args.database)
+    except Exception as e:
+        print(f"Oops, failed to connect to database '{args.database}': {e}", file=sys.stderr)
+        sys.exit(1)
 
-# 1. Convert PassengerId to a UUID
-medical_df['Decodex'] = titanic_df.PassengerId
+    # Initialise the schema (this won't drop any existing tables because the schema file should use IF NOT EXISTS)
+    try:
+        with open(args.schema, "r", encoding="utf-8") as f:
+            schema_sql = f.read()
+        conn.executescript(schema_sql)
+    except Exception as e:
+        print(f"Oops, failed to initialise schema from '{args.schema}': {e}", file=sys.stderr)
+        sys.exit(1)
 
-medical_df['PatientID'] = [str(uuid.uuid4()) for _ in range(len(titanic_df))]
+    # Load the source CSV.
+    try:
+        titanic_df = pd.read_csv(args.source)
+    except Exception as e:
+        print(f"Oops, failed to read CSV file '{args.source}': {e}", file=sys.stderr)
+        sys.exit(1)
 
-# 2. Convert Survived (0,1) -> (Failure, Success)
-medical_df['Outcome'] = titanic_df['Survived'].map({0: 'Failure', 1: 'Success'})
+    # Build the medical_df by transforming titanic_df.
+    # We'll construct a new DataFrame with the required columns.
+    medical_df = pd.DataFrame()
 
-# 3. Convert Pclass (1,2,3) -> (Beta, Omicron, Delta)
-medical_df['Group'] = titanic_df['Pclass'].map({1: 'Beta', 2: 'Omicron', 3: 'Delta'})
+    # 1. Use PassengerId as Decodex.
+    medical_df['Decodex'] = titanic_df['PassengerId']
 
-# 4. Drop Name
-titanic_df = titanic_df.drop(columns=['Name'])
+    # 2. Generate a unique PatientID.
+    medical_df['Patient_ID'] = [str(uuid.uuid4()) for _ in range(len(titanic_df))]
 
-# 5. Invert Sex
-medical_df['Sex'] = titanic_df['Sex'].map({'male': 'female', 'female': 'male'})
+    # 3. Outcome: Convert Survived (0,1) -> (Failure, Success)
+    medical_df['Outcome'] = titanic_df['Survived'].map({0: 'Failure', 1: 'Success'})
 
-# 6. Convert Age to Treatment Months (3 * Age), imputing missing values with mean
-mean_age = titanic_df['Age'].mean()
-medical_df['Treatment Months'] = titanic_df['Age'].fillna(mean_age) * 3
+    # 4. Group: Convert Pclass (1,2,3) -> (Beta, Omicron, Delta)
+    medical_df['Treatment_Group'] = titanic_df['Pclass'].map({1: 'Beta', 2: 'Omicron', 3: 'Delta'})
 
-titanic_df = titanic_df.drop(columns=['Age'])
+    # 5. Drop Name from titanic_df (we don't need it further)
+    titanic_df = titanic_df.drop(columns=['Name'])
 
-# 7. Convert SibSp to "Genetic Class A Matches" (SibSp + 1)
-medical_df['Genetic Class A Matches'] = titanic_df['SibSp'] + 1
+    # 6. Sex: Invert Sex (male becomes female and vice versa)
+    medical_df['Sex'] = titanic_df['Sex'].map({'male': 'female', 'female': 'male'})
 
-titanic_df = titanic_df.drop(columns=['SibSp'])
+    # 7. Treatment Months: Convert Age to Treatment Months (3 * Age), imputing missing with mean.
+    mean_age = titanic_df['Age'].mean()
+    medical_df['Treatment_Months'] = titanic_df['Age'].fillna(mean_age) * 3
+    titanic_df = titanic_df.drop(columns=['Age'])
 
-# 8. Convert Parch to "Genetic Class B Matches" (Parch + 1)
-medical_df['Genetic Class B Matches'] = titanic_df['Parch'] + 1
+    # 8. Genetic Class A Matches: SibSp + 1.
+    medical_df['Genetic_Class_A_Matches'] = titanic_df['SibSp'] + 1
+    titanic_df = titanic_df.drop(columns=['SibSp'])
 
-titanic_df = titanic_df.drop(columns=['Parch'])
+    # 9. Genetic Class B Matches: Parch + 1.
+    medical_df['Genetic_Class_B_Matches'] = titanic_df['Parch'] + 1
+    titanic_df = titanic_df.drop(columns=['Parch'])
 
-# 9. Convert Fare to "TcQ mass" (1000 * Fare)
-medical_df['TcQ mass'] = titanic_df['Fare'] * 1000
+    # 10. TcQ mass: Fare * 1000.
+    medical_df['TcQ_mass'] = titanic_df['Fare'] * 1000
+    titanic_df = titanic_df.drop(columns=['Fare'])
 
-titanic_df = titanic_df.drop(columns=['Fare'])
+    # 11. Drop Cabin.
+    titanic_df = titanic_df.drop(columns=['Cabin'])
 
-# 10. Drop Cabin
-titanic_df = titanic_df.drop(columns=['Cabin'])
+    # 12. Cohort: Change Embarked (S, C, Q) -> (Melbourne, Delhi, Lisbon).
+    medical_df['Cohort'] = titanic_df['Embarked'].map({'S': 'Melbourne', 'C': 'Delhi', 'Q': 'Lisbon'})
+    titanic_df = titanic_df.drop(columns=['Embarked'])
 
-# 11. Change Embarked to "Cohort" (S,C,Q -> Melbourne, Delhi, Lisbon)
-medical_df['Cohort'] = titanic_df['Embarked'].map({'S': 'Melbourne', 'C': 'Delhi', 'Q': 'Lisbon'})
+    # Set Patient_ID as the index.
+    medical_df.set_index('Patient_ID', inplace=True)
 
-titanic_df = titanic_df.drop(columns=['Embarked'])
+    insert_sql = '''
+    INSERT INTO medical_treatment_data (
+      Patient_ID,
+      Decodex,
+      Outcome,
+      Treatment_Group,
+      Sex,
+      Treatment_Months,
+      "Genetic_Class_A_Matches",
+      "Genetic_Class_B_Matches",
+      TcQ_mass,
+      Cohort
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    '''
+    cur = conn.cursor()
+    for patient_id, row in medical_df.iterrows():
+        cur.execute(insert_sql, (
+            patient_id,
+            row['Decodex'],
+            row['Outcome'],
+            row['Treatment_Group'],
+            row['Sex'],
+            row['Treatment_Months'],
+            row['Genetic_Class_A_Matches'],
+            row['Genetic_Class_B_Matches'],
+            row['TcQ_mass'],
+            row['Cohort']
+        ))
+    conn.commit()
+        
+    cur.execute("INSERT INTO rounds (prompt) VALUES (?)", (args.prompt,))
+    conn.commit()
 
-medical_df.set_index('PatientID', inplace=True)
+    print("Database initialised successfully!")
+    conn.close()
 
-# Save the transformed dataset to a SQLite database
-sqlite_path = "titanic_medical.sqlite"
-conn = sqlite3.connect(sqlite_path)
-medical_df.to_sql("medical_treatment_data", conn, if_exists="replace", index=True)
-conn.close()
+if __name__ == '__main__':
+    main()

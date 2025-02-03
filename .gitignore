@@ -170,3 +170,4 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 *~
+titanic_medical.sqlite

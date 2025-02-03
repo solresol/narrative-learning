@@ -1,13 +1,13 @@
 CREATE TABLE IF NOT EXISTS medical_treatment_data (
-  PatientID TEXT primary key,
+  Patient_ID TEXT primary key,
   Decodex INTEGER,
   Outcome TEXT,
-  Group TEXT,
+  Treatment_Group TEXT,
   Sex TEXT,
-  Treatment Months REAL,
-  Genetic Class A Matches INTEGER,
-  Genetic Class B Matches INTEGER,
-  TcQ mass REAL,
+  Treatment_Months REAL,
+  Genetic_Class_A_Matches INTEGER,
+  Genetic_Class_B_Matches INTEGER,
+  TcQ_mass REAL,
   Cohort TEXT
 );
 
@@ -20,7 +20,7 @@ create table if not exists rounds (
 create table if not exists inferences (
   round_id integer references rounds(round_id),
   creation_time datetime default current_timestamp,
-  patientid text references medical_treatment_data(patientid),
+  patient_id text references medical_treatment_data(patientid),
   narrative_text text,
   prediction text
 );
