@@ -19,6 +19,7 @@ create table if not exists rounds (
 
 create table if not exists inferences (
   round_id integer references rounds(round_id),
+  creation_time datetime default current_timestamp,
   patientid text references medical_treatment_data(patientid),
   narrative_text text,
   prediction text
