@@ -7,32 +7,20 @@ import subprocess
 import json
 import string
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Show the round prompt and patient data (excluding Decodex, Outcome, and PatientID)"
-    )
-    parser.add_argument('--database', default='titanic_medical.sqlite', help="Path to the SQLite database file")
-    parser.add_argument('--round-id', type=int, required=True, help="Round ID")
-    parser.add_argument('--patient-id', required=True, help="Patient ID")
-    parser.add_argument("--dry-run", action="store_true", help="Just show the prompt, then exit")
-    parser.add_argument("--model", default="phi4:latest")
-    # maybe I should check an environment variable for the default model
-    args = parser.parse_args()
-
-    conn = sqlite3.connect(args.database)
+def predict(conn, round_id, patient_id, model='phi4:latest', dry_run=False):
 
     # Use common code to get the round instructions.
-    instructions = get_round_prompt(conn, args.round_id)
+    instructions = get_round_prompt(conn, round_id)
     if instructions is None:
-        sys.exit(f"Round ID {args.round_id} not found.")
+        sys.exit(f"Round ID {round_id} not found.")
 
     cur = conn.cursor()
     # Check to see if it exists already
     cur.execute("select count(*) from inferences where round_id = ? and patient_id = ?",
-                [args.round_id, args.patient_id])
+                [round_id, patient_id])
     row = cur.fetchone()
     if row[0] == 1:
-        sys.exit(f"Patient {args.patient_id} has already been evaluated in round {args.round_id}")
+        sys.exit(f"Patient {patient_id} has already been evaluated in round {round_id}")
 
     # Retrieve patient data, excluding PatientID, Decodex, and Outcome.
     patient_query = """
@@ -41,10 +29,10 @@ def main():
       FROM medical_treatment_data
      WHERE Patient_ID = ?
     """
-    cur.execute(patient_query, (args.patient_id,))
+    cur.execute(patient_query, (patient_id,))
     patient_row = cur.fetchone()
     if not patient_row:
-        sys.exit(f"Patient ID '{args.patient_id}' not found.")
+        sys.exit(f"Patient ID '{patient_id}' not found.")
 
     prompt = f"""This is an experiment in identifying whether an LLM can predict medical outcomes. Use the following methodology for predicting the outcome for this patient.
 
@@ -73,11 +61,11 @@ Output in JSON format like this:
 `narrative_text` is where you describe your thinking process in evaluating the prompt.
 `prediction` is either Success or Failure
     """
-    if args.dry_run:
+    if dry_run:
         print(prompt)
-        sys.exit(0)
+        return
 
-    command = ["ollama", "run", args.model, "--format=json", "--verbose"]
+    command = ["ollama", "run", model, "--format=json", "--verbose"]
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -91,12 +79,27 @@ Output in JSON format like this:
     print(stdout)
     answer = json.loads(stdout)
     #print(f"stdout = {json.dumps(answer,indent=4)}")
-    info_start = stderr.index("load duration:")
+    info_start = stderr.index("total duration:")
     stderr = stderr[info_start:]
     print(f"stderr = {stderr}")
     cur.execute("insert into inferences (round_id, patient_id, narrative_text, llm_stderr, prediction) values (?, ?, ?, ?, ?)",
-                   (args.round_id, args.patient_id, answer['narrative_text'], stderr, answer['prediction']))
+                   (round_id, patient_id, answer['narrative_text'], stderr, answer['prediction']))
     conn.commit()
 
+
+
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(
+        description="Show the round prompt and patient data (excluding Decodex, Outcome, and PatientID)"
+    )
+    parser.add_argument('--database', default='titanic_medical.sqlite', help="Path to the SQLite database file")
+    parser.add_argument('--round-id', type=int, required=True, help="Round ID")
+    parser.add_argument('--patient-id', required=True, help="Patient ID")
+    parser.add_argument("--dry-run", action="store_true", help="Just show the prompt, then exit")
+    parser.add_argument("--model", default="phi4:latest")
+    # maybe I should check an environment variable for the default model
+    args = parser.parse_args()
+
+    conn = sqlite3.connect(args.database)
+
+    predict(conn, args.round_id, args.patient_id, args.model, args.dry_run)
