@@ -11,11 +11,6 @@ CREATE TABLE IF NOT EXISTS medical_treatment_data (
   Cohort TEXT
 );
 
-create table if not exists rounds (
-  round_id integer primary key autoincrement,
-  round_start datetime default current_timestamp,
-  prompt text
-);
 
 create table if not exists inferences (
   round_id integer references rounds(round_id),
@@ -26,3 +21,22 @@ create table if not exists inferences (
   prediction text,
   primary key (round_id, patient_id)
 );
+
+create table if not exists splits (
+  split_id integer primary key autoincrement
+);
+
+create table if not exists patient_split (
+  split_id integer references splits(split_id),
+  patient_id text references medical_treatment_data(patient_id),
+  holdout bool not null default false,
+  primary key (split_id, patient_id)
+);
+
+create table if not exists rounds (
+  round_id integer primary key autoincrement,
+  round_start datetime default current_timestamp,
+  split_id integer references splits(split_id),
+  prompt text
+);
+

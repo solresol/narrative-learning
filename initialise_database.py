@@ -4,6 +4,7 @@ import sqlite3
 import pandas as pd
 import uuid
 import sys
+import random
 
 def main():
     parser = argparse.ArgumentParser(
@@ -25,6 +26,9 @@ def main():
         "--prompt", default="Choose randomly",
         help="Prompt to insert into the rounds table (default: 'Choose randomly')."
     )
+    parser.add_argument(
+        "--holdout", default=0.2, type=float,
+        help="Proportion of the data to mark as held out (never to be used in training)")
     args = parser.parse_args()
 
     # Connect to the database.
@@ -99,6 +103,13 @@ def main():
     # Set Patient_ID as the index.
     medical_df.set_index('Patient_ID', inplace=True)
 
+    cur = conn.cursor()
+    cur.execute("insert into splits default values returning split_id")
+    row = cur.fetchone()
+    split_id = row[0]
+        
+    cur.execute("INSERT INTO rounds (prompt, split_id) VALUES (?,?)", (args.prompt,split_id))
+    
     insert_sql = '''
     INSERT INTO medical_treatment_data (
       Patient_ID,
@@ -113,7 +124,6 @@ def main():
       Cohort
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     '''
-    cur = conn.cursor()
     for patient_id, row in medical_df.iterrows():
         cur.execute(insert_sql, (
             patient_id,
@@ -127,9 +137,11 @@ def main():
             row['TcQ_mass'],
             row['Cohort']
         ))
+        cur.execute("insert into patient_split (split_id, patient_id, holdout) values (?,?,?)",
+                    (split_id, patient_id, random.random() < args.holdout))
+
     conn.commit()
-        
-    cur.execute("INSERT INTO rounds (prompt) VALUES (?)", (args.prompt,))
+
     conn.commit()
 
     print("Database initialised successfully!")
