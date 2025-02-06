@@ -171,3 +171,4 @@ cython_debug/
 .pypirc
 *~
 titanic_medical.sqlite
+old_titanic_medical.sqlite
