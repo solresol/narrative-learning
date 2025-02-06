@@ -13,8 +13,13 @@ for any other step.
 
 Check to see if it works... this should produce a long list:
 
-`python list_missing_patients.py --round 1`
+`./process_round.py --list --round 1`
 
 
 ## Operation
 
+This will get things going.
+
+`./process_round.py --list --round 1` 
+
+I haven't implemented the actual training yet.
