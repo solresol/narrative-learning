@@ -2,7 +2,7 @@
 import argparse
 import sqlite3
 import sys
-from common import get_round_prompt
+from common import get_round_prompt, get_patient_features
 import subprocess
 import json
 import string
@@ -22,17 +22,7 @@ def predict(conn, round_id, patient_id, model='phi4:latest', dry_run=False):
     if row[0] == 1:
         sys.exit(f"Patient {patient_id} has already been evaluated in round {round_id}")
 
-    # Retrieve patient data, excluding PatientID, Decodex, and Outcome.
-    patient_query = """
-    SELECT Treatment_Group, Sex, Treatment_Months, Genetic_Class_A_Matches,
-           Genetic_Class_B_Matches, TcQ_mass, Cohort
-      FROM medical_treatment_data
-     WHERE Patient_ID = ?
-    """
-    cur.execute(patient_query, (patient_id,))
-    patient_row = cur.fetchone()
-    if not patient_row:
-        sys.exit(f"Patient ID '{patient_id}' not found.")
+    patient_features = get_patient_features(conn, patient_id)
 
     prompt = f"""This is an experiment in identifying whether an LLM can predict medical outcomes. Use the following methodology for predicting the outcome for this patient.
 
@@ -41,18 +31,10 @@ def predict(conn, round_id, patient_id, model='phi4:latest', dry_run=False):
 ```
 
 Patient Data:
-"""
-    columns = [
-        "Treatment Group", "Sex", "Treatment Months",
-        "Genetic_Class_A_Matches", "Genetic_Class_B_Matches",
-        "TcQ_mass", "Cohort"
-    ]
-    for col, value in zip(columns, patient_row):
-        prompt += f"{col}: {value}\n"
-    prompt += """
+{patient_features}
 
 Output in JSON format like this:
-
+""" + """
     {
         "narrative_text": "...",
         "prediction": "..."
@@ -78,6 +60,10 @@ Output in JSON format like this:
     stdout, stderr = process.communicate(input=prompt)
     print(stdout)
     answer = json.loads(stdout)
+    if answer['prediction'] not in ['Success', 'Failure']:
+        # We didn't do anything. Leave it for now, and hopefully we'll come
+        # back in another round
+        return
     #print(f"stdout = {json.dumps(answer,indent=4)}")
     info_start = stderr.index("total duration:")
     stderr = stderr[info_start:]
