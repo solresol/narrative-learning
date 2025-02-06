@@ -2,6 +2,16 @@
 
 What if a text-based explanation was the machine learning model?
 
+
+## Explanation
+
+Normally we train up a model, and then we create an explanation so that human beings can understand it. Ideally, understanding should be sufficient for a human being to reproduce the activity of the computer -- it should be (English) language human-readable text. But now that computers can act on the instructions from human-readable text, the human-readable text could be the model itself. If so, we don't need the model: we could iterate (the LLM improving the human-readable text; evaluate the results). Small studies would be "how dumb can the evaluating model be?"; "how dumb can the training/prompt-improver model be?"; "how sensitive is it to the amount of history or the number of examples given?"; "how does it compare to other classification techniques?"
+
+### Side question
+
+How would we do narrative learning regressors?
+
+
 ## Data prep
 
 `python initialise_database.py`
