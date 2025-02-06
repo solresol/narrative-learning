@@ -2,7 +2,9 @@
 import argparse
 import sqlite3
 import sys
-from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples
+import json
+
+from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples, get_split_id
 import subprocess
 
 def get_prompt_for_updating_model(conn, round_id, example_count, history_rounds):
@@ -82,7 +84,7 @@ def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
     stderr = stderr[info_start:]
     split_id = get_split_id(conn, old_round_id)
     cur = conn.cursor()
-    cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?) returning round_id",
+    cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?,?) returning round_id",
                 [split_id, answer['updated_prompt'], answer['reasoning'], stderr])
     row = cur.fetchone()
     if row is None:
@@ -110,11 +112,11 @@ def main():
         sys.exit(0)
     new_round_id, details = run_reprompt(conn, prompting_creation_prompt, args.round_id, args.model)
     if args.verbose:
-        print("REASONING: {details['reasoning']}")
+        print(f"REASONING: {details['reasoning']}")
         print()
-        print("NEW PROMPT: {details['updated_prompt']}")
+        print(f"NEW PROMPT: {details['updated_prompt']}")
         print()
-        print("NEW ROUND ID: {new_round_id}")
+        print(f"NEW ROUND ID: {new_round_id}")
 
 if __name__ == '__main__':
     main()
