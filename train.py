@@ -90,6 +90,7 @@ def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
     if row is None:
         sys.exit("Failed to create a new round")
     new_round_id = row[0]
+    conn.commit()
     return (new_round_id, answer)
 
 
