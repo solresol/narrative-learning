@@ -3,7 +3,7 @@ import argparse
 import sqlite3
 import sys
 from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples
-
+import subprocess
 
 def get_prompt_for_updating_model(conn, round_id, example_count, history_rounds):
     answer = """
@@ -63,19 +63,58 @@ didn't work.
     Where `reasoning` explains why you are making the change and `updated_prompt` is the prompt that you think we should run next.
 """
     return answer
-    
+
+def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
+    command = ["ollama", "run", model, "--format=json", "--verbose"]
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True  # This ensures text mode instead of bytes
+    )
+    # Send the prompt and get outputs
+    stdout, stderr = process.communicate(input=prompting_creation_prompt)
+    answer = json.loads(stdout)
+    if 'updated_prompt' not in answer:
+        sys.exit(f"No updated prompt supplied: {answer}")
+    info_start = stderr.index("total duration:")
+    stderr = stderr[info_start:]
+    split_id = get_split_id(conn, old_round_id)
+    cur = conn.cursor()
+    cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?) returning round_id",
+                [split_id, answer['updated_prompt'], answer['reasoning'], stderr])
+    row = cur.fetchone()
+    if row is None:
+        sys.exit("Failed to create a new round")
+    new_round_id = row[0]
+    return (new_round_id, answer)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
     parser.add_argument('--database', default='titanic_medical.sqlite', help="Path to the SQLite database file")
     parser.add_argument('--round-id', type=int, required=True, help="Round ID")
     parser.add_argument('--example-count', type=int, default=3, help="Number of examples per cell")
     parser.add_argument('--show-history', type=int, default=2, help="Show confusion matrices for the previous N rounds")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--model", default="llama3.3:latest", help="Model to do the retraining, not the model that does the inference")
     args = parser.parse_args()
 
     conn = sqlite3.connect(args.database)
-    print(get_prompt_for_updating_model(conn, args.round_id, args.example_count, args.show_history))
-
-
+    prompting_creation_prompt = get_prompt_for_updating_model(conn, args.round_id, args.example_count, args.show_history)
+    if args.dry_run or args.verbose:
+        print(prompting_creation_prompt)
+    if args.dry_run:
+        sys.exit(0)
+    new_round_id, details = run_reprompt(conn, prompting_creation_prompt, args.round_id, args.model)
+    if args.verbose:
+        print("REASONING: {details['reasoning']}")
+        print()
+        print("NEW PROMPT: {details['updated_prompt']}")
+        print()
+        print("NEW ROUND ID: {new_round_id}")
 
 if __name__ == '__main__':
     main()
