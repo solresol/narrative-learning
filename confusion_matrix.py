@@ -7,16 +7,23 @@ from common import get_round_prompt, get_confusion_matrix, get_printable_confusi
 
 def get_prompt_for_updating_model(conn, round_id, example_count, history_rounds):
     answer = """
-You are part of a program that is trying to learn the causes for success or failure of
-a medical intervention. At each round, a prompt is shown to an LLM together with the
-each patient's medical details one at a time. It then attempts to predict the outcome based
-on the rules in the prompt. If the prompt has descriptive rules that help predict the outcome,
-this process works well.
+    
+You are part of a program that is trying to learn the causes for
+success or failure of a medical intervention. At each round, a prompt
+is shown to an LLM together with the each patient's medical details
+one at a time. It then attempts to predict the outcome based on the
+rules in the prompt. This process works well if the prompt has very
+explicit and clear rules: aim for unambiguous thresholds for values,
+clear criteria for labels and careful wording for and 'AND' or 'OR'
+logic you need to express.
 
 We would like to improve the prompt that is being used.
 
-Please create a new prompt that will reduce the number of false positives and false negatives
-in this dataset. You can see the prompt(s) that have been used previously, and how effective they were. There are also some examples of where those prompt(s) did and didn't work.
+Please create a new prompt that will reduce the number of false
+positives and false negatives in this dataset. You can see the
+prompt(s) that have been used previously, and how effective they
+were. There are also some examples of where those prompt(s) did and
+didn't work.
 
 ----------------------------
 
