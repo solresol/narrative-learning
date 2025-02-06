@@ -37,6 +37,8 @@ create table if not exists rounds (
   round_id integer primary key autoincrement,
   round_start datetime default current_timestamp,
   split_id integer references splits(split_id),
-  prompt text
+  prompt text,
+  reasoning_for_this_prompt text,
+  stderr_from_prompt_creation text
 );
 
