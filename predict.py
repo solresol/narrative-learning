@@ -63,7 +63,11 @@ Output in JSON format like this:
     if answer['prediction'] not in ['Success', 'Failure']:
         # We didn't do anything. Leave it for now, and hopefully we'll come
         # back in another round
+        sys.stderr.write("Invalid prediction\n")
         return
+    if 'narrative_text' not in answer:
+        sys.stderr.write("No narrative text\n")
+        answer['narrative_text'] = ''
     #print(f"stdout = {json.dumps(answer,indent=4)}")
     info_start = stderr.index("total duration:")
     stderr = stderr[info_start:]
