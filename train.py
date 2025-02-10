@@ -47,7 +47,7 @@ didn't work.
         history_rounds = cur.fetchall()
 
         if history_rounds:
-            answer += print("# Historical results:")
+            answer += "# Historical results:"
             for r_id, r_prompt in history_rounds:
                 hist_matrix = get_confusion_matrix(conn, r_id, example_count=0)
                 answer += get_printable_confusion_matrix_and_examples(r_id, r_prompt, hist_matrix, show_examples=False)
