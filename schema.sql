@@ -29,7 +29,8 @@ create table if not exists splits (
 create table if not exists patient_split (
   split_id integer references splits(split_id),
   patient_id text references medical_treatment_data(patient_id),
-  holdout bool not null default false,
+  holdout bool not null default false, -- holdout either for validation or test
+  validation bool not null default false,
   primary key (split_id, patient_id)
 );
 

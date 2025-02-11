@@ -29,6 +29,10 @@ def main():
     parser.add_argument(
         "--holdout", default=0.2, type=float,
         help="Proportion of the data to mark as held out (never to be used in training)")
+
+    parser.add_argument(
+        "--validation", default=0.5, type=float,
+        help="Proportion of the holdout data to use for validation")
     args = parser.parse_args()
 
     # Connect to the database.
@@ -137,11 +141,10 @@ def main():
             row['TcQ_mass'],
             row['Cohort']
         ))
-        cur.execute("insert into patient_split (split_id, patient_id, holdout) values (?,?,?)",
-                    (split_id, patient_id, random.random() < args.holdout))
-
-    conn.commit()
-
+        holdout = random.random() < args.holdout
+        validation = holdout and (random.random() < args.validation)
+        cur.execute("insert into patient_split (split_id, patient_id, holdout, validation) values (?,?,?, ?)",
+                    (split_id, patient_id, holdout, validation))
     conn.commit()
 
     print("Database initialised successfully!")
