@@ -116,17 +116,6 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
 
     return pd.DataFrame(data)
 
-def create_chart(df: pd.DataFrame, metric: str, data_type: str, output_file: str):
-    """Create and save a line chart of the metric over rounds."""
-    plt.figure(figsize=(10, 6))
-    plt.plot(df['round_id'], df['metric'], marker='o')
-    plt.title(f'{metric.capitalize()} over Rounds ({data_type})')
-    plt.xlabel('Round ID')
-    plt.ylabel(metric.capitalize())
-    plt.grid(True)
-    plt.savefig(output_file)
-    plt.close()
-
 def main():
     parser = argparse.ArgumentParser(description="Report on classification metrics across rounds")
     parser.add_argument('--database', default='titanic_medical.sqlite',
@@ -165,27 +154,39 @@ def main():
         if should_stop:
             print(f"Early stopping triggered: No improvement in {args.patience} rounds")
             sys.exit(1)
+        sys.exit(0)
 
+    df = pd.DataFrame({})
     # Generate and output metrics for each requested data type
     for data_type in ['train', 'validation', 'test']:
         if getattr(args, data_type):
-            df = generate_metrics_data(conn, split_id, args.metric, data_type)
+            temp_df = generate_metrics_data(conn, split_id, args.metric, data_type)
+            temp_df.set_index('round_id', inplace=True)
+            column_name = f"{data_type} {args.metric}"
+            df[column_name] = temp_df['metric']
 
-            # Output CSV if requested
-            if args.csv:
-                csv_path = args.csv.replace('.csv', f'_{data_type}.csv')
-                df.to_csv(csv_path, index=False)
-                print(f"CSV output written to {csv_path}")
+    did_something = False
+    if args.csv:
+        df.to_csv(args.csv)
+        print(f"CSV output written to {csv_path}")
+        did_something = True
 
-            # Create chart if requested
-            if args.chart:
-                chart_path = args.chart.replace('.png', f'_{data_type}.png')
-                create_chart(df, args.metric, data_type, chart_path)
-                print(f"Chart saved to {chart_path}")
+    if args.chart:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        df.plot(ax=ax)
+        ax.set_xlabel('Round ID')
+        ax.grid(True)
+        ax.set_ylim((0,1))
+        fig.savefig(args.chart)
+        print(f"Chart saved to {args.chart}")
+        did_something = True
 
-            if args.show:
-                print(df.set_index('round_id').rename(columns={'metric': f"{data_type} {args.metric}"}))
-                print()
+    if args.show:
+        print(df)
+        did_something = True
+
+    if not did_something:
+        sys.exit("Specify --patience, --csv, --chart or --show")
 
 if __name__ == '__main__':
     main()
