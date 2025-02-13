@@ -94,7 +94,7 @@ def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str,
 
     return True
 
-def generate_metrics_data(conn: sqlite3.Connection, split_id: int, 
+def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
                          metric: str, data_type: str) -> pd.DataFrame:
     """
     Generate a DataFrame with metrics for all rounds in a split.
@@ -149,23 +149,23 @@ def main():
                        help="Output chart PNG file path")
     
     args = parser.parse_args()
-    
+
     conn = sqlite3.connect(args.database)
-    
+
     # If split_id not provided, use the most recent
     split_id = args.split_id if args.split_id is not None else get_latest_split_id(conn)
-    
+
     # If no data type specified, default to training data
     if not any([args.validation, args.test, args.train]):
         args.train = True
-    
+
     # Handle early stopping check
     if args.validation and args.patience:
         should_stop = check_early_stopping(conn, split_id, args.metric, args.patience)
         if should_stop:
             print(f"Early stopping triggered: No improvement in {args.patience} rounds")
             sys.exit(1)
-    
+
     # Generate and output metrics for each requested data type
     for data_type in ['train', 'validation', 'test']:
         if getattr(args, data_type):
@@ -178,7 +178,7 @@ def main():
                 csv_path = args.csv.replace('.csv', f'_{data_type}.csv')
                 df.to_csv(csv_path, index=False)
                 print(f"CSV output written to {csv_path}")
-            
+
             # Create chart if requested
             if args.chart:
                 chart_path = args.chart.replace('.png', f'_{data_type}.png')
