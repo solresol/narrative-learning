@@ -53,7 +53,6 @@ def get_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
         ORDER BY round_id
     """, (split_id,))
     rounds = [row[0] for row in cur.fetchall()]
-    print(f"Here are the rounds for {split_id=}: {rounds}")
     return rounds
 
 def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str, 
