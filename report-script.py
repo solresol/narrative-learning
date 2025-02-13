@@ -32,9 +32,9 @@ def get_latest_split_id(conn: sqlite3.Connection) -> int:
     """Get the split_id from the most recent round."""
     cur = conn.cursor()
     cur.execute("""
-        SELECT split_id 
-        FROM rounds 
-        ORDER BY round_id DESC 
+        SELECT split_id
+        FROM rounds
+        ORDER BY round_id DESC
         LIMIT 1
     """)
     row = cur.fetchone()
