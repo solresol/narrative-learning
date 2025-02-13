@@ -13,7 +13,7 @@ def calculate_metric(matrix: Dict, metric_name: str) -> float:
     fn = matrix['FN']['count']
     fp = matrix['FP']['count']
     tn = matrix['TN']['count']
-    
+
     if metric_name == 'accuracy':
         total = tp + fn + fp + tn
         return (tp + tn) / total if total > 0 else 0
@@ -47,9 +47,9 @@ def get_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
     """Get all round IDs for a given split_id."""
     cur = conn.cursor()
     cur.execute("""
-        SELECT round_id 
-        FROM rounds 
-        WHERE split_id = ? 
+        SELECT round_id
+        FROM rounds
+        WHERE split_id = ?
         ORDER BY round_id
     """, (split_id,))
     rounds = [row[0] for row in cur.fetchall()]
@@ -65,22 +65,22 @@ def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str,
     rounds = get_rounds_for_split(conn, split_id)
     if len(rounds) < patience + 1:
         return False
-        
+
     # Look at last 'patience' + 1 rounds
     relevant_rounds = rounds[-(patience + 1):]
     oldest_round = relevant_rounds[0]
-    
+
     # Calculate metric for oldest round
     oldest_matrix = get_confusion_matrix(conn, oldest_round, on_holdout_data=on_validation)
     best_score = calculate_metric(oldest_matrix, metric)
-    
+
     # Check if any later round beat this score
     for round_id in relevant_rounds[1:]:
         matrix = get_confusion_matrix(conn, round_id, on_holdout_data=on_validation)
         score = calculate_metric(matrix, metric)
         if score > best_score:
             return False
-            
+
     return True
 
 def generate_metrics_data(conn: sqlite3.Connection, split_id: int, 
@@ -91,7 +91,7 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
     """
     rounds = get_rounds_for_split(conn, split_id)
     data = []
-    
+
     for round_id in rounds:
         # Set appropriate flags based on data_type
         on_holdout = data_type in ('validation', 'test')
@@ -102,7 +102,7 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
             'round_id': round_id,
             'metric': score
         })
-    
+
     return pd.DataFrame(data)
 
 def create_chart(df: pd.DataFrame, metric: str, data_type: str, output_file: str):
@@ -118,7 +118,7 @@ def create_chart(df: pd.DataFrame, metric: str, data_type: str, output_file: str
 
 def main():
     parser = argparse.ArgumentParser(description="Report on classification metrics across rounds")
-    parser.add_argument('--database', default='titanic_medical.sqlite', 
+    parser.add_argument('--database', default='titanic_medical.sqlite',
                        help="Path to the SQLite database file")
     parser.add_argument('--split-id', type=int, help="Split ID to analyze")
     parser.add_argument('--metric', default='accuracy',
