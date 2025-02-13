@@ -55,7 +55,19 @@ def get_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
     rounds = [row[0] for row in cur.fetchall()]
     return rounds
 
-def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str, 
+def get_processed_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
+    cur = conn.cursor()
+    answer = []
+    for r in get_rounds_for_split(conn, split_id):
+        cur.execute("select count(*) from inferences where round_id = ?", [r])
+        row = cur.fetchone()
+        if row[0] == 0:
+            continue
+        answer.append(r)
+    return answer
+
+
+def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str,
                         patience: int, on_validation: bool = True) -> bool:
     """
     Check if training should be stopped based on validation performance.
