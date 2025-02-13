@@ -147,7 +147,7 @@ def main():
                        help="Output CSV file path")
     parser.add_argument('--chart', type=str,
                        help="Output chart PNG file path")
-    
+    parser.add_argument("--show", action="store_true", help="Display the metric data to stdout")
     args = parser.parse_args()
 
     conn = sqlite3.connect(args.database)
@@ -170,9 +170,7 @@ def main():
     for data_type in ['train', 'validation', 'test']:
         if getattr(args, data_type):
             df = generate_metrics_data(conn, split_id, args.metric, data_type)
-            print(data_type)
-            print(df)
-            
+
             # Output CSV if requested
             if args.csv:
                 csv_path = args.csv.replace('.csv', f'_{data_type}.csv')
@@ -184,10 +182,10 @@ def main():
                 chart_path = args.chart.replace('.png', f'_{data_type}.png')
                 create_chart(df, args.metric, data_type, chart_path)
                 print(f"Chart saved to {chart_path}")
-            
-            # Print current metric value
-            current_value = df.iloc[-1]['metric']
-            print(f"{data_type.capitalize()} {args.metric}: {current_value:.3f}")
+
+            if args.show:
+                print(df.set_index('round_id').rename(columns={'metric': f"{data_type} {args.metric}"}))
+                print()
 
 if __name__ == '__main__':
     main()
