@@ -106,7 +106,7 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
     for round_id in rounds:
         # Set appropriate flags based on data_type
         on_holdout = data_type in ('validation', 'test')
-        on_test_data = data_type = 'test'
+        on_test_data = data_type == 'test'
         matrix = get_confusion_matrix(conn, round_id, on_holdout_data=on_holdout, on_test_data=on_test_data)
         score = calculate_metric(matrix, metric)
         data.append({
