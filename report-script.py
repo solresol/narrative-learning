@@ -73,7 +73,7 @@ def check_early_stopping(conn: sqlite3.Connection, split_id: int, metric: str,
     Check if training should be stopped based on validation performance.
     Returns True if training should stop.
     """
-    rounds = get_rounds_for_split(conn, split_id)
+    rounds = get_processed_rounds_for_split(conn, split_id)
     if len(rounds) < patience + 1:
         return False
 
@@ -100,7 +100,7 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
     Generate a DataFrame with metrics for all rounds in a split.
     data_type should be 'train', 'validation', or 'test'
     """
-    rounds = get_rounds_for_split(conn, split_id)
+    rounds = get_processed_rounds_for_split(conn, split_id)
     data = []
 
     for round_id in rounds:
