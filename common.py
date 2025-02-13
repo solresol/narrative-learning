@@ -31,7 +31,7 @@ def is_holdout_data(conn, patient_id, split_id):
         raise KeyError(patient_id)
     return row[0]
 
-def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False):
+def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False, on_test_data=False):
     """
     Retrieve the confusion matrix for a given round.
     
@@ -48,7 +48,7 @@ def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False)
     cur = conn.cursor()
     split_id = get_split_id(conn, round_id)
     cur.execute("""
-        SELECT m.Outcome, i.prediction, i.patient_id, i.narrative_text, holdout
+        SELECT m.Outcome, i.prediction, i.patient_id, i.narrative_text, holdout, validation
           FROM inferences i
           JOIN medical_treatment_data m ON i.patient_id = m.Patient_ID
           JOIN patient_split using (patient_id)
@@ -65,11 +65,16 @@ def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False)
         'TN': {'count': 0, 'examples': []},
     }
 
-    for outcome, prediction, patientid, narrative_text, holdout in rows:
+    for outcome, prediction, patientid, narrative_text, holdout, validation in rows:
         if on_holdout_data and not holdout:
             continue
         if not on_holdout_data and holdout:
             continue
+        if on_holdout_data and holdout:
+            if validation and on_test_data:
+                continue
+            if not validation and not on_test_data:
+                continue
         # Assume case-insensitive comparison. If Outcome (or prediction) isn’t exactly 'Success',
         # we treat it as 'Failure'.
         outcome_label = 'Success' if outcome.strip().lower() == 'success' else 'Failure'
