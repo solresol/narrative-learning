@@ -51,3 +51,11 @@ Check to see if it works... this should produce a long list:
 ## Operation
 
 `./loop.sh`
+
+
+## To-do
+
+- Make the code less specific --- it shouldn't be tied to Titanic Medical.
+
+- Make a decoder which takes a prompt and a list of transformations that were applied to the data, and undoes
+  them to generate the actual prompt.
