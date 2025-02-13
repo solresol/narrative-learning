@@ -103,6 +103,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--model", default="llama3.3:latest", help="Model to do the retraining, not the model that does the inference")
+    parser.add_argument("--round-tracking-file", help="A file that will have the new round ID written to it")
     args = parser.parse_args()
 
     conn = sqlite3.connect(args.database)
@@ -118,6 +119,9 @@ def main():
         print(f"NEW PROMPT: {details['updated_prompt']}")
         print()
         print(f"NEW ROUND ID: {new_round_id}")
+    if args.round_tracking_file:
+        with open(args.round_tracking_file, 'w') as f:
+            f.write(f"{new_round_id}")
 
 if __name__ == '__main__':
     main()

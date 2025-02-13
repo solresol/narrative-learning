@@ -36,7 +36,7 @@ This approach offers several potential advantages:
 
 ## Data prep
 
-`python initialise_database.py`
+`python initialise_titanic.py`
 
 Maybe do this, but this might be a bad idea after a few inferences. It's not needed
 for any other step.
@@ -50,8 +50,4 @@ Check to see if it works... this should produce a long list:
 
 ## Operation
 
-This will get things going.
-
-`./process_round.py --list --round 1` 
-
-I haven't implemented the actual training yet.
+`./loop.sh`
