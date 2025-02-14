@@ -12,7 +12,7 @@ fi
 while true
 do
     ./process_round.py --round $ROUND
-    ./train.py --round $ROUND --round-tracking-file $(ROUND_TRACKING_FILE)
+    ./train.py --round-id $ROUND --round-tracking-file $(ROUND_TRACKING_FILE)
     ROUND=$(< $ROUND_TRACKING_FILE)
     if ./report-script.py --metric accuracy --validation --patience 3 --round $ROUND
     then
