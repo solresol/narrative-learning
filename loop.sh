@@ -14,7 +14,7 @@ do
     ./process_round.py --round $ROUND
     ./train.py --round-id $ROUND --round-tracking-file $(ROUND_TRACKING_FILE)
     ROUND=$(< $ROUND_TRACKING_FILE)
-    if ./report-script.py --metric accuracy --validation --patience 3 --round $ROUND
+    if ./report-script.py --metric accuracy --validation --patience 3 
     then
 	# Successful. Worth continuing
 	continue
