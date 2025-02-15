@@ -172,3 +172,4 @@ cython_debug/
 *~
 titanic_medical.sqlite
 old_titanic_medical.sqlite
+.round-tracking-file
