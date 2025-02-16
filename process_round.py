@@ -11,6 +11,7 @@ def main():
     parser.add_argument("--list", action="store_true", help="Just list the patients yet to be processed")
     parser.add_argument("--loop", action="store_true", help="Loop until there are no more patients to process")
     parser.add_argument("--stop-after", type=int, default=None, help="Stop after this many predictions")
+    parser.add_argument("--model", default="phi4:latest")
     args = parser.parse_args()
 
     if args.list and args.loop:
@@ -37,7 +38,7 @@ def main():
             if args.list:
                 print(row[0])
                 continue
-            predict.predict(conn, args.round_id, row[0])
+            predict.predict(conn, args.round_id, row[0], model=args.model)
             predictions_done += 1
             if args.stop_after is not None and predictions_done >= args.stop_after:
                 sys.exit(0)

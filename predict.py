@@ -6,6 +6,7 @@ from common import get_round_prompt, get_patient_features
 import subprocess
 import json
 import string
+import llmcall
 
 def predict(conn, round_id, patient_id, model='phi4:latest', dry_run=False):
 
@@ -32,48 +33,17 @@ def predict(conn, round_id, patient_id, model='phi4:latest', dry_run=False):
 
 Patient Data:
 {patient_features}
+"""
 
-Output in JSON format like this:
-""" + """
-    {
-        "narrative_text": "...",
-        "prediction": "..."
-    }
-
-`narrative_text` is where you describe your thinking process in evaluating the prompt.
-`prediction` is either Success or Failure
-    """
     if dry_run:
         print(prompt)
         return
 
-    command = ["ollama", "run", model, "--format=json", "--verbose"]
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True  # This ensures text mode instead of bytes
-    )
+    prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, ['Success', 'Failure'])
 
-    # Send the prompt and get outputs
-    stdout, stderr = process.communicate(input=prompt)
-    print(stdout)
-    answer = json.loads(stdout)
-    if answer['prediction'] not in ['Success', 'Failure']:
-        # We didn't do anything. Leave it for now, and hopefully we'll come
-        # back in another round
-        sys.stderr.write("Invalid prediction\n")
-        return
-    if 'narrative_text' not in answer:
-        sys.stderr.write("No narrative text\n")
-        answer['narrative_text'] = ''
-    #print(f"stdout = {json.dumps(answer,indent=4)}")
-    info_start = stderr.index("total duration:")
-    stderr = stderr[info_start:]
-    print(f"stderr = {stderr}")
+
     cur.execute("insert into inferences (round_id, patient_id, narrative_text, llm_stderr, prediction) values (?, ?, ?, ?, ?)",
-                   (round_id, patient_id, answer['narrative_text'], stderr, answer['prediction']))
+                   (round_id, patient_id, prediction_output['narrative_text'], run_info, prediction_output['prediction']))
     conn.commit()
 
 
