@@ -3,6 +3,7 @@ import argparse
 import sqlite3
 import sys
 import json
+import llmcall
 
 from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples, get_split_id
 import subprocess
@@ -55,43 +56,20 @@ didn't work.
             #print("No previous rounds found.")
             pass
     answer += "\n\n---------------------\n\n"
-    answer += """Supply your answer in JSON format like this:
-
-{
-    "reasoning": "...",
-    "updated_prompt": "..."
-}
-
-    Where `reasoning` explains why you are making the change and `updated_prompt` is the prompt that you think we should run next.
-"""
     return answer
 
 def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
-    command = ["ollama", "run", model, "--format=json", "--verbose"]
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True  # This ensures text mode instead of bytes
-    )
-    # Send the prompt and get outputs
-    stdout, stderr = process.communicate(input=prompting_creation_prompt)
-    answer = json.loads(stdout)
-    if 'updated_prompt' not in answer:
-        sys.exit(f"No updated prompt supplied: {answer}")
-    info_start = stderr.index("total duration:")
-    stderr = stderr[info_start:]
+    new_prompt, process_info = llmcall.dispatch_reprompt_prompt(model, prompting_creation_prompt)
     split_id = get_split_id(conn, old_round_id)
     cur = conn.cursor()
     cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?,?) returning round_id",
-                [split_id, answer['updated_prompt'], answer['reasoning'], stderr])
+                [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info])
     row = cur.fetchone()
     if row is None:
         sys.exit("Failed to create a new round")
     new_round_id = row[0]
     conn.commit()
-    return (new_round_id, answer)
+    return (new_round_id, new_prompt)
 
 
 def main():
