@@ -3,15 +3,21 @@ import argparse
 import sqlite3
 import sys
 import predict
+import os
 
 def main():
+    # One day I'll make --database mandatory, with no fallback to titanic_medical.sqlite
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
+    default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', 'phi4:latest')
     parser = argparse.ArgumentParser(description="List patientIDs missing from inferences for a given round")
-    parser.add_argument('--database', default='titanic_medical.sqlite', help="Path to the SQLite database file")
-    parser.add_argument('--round-id', type=int, required=True, help="Round ID to check")
     parser.add_argument("--list", action="store_true", help="Just list the patients yet to be processed")
-    parser.add_argument("--loop", action="store_true", help="Loop until there are no more patients to process")
     parser.add_argument("--stop-after", type=int, default=None, help="Stop after this many predictions")
-    parser.add_argument("--model", default="phi4:latest")
+    parser.add_argument('--round-id', type=int, required=True, help="Round ID to check")
+    parser.add_argument("--loop", action="store_true", help="Loop until there are no more patients to process")
+
+    parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
+    # Maybe one day I will find the latest round by default, or have an option for a split_id
+    parser.add_argument("--model", default=default_model)
     args = parser.parse_args()
 
     if args.list and args.loop:
