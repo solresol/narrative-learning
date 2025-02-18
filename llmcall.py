@@ -189,11 +189,152 @@ def claude_reprompt(model, prompting_creation_prompt):
     return tool_call, json.dumps(usage_obj)
 
 
+def openai_prediction(model, prompt, valid_predictions):
+    import openai
+    import json
+    import sys
+
+    # Define the function schema for making a prediction.
+    prediction_function = {
+        "name": "store_prediction",
+        "description": "Store the prediction along with the narrative of your thinking process.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "narrative_text": {
+                    "type": "string",
+                    "description": "Your thinking process in evaluating the prompt."
+                },
+                "prediction": {
+                    "type": "string",
+                    "description": "Either " + " or ".join(valid_predictions)
+                }
+            },
+            "required": ["narrative_text", "prediction"]
+        }
+    }
+
+    # Build the message list.
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful prediction assistant. Use the store_prediction function to provide your answer."
+        },
+        {"role": "user", "content": prompt}
+    ]
+
+    # Call the OpenAI API with function calling.
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=messages,
+        functions=[prediction_function],
+        function_call={"name": "store_prediction"},  # Force a function call
+        temperature=0,
+        max_tokens=1024,
+    )
+
+    # Debug print (can remove if not needed)
+    print(response)
+    usage = response['usage']
+    total_prompt_tokens += usage['prompt_tokens']
+    total_completion_tokens += usage['completion_tokens']    
+
+    message = response['choices'][0]['message']
+    if "function_call" not in message:
+        sys.stderr.write("No function call in the response.\n")
+        return
+
+    arguments_str = message["function_call"]["arguments"]
+    try:
+        answer = json.loads(arguments_str)
+    except json.JSONDecodeError as e:
+        sys.stderr.write("Failed to decode JSON: " + str(e))
+        return
+
+    if answer.get("prediction") not in valid_predictions:
+        sys.stderr.write("Invalid prediction\n")
+        return
+    if "narrative_text" not in answer:
+        sys.stderr.write("No narrative text\n")
+        answer["narrative_text"] = ""
+
+    usage_obj = response.get("usage", {})
+    return answer, json.dumps(usage_obj)
+
+
+def openai_reprompt(model, prompting_creation_prompt):
+    import openai
+    import json
+    import sys
+
+    # Define the function schema for creating a new prompt.
+    reprompt_function = {
+        "name": "store_replacement_prompt",
+        "description": "Store the updated prompt along with reasoning for the change.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why you are making the change."
+                },
+                "updated_prompt": {
+                    "type": "string",
+                    "description": "The prompt that you think we should run next."
+                }
+            },
+            "required": ["reasoning", "updated_prompt"]
+        }
+    }
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an assistant tasked with updating the prompt. Use the store_replacement_prompt function to provide your answer."
+        },
+        {"role": "user", "content": prompting_creation_prompt}
+    ]
+
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=messages,
+        functions=[reprompt_function],
+        function_call={"name": "store_replacement_prompt"},
+        temperature=0,
+        max_tokens=1024,
+    )
+    print(response)
+    usage = response['usage']
+    total_prompt_tokens += usage['prompt_tokens']
+    total_completion_tokens += usage['completion_tokens']
+
+    message = response['choices'][0]['message']
+    if "function_call" not in message:
+        sys.stderr.write("No function call in the response.\n")
+        return
+
+    arguments_str = message["function_call"]["arguments"]
+    try:
+        answer = json.loads(arguments_str)
+    except json.JSONDecodeError as e:
+        sys.stderr.write("Failed to decode JSON: " + str(e))
+        return
+
+    if "updated_prompt" not in answer:
+        sys.exit(f"No updated prompt supplied: {answer}")
+
+    usage_obj = response.get("usage", {})
+    return answer, json.dumps(usage_obj)
+
+
+
 def dispatch_prediction_prompt(model, prompt, valid_predictions):
     if model in ['phi4:latest', 'llama3.3:latest']:
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_prediction(model, prompt, valid_predictions)
+    if model in ["gpt-4o", "gpt-4o-mini"]:
+        return openai_prediction(model, prompt, valid_predictions)
     raise KeyError(model)
 
 
@@ -202,4 +343,6 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_reprompt(model, prompting_creation_prompt)
+    if model in ["gpt-4o", "gpt-4o-mini"]:
+        return openai_reprompt(model, prompting_creation_prompt)
     raise KeyError(model)
