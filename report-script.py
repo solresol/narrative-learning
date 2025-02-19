@@ -14,6 +14,8 @@ def calculate_metric(matrix: Dict, metric_name: str) -> float:
     fp = matrix['FP']['count']
     tn = matrix['TN']['count']
 
+    if metric_name == 'count':
+        return tp + fn + fp + tn
     if metric_name == 'accuracy':
         total = tp + fn + fp + tn
         return (tp + tn) / total if total > 0 else 0
@@ -122,7 +124,7 @@ def main():
                        help="Path to the SQLite database file")
     parser.add_argument('--split-id', type=int, help="Split ID to analyze")
     parser.add_argument('--metric', default='accuracy',
-                       choices=['accuracy', 'precision', 'recall', 'f1'],
+                       choices=['accuracy', 'precision', 'recall', 'f1', 'count'],
                        help="Metric to calculate")
     parser.add_argument('--validation', action='store_true',
                        help="Report on validation data")
