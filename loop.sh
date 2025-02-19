@@ -1,6 +1,9 @@
 #!/bin/sh
 
-ROUND_TRACKING_FILE=.round-tracking-file
+if [ "$ROUND_TRACKING_FILE" = "" ]
+then
+    ROUND_TRACKING_FILE=.round-tracking-file
+fi
 
 if [ ! -e $ROUND_TRACKING_FILE ]
 then
