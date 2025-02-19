@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import json
 import llmcall
+import os
 
 from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples, get_split_id
 import subprocess
@@ -73,14 +74,16 @@ def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
 
 
 def main():
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
+    default_model = os.environ.get('NARRATIVE_LEARNING_TRAINING_MODEL', 'llama3.3:latest')
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
-    parser.add_argument('--database', default='titanic_medical.sqlite', help="Path to the SQLite database file")
+    parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
     parser.add_argument('--round-id', type=int, required=True, help="Round ID")
     parser.add_argument('--example-count', type=int, default=3, help="Number of examples per cell")
     parser.add_argument('--show-history', type=int, default=2, help="Show confusion matrices for the previous N rounds")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--model", default="llama3.3:latest", help="Model to do the retraining, not the model that does the inference")
+    parser.add_argument("--model", default=default_model, help="Model to do the retraining, not the model that does the inference")
     parser.add_argument("--round-tracking-file", help="A file that will have the new round ID written to it")
     args = parser.parse_args()
 
