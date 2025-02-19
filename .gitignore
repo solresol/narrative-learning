@@ -176,3 +176,6 @@ titanic_medical-anthropic.sqlite
 titanic_medical-hybrid.sqlite
 .round-tracking-file
 
+.round-tracking-file.anthropic
+.round-tracking-file.openai
+titanic_medical-openai.sqlite
