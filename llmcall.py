@@ -190,27 +190,34 @@ def claude_reprompt(model, prompting_creation_prompt):
 
 
 def openai_prediction(model, prompt, valid_predictions):
-    import openai
+    from openai import OpenAI
+
+    client = OpenAI(api_key=open(os.path.expanduser("~/.openai.key")).read().strip())
     import json
     import sys
 
     # Define the function schema for making a prediction.
     prediction_function = {
-        "name": "store_prediction",
-        "description": "Store the prediction along with the narrative of your thinking process.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "narrative_text": {
-                    "type": "string",
-                    "description": "Your thinking process in evaluating the prompt."
+        "type": "function",
+        "function": {
+            "name": "store_prediction",
+            "strict": True,
+            "description": "Store the prediction along with the narrative of your thinking process.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "narrative_text": {
+                        "type": "string",
+                        "description": "Your thinking process in evaluating the prompt."
+                    },
+                    "prediction": {
+                        "type": "string",
+                        "description": "Either " + " or ".join(valid_predictions)
+                    }
                 },
-                "prediction": {
-                    "type": "string",
-                    "description": "Either " + " or ".join(valid_predictions)
-                }
-            },
-            "required": ["narrative_text", "prediction"]
+                "required": ["narrative_text", "prediction"],
+                "additionalProperties": False
+            }
         }
     }
 
@@ -224,66 +231,69 @@ def openai_prediction(model, prompt, valid_predictions):
     ]
 
     # Call the OpenAI API with function calling.
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=model,
         messages=messages,
-        functions=[prediction_function],
-        function_call={"name": "store_prediction"},  # Force a function call
-        temperature=0,
-        max_tokens=1024,
+        tools=[prediction_function],
+        tool_choice={'type': 'function', 'function': {"name": "store_prediction"}},
+        temperature=0
     )
+
 
     # Debug print (can remove if not needed)
     print(response)
-    usage = response['usage']
-    total_prompt_tokens += usage['prompt_tokens']
-    total_completion_tokens += usage['completion_tokens']    
+    usage = response.usage
+    prompt_tokens = usage.prompt_tokens
+    completion_tokens = usage.completion_tokens
 
-    message = response['choices'][0]['message']
-    if "function_call" not in message:
-        sys.stderr.write("No function call in the response.\n")
-        return
+    message = response.choices[0].message
 
-    arguments_str = message["function_call"]["arguments"]
-    try:
-        answer = json.loads(arguments_str)
-    except json.JSONDecodeError as e:
-        sys.stderr.write("Failed to decode JSON: " + str(e))
-        return
+    answer = json.loads(message.tool_calls[0].function.arguments)
 
     if answer.get("prediction") not in valid_predictions:
-        sys.stderr.write("Invalid prediction\n")
-        return
+        raise KeyError("prediction")
     if "narrative_text" not in answer:
-        sys.stderr.write("No narrative text\n")
         answer["narrative_text"] = ""
 
-    usage_obj = response.get("usage", {})
+    if 'gpt-4o-mini' in model:
+        cost = (0.15 * prompt_tokens + 0.6 * completion_tokens) / 1000000
+    elif 'gpt-4o' in model:
+        cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
+    else:
+        cost = None
+    usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
     return answer, json.dumps(usage_obj)
 
 
 def openai_reprompt(model, prompting_creation_prompt):
-    import openai
+    from openai import OpenAI
+
+    client = OpenAI(api_key=open(os.path.expanduser("~/.openai.key")).read().strip())
     import json
     import sys
 
     # Define the function schema for creating a new prompt.
-    reprompt_function = {
-        "name": "store_replacement_prompt",
-        "description": "Store the updated prompt along with reasoning for the change.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "reasoning": {
-                    "type": "string",
-                    "description": "Why you are making the change."
+    reprompt_tool = {
+        "type": "function",
+        "function": {
+            "name": "store_replacement_prompt",
+            "description": "Store the updated prompt along with reasoning for the change.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why you are making the change."
                 },
                 "updated_prompt": {
                     "type": "string",
                     "description": "The prompt that you think we should run next."
                 }
-            },
-            "required": ["reasoning", "updated_prompt"]
+                },
+                "required": ["reasoning", "updated_prompt"],
+                "additionalProperties": False
+            }
         }
     }
 
@@ -295,35 +305,28 @@ def openai_reprompt(model, prompting_creation_prompt):
         {"role": "user", "content": prompting_creation_prompt}
     ]
 
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        functions=[reprompt_function],
-        function_call={"name": "store_replacement_prompt"},
-        temperature=0,
-        max_tokens=1024,
-    )
+    response = client.chat.completions.create(model=model,
+                                              messages=messages,
+                                              tools=[reprompt_tool],
+                                              tool_choice={"type": "function", "function": {"name": "store_replacement_prompt"}})
     print(response)
-    usage = response['usage']
-    total_prompt_tokens += usage['prompt_tokens']
-    total_completion_tokens += usage['completion_tokens']
+    usage = response.usage
+    prompt_tokens = usage.prompt_tokens
+    completion_tokens = usage.completion_tokens
 
-    message = response['choices'][0]['message']
-    if "function_call" not in message:
-        sys.stderr.write("No function call in the response.\n")
-        return
-
-    arguments_str = message["function_call"]["arguments"]
-    try:
-        answer = json.loads(arguments_str)
-    except json.JSONDecodeError as e:
-        sys.stderr.write("Failed to decode JSON: " + str(e))
-        return
+    message = response.choices[0].message
+    answer = json.loads(message.tool_calls[0].function.arguments)
 
     if "updated_prompt" not in answer:
         sys.exit(f"No updated prompt supplied: {answer}")
 
-    usage_obj = response.get("usage", {})
+    if 'gpt-4o-mini' in model:
+        cost = (0.15 * prompt_tokens + 0.6 * completion_tokens) / 1000000
+    elif 'gpt-4o' in model:
+        cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
+    else:
+        cost = None
+    usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
     return answer, json.dumps(usage_obj)
 
 
