@@ -6,6 +6,7 @@ from common import get_confusion_matrix, get_split_id
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List, Optional
+import os
 
 def calculate_metric(matrix: Dict, metric_name: str) -> float:
     """Calculate the specified metric from a confusion matrix."""
@@ -119,8 +120,9 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
     return pd.DataFrame(data)
 
 def main():
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
     parser = argparse.ArgumentParser(description="Report on classification metrics across rounds")
-    parser.add_argument('--database', default='titanic_medical.sqlite',
+    parser.add_argument('--database', default=default_database,
                        help="Path to the SQLite database file")
     parser.add_argument('--split-id', type=int, help="Split ID to analyze")
     parser.add_argument('--metric', default='accuracy',
