@@ -44,11 +44,11 @@ Patient Data:
         cur.execute("insert into inferences (round_id, patient_id, narrative_text, llm_stderr, prediction) values (?, ?, ?, ?, ?)",
                     (round_id, patient_id, prediction_output['narrative_text'], run_info, prediction_output['prediction']))
         conn.commit()
-    except KeyError:
-        sys.stderr.write("There was a field missing in ChatGPT's response. Skipping.\n")
+    except llmcall.MissingPrediction:
+        sys.stderr.write("There was a field missing in the response. Skipping.\n")
         # we'll pick it up next time through the loop, I guess
-        pass
-
+    except llmcall.InvalidPrediction:
+        sys.stderr.write("There was a invalid prediction.\n")
 
 
 if __name__ == '__main__':

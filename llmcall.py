@@ -2,6 +2,18 @@ import subprocess
 import json
 import os
 
+class MissingUpdatedPrompt(Exception):
+    pass
+
+class MissingPrediction(Exception):
+    pass
+
+class InvalidPrediction(Exception):
+    pass
+
+class UnknownModel(Exception):
+    pass
+
 def ollama_prediction(model, prompt, valid_predictions):
     command = ["ollama", "run", model, "--format=json", "--verbose"]
     process = subprocess.Popen(
@@ -25,12 +37,17 @@ Output in JSON format like this:
     # Send the prompt and get outputs
     stdout, stderr = process.communicate(input=prompt)
     print(stdout)
-    answer = json.loads(stdout)
+    try:
+        answer = json.loads(stdout)
+    except json.decoder.JSONDecodeError:
+        # If I hadn't already printed it, I would print it here
+        raise InvalidPrediction
+    if 'prediction' not in answer:
+        raise MissingPrediction
     if answer['prediction'] not in ['Success', 'Failure']:
         # We didn't do anything. Leave it for now, and hopefully we'll come
         # back in another round
-        sys.stderr.write("Invalid prediction\n")
-        return
+        raise InvalidPrediction
     if 'narrative_text' not in answer:
         sys.stderr.write("No narrative text\n")
         answer['narrative_text'] = ''
@@ -69,7 +86,6 @@ Supply your answer in JSON format like this:
     info_start = stderr.index("total duration:")
     stderr = stderr[info_start:]
     return answer, stderr
-
 
 
 def claude_prediction(model, prompt, valid_predictions):
@@ -185,7 +201,7 @@ def claude_reprompt(model, prompting_creation_prompt):
     usage_obj = {'input_tokens': usage.input_tokens, 'output_tokens': usage.output_tokens, 'cost': cost}
     tool_call = response.content[0].input
     if 'updated_prompt' not in tool_call:
-        raise KeyError
+        raise MissingUpdatedPrompt
     return tool_call, json.dumps(usage_obj)
 
 
@@ -251,7 +267,7 @@ def openai_prediction(model, prompt, valid_predictions):
     answer = json.loads(message.tool_calls[0].function.arguments)
 
     if answer.get("prediction") not in valid_predictions:
-        raise KeyError("prediction")
+        raise MissingPrediction
     if "narrative_text" not in answer:
         answer["narrative_text"] = ""
 
@@ -342,7 +358,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return claude_prediction(model, prompt, valid_predictions)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
         return openai_prediction(model, prompt, valid_predictions)
-    raise KeyError(model)
+    raise UnknownModel
 
 
 def dispatch_reprompt_prompt(model, prompting_creation_prompt):
@@ -352,4 +368,4 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return claude_reprompt(model, prompting_creation_prompt)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
         return openai_reprompt(model, prompting_creation_prompt)
-    raise KeyError(model)
+    raise UnknownModel
