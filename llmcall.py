@@ -143,7 +143,7 @@ def claude_prediction(model, prompt, valid_predictions):
     usage_obj = {'input_tokens': usage.input_tokens, 'output_tokens': usage.output_tokens, 'cost': cost}
     tool_call = response.content[0].input
     if 'narrative_text' not in tool_call:
-        raise KeyError
+        tool_call['narrative_text'] = ''
     return tool_call, json.dumps(usage_obj)
 
 
