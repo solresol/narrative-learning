@@ -5,13 +5,15 @@ import pandas as pd
 import uuid
 import sys
 import random
+import os
 
 def main():
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
     parser = argparse.ArgumentParser(
         description="Import Titanic CSV data into the medical treatment database."
     )
     parser.add_argument(
-        "--database", default="titanic_medical.sqlite",
+        "--database", default=default_database,
         help="Path to the SQLite database file."
     )
     parser.add_argument(
@@ -111,9 +113,9 @@ def main():
     cur.execute("insert into splits default values returning split_id")
     row = cur.fetchone()
     split_id = row[0]
-        
+
     cur.execute("INSERT INTO rounds (prompt, split_id) VALUES (?,?)", (args.prompt,split_id))
-    
+
     insert_sql = '''
     INSERT INTO medical_treatment_data (
       Patient_ID,
