@@ -16,6 +16,7 @@ def calculate_metric(matrix: Dict, metric_name: str) -> float:
     tn = matrix['TN']['count']
 
     if metric_name == 'count':
+        #print(f"{tp=} + {fn=} + {fp=} + {tn=}")
         return tp + fn + fp + tn
     if metric_name == 'accuracy':
         total = tp + fn + fp + tn
