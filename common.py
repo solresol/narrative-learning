@@ -52,7 +52,7 @@ def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False,
           FROM inferences i
           JOIN medical_treatment_data m ON i.patient_id = m.Patient_ID
           JOIN patient_split using (patient_id)
-         WHERE i.round_id = ? and i.patient_id and split_id = ?
+         WHERE i.round_id = ? and split_id = ?
          order by random()
     """, (round_id,split_id))
     rows = cur.fetchall()
@@ -65,6 +65,7 @@ def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False,
         'TN': {'count': 0, 'examples': []},
     }
 
+    #print(f"get_confusion_matrix()... {len(rows)=}")
     for outcome, prediction, patientid, narrative_text, holdout, validation in rows:
         if on_holdout_data and not holdout:
             continue
