@@ -259,6 +259,8 @@ def openai_prediction(model, prompt, valid_predictions):
         cost = (0.15 * prompt_tokens + 0.6 * completion_tokens) / 1000000
     elif 'gpt-4o' in model:
         cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
+    elif 'o1' in model:
+        cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
@@ -324,6 +326,8 @@ def openai_reprompt(model, prompting_creation_prompt):
         cost = (0.15 * prompt_tokens + 0.6 * completion_tokens) / 1000000
     elif 'gpt-4o' in model:
         cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
+    elif 'o1' in model:
+        cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000        
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
@@ -336,7 +340,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_prediction(model, prompt, valid_predictions)
-    if model in ["gpt-4o", "gpt-4o-mini"]:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
         return openai_prediction(model, prompt, valid_predictions)
     raise KeyError(model)
 
@@ -346,6 +350,6 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_reprompt(model, prompting_creation_prompt)
-    if model in ["gpt-4o", "gpt-4o-mini"]:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
         return openai_reprompt(model, prompting_creation_prompt)
     raise KeyError(model)
