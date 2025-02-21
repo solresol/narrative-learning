@@ -137,6 +137,7 @@ def main():
                        help="Report on training data")
     parser.add_argument('--patience', type=int,
                        help="Number of rounds to look back for early stopping")
+    parser.add_argument("--best-round", action="store_true", help="Instead of showing the metric value, show the round where the validation result was best")
     parser.add_argument('--csv', type=str,
                        help="Output CSV file path")
     parser.add_argument('--chart', type=str,
@@ -149,17 +150,24 @@ def main():
     # If split_id not provided, use the most recent
     split_id = args.split_id if args.split_id is not None else get_latest_split_id(conn)
 
-    # If no data type specified, default to training data
-    if not any([args.validation, args.test, args.train]):
-        args.train = True
-
-    # Handle early stopping check
-    if args.validation and args.patience:
+    if args.patience:
+        args.validation = True
         should_stop = check_early_stopping(conn, split_id, args.metric, args.patience)
         if should_stop:
             print(f"Early stopping triggered: No improvement in {args.patience} rounds")
             sys.exit(1)
         sys.exit(0)
+
+    if args.best_round:
+        args.validation = True
+        temp_df = generate_metrics_data(conn, split_id, args.metric, 'validation')
+        temp_df.set_index('round_id', inplace=True)
+        print(temp_df.metric.idxmax())
+        sys.exit(0)
+
+    # If no data type specified, default to training data
+    if not any([args.validation, args.test, args.train]):
+        args.train = True
 
     df = pd.DataFrame({})
     # Generate and output metrics for each requested data type
@@ -191,7 +199,7 @@ def main():
         did_something = True
 
     if not did_something:
-        sys.exit("Specify --patience, --csv, --chart or --show")
+        sys.exit("Specify --patience, --csv, --chart,  --show or --best-round")
 
 if __name__ == '__main__':
     main()
