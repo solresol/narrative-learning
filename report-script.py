@@ -138,6 +138,7 @@ def main():
     parser.add_argument('--patience', type=int,
                        help="Number of rounds to look back for early stopping")
     parser.add_argument("--best-round", action="store_true", help="Instead of showing the metric value, show the round where the validation result was best")
+    parser.add_argument("--estimate", help="Show the value of the metric given as an argument, based on the round for which the validation result was best (for the --metric argument)")
     parser.add_argument('--csv', type=str,
                        help="Output CSV file path")
     parser.add_argument('--chart', type=str,
@@ -162,10 +163,19 @@ def main():
         sys.exit(0)
 
     if args.best_round:
-        args.validation = True
         temp_df = generate_metrics_data(conn, split_id, args.metric, 'validation')
         temp_df.set_index('round_id', inplace=True)
         print(temp_df.metric.idxmax())
+        sys.exit(0)
+
+
+    if args.estimate:
+        temp_df = generate_metrics_data(conn, split_id, args.metric, 'validation')
+        temp_df.set_index('round_id', inplace=True)
+        # There's probably a bug here if two rounds had the same value
+        round_id = temp_df.metric.idxmax()
+        estimate_data = generate_metrics_data(conn, split_id, args.estimate, 'test')
+        print(estimate_data[estimate_data.round_id == round_id].metric.iloc[0])
         sys.exit(0)
 
     # If no data type specified, default to training data
@@ -202,7 +212,7 @@ def main():
         did_something = True
 
     if not did_something:
-        sys.exit("Specify --patience, --csv, --chart,  --show or --best-round")
+        sys.exit("Specify --patience, --csv, --chart,  --show, --estimate or --best-round")
 
 if __name__ == '__main__':
     main()
