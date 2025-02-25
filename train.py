@@ -74,8 +74,8 @@ def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
 
 
 def main():
-    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
-    default_model = os.environ.get('NARRATIVE_LEARNING_TRAINING_MODEL', 'llama3.3:latest')
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
+    default_model = os.environ.get('NARRATIVE_LEARNING_TRAINING_MODEL', None)
     default_example_count = int(os.environ.get('NARRATIVE_LEARNING_EXAMPLE_COUNT', '3'))
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
     parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
@@ -87,6 +87,11 @@ def main():
     parser.add_argument("--model", default=default_model, help="Model to do the retraining, not the model that does the inference")
     parser.add_argument("--round-tracking-file", help="A file that will have the new round ID written to it")
     args = parser.parse_args()
+
+    if args.database is None:
+        sys.exit("Must specify a database via --database or NARRATIVE_LEARNING_DATABASE env")
+    if args.model is None:
+        sys.exit("Must specify a model via --model or NARRATIVE_LEARNING_TRAINING_MODEL env")
 
     conn = sqlite3.connect(args.database)
     prompting_creation_prompt = get_prompt_for_updating_model(conn, args.round_id, args.example_count, args.show_history)
