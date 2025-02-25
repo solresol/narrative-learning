@@ -2,10 +2,19 @@
 
 if [ "$ROUND_TRACKING_FILE" = "" ]
 then
-    ROUND_TRACKING_FILE=.round-tracking-file
+    echo "ROUND_TRACKING_FILE is not defined"
+    exit 1
 fi
 
 echo "Using $ROUND_TRACKING_FILE to track the current round"
+
+if [ "$NARRATIVE_LEARNING_DATABASE" = "" ]
+then
+    echo "NARRATIVE_LEARNING_DATABASE is not defined"
+    exit 1
+fi
+
+echo "Storing rounds and prompts inn $NARRATIVE_LEARNING_DATABASE"
 
 if [ ! -e $ROUND_TRACKING_FILE ]
 then
@@ -17,16 +26,20 @@ fi
 
 echo "Starting at round $ROUND"
 
-while true
+
+
+while uv run report-script.py --metric accuracy --validation --patience 3 
 do
     uv run process_round.py --round $ROUND --loop
+    # This runs train one more time than is actually necessary
     uv run train.py --round-id $ROUND --round-tracking-file $ROUND_TRACKING_FILE
     ROUND=$(< $ROUND_TRACKING_FILE)
-    if uv run report-script.py --metric accuracy --validation --patience 3 
-    then
-	# Successful. Worth continuing
-	continue
-    else
-	break
-    fi
 done
+
+BEST_ROUND=$(uv run report-script.py --best)
+
+if [ "$BEST_ROUND" != "" ]
+then
+    OUTFILE="${NARRATIVE_LEARNING_DATABASE%.sqlite}.best-round.txt"
+    echo $BEST_ROUND > $OUTFILE
+fi
