@@ -7,8 +7,8 @@ import os
 
 def main():
     # One day I'll make --database mandatory, with no fallback to titanic_medical.sqlite
-    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
-    default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', 'phi4:latest')
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
+    default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', None)
     parser = argparse.ArgumentParser(description="List patientIDs missing from inferences for a given round")
     parser.add_argument("--list", action="store_true", help="Just list the patients yet to be processed")
     parser.add_argument("--stop-after", type=int, default=None, help="Stop after this many predictions")
@@ -22,6 +22,11 @@ def main():
 
     if args.list and args.loop:
         sys.exit("Can't loop if we aren't going to process anything")
+
+    if args.database is None:
+        sys.exit("Must specify --database or set the env variable NARRATIVE_LEARNING_DATABASE")
+    if args.model is None:
+        sys.exit("Must specify --model or set the env variable NARRATIVE_LEARNING_INFERENCE_MODEL")
 
     conn = sqlite3.connect(args.database)
     cur = conn.cursor()
