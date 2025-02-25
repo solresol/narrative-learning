@@ -11,7 +11,7 @@ import subprocess
 
 def get_prompt_for_updating_model(conn, round_id, example_count, history_rounds):
     answer = """
-    
+
 You are part of a program that is trying to learn the causes for
 success or failure of a medical intervention. At each round, a prompt
 is shown to an LLM together with the each patient's medical details
@@ -40,10 +40,10 @@ didn't work.
     if history_rounds > 0:
         cur = conn.cursor()
         cur.execute("""
-            SELECT round_id, prompt 
-              FROM rounds 
-             WHERE round_id < ? 
-          ORDER BY round_id DESC 
+            SELECT round_id, prompt
+              FROM rounds
+             WHERE round_id < ?
+          ORDER BY round_id DESC
              LIMIT ?
         """, (round_id, history_rounds))
         history_rounds = cur.fetchall()
