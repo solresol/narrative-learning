@@ -121,7 +121,7 @@ def generate_metrics_data(conn: sqlite3.Connection, split_id: int,
     return pd.DataFrame(data)
 
 def main():
-    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', 'titanic_medical.sqlite')
+    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
     parser = argparse.ArgumentParser(description="Report on classification metrics across rounds")
     parser.add_argument('--database', default=default_database,
                        help="Path to the SQLite database file")
@@ -144,6 +144,9 @@ def main():
                        help="Output chart PNG file path")
     parser.add_argument("--show", action="store_true", help="Display the metric data to stdout")
     args = parser.parse_args()
+
+    if not args.database:
+        sys.exit("Must specify a database file")
 
     conn = sqlite3.connect(args.database)
 
