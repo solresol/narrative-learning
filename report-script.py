@@ -194,7 +194,7 @@ def main():
     did_something = False
     if args.csv:
         df.to_csv(args.csv)
-        print(f"CSV output written to {csv_path}")
+        print(f"CSV output written to {args.csv}")
         did_something = True
 
     if args.chart:
