@@ -1,0 +1,15 @@
+This is the famous Titanic dataset. What I want to do is convert this
+to a dataset that looks like it is for a medical treatment. I want to
+mask everything but keep the details the same.
+
+1. Turn the passenger ID into a UUID.
+2. Survived changes from (0,1) to (Success, Failure)
+3. Pclass should change (1,2,3) to (Beta, Omicron, Delta)
+4. Name should be dropped
+5. Sex should be inverted.
+6. Age should become "Treatment Months", and be 3 times whatever the age was. Where the Age is null, impute a mean.
+7. SibSp should become "Genetic Class A Matches" and be one more than SibSp.
+8. Parch should be "Genetic Class B Matches" and be one more than Parch
+9. Fare should become "TcQ mass" and be 1000 times fare.
+10. Drop Cabin
+11. Change Embarked to "Cohort" with (S,C,Q) -> (Melbourne, Delhi, Lisbon)

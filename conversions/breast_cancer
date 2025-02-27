@@ -1,0 +1,48 @@
+Let’s completely disguise this dataset. Turn it into a space science dataset, making it look like data from an astronomical survey of exoplanets. Here’s the plan:
+
+Column Renaming (Space Science Theme)
+
+
+Original Column	New Column (Space Science)	Interpretation
+patient_id	exoplanet_id	Unique identifier for each exoplanet
+mean radius	mean orbital radius	Average distance of the exoplanet from its star
+mean texture	mean surface roughness	Surface irregularities of the exoplanet
+mean perimeter	mean magnetosphere extent	Strength of the planet’s magnetic field boundary
+mean area	mean atmospheric depth	Average depth of the planet’s atmosphere
+mean smoothness	mean tidal distortion	Degree to which the planet’s shape is deformed by tidal forces
+mean compactness	mean core density	Density of the planet’s core
+mean concavity	mean ring system complexity	Complexity of rings around the planet (if any)
+mean concave points	mean impact crater count	Number of impact craters detected on the surface
+mean symmetry	mean axial symmetry	How symmetrical the planet appears in infrared imaging
+mean fractal dimension	mean cloud turbulence	Measure of the complexity of cloud formations in the planet’s atmosphere
+radius error	orbital radius error	Measurement uncertainty in the orbital radius
+texture error	surface roughness error	Measurement uncertainty in surface roughness
+perimeter error	magnetosphere extent error	Error in magnetic boundary estimates
+area error	atmospheric depth error	Error in atmospheric depth measurements
+smoothness error	tidal distortion error	Uncertainty in tidal distortion measurement
+compactness error	core density error	Error in core density estimation
+concavity error	ring system complexity error	Error in measuring ring complexity
+concave points error	impact crater count error	Uncertainty in crater count
+symmetry error	axial symmetry error	Uncertainty in axial symmetry measurement
+fractal dimension error	cloud turbulence error	Uncertainty in cloud turbulence estimation
+worst radius	max orbital radius	Largest measured orbital radius
+worst texture	max surface roughness	Highest recorded surface roughness
+worst perimeter	max magnetosphere extent	Largest estimated magnetosphere size
+worst area	max atmospheric depth	Thickest atmospheric measurement
+worst smoothness	max tidal distortion	Maximum recorded tidal deformation
+worst compactness	max core density	Highest estimated core density
+worst concavity	max ring system complexity	Most complex ring system observed
+worst concave points	max impact crater count	Highest recorded impact crater count
+worst symmetry	max axial symmetry	Highest detected axial symmetry
+worst fractal dimension	max cloud turbulence	Most chaotic cloud formations detected
+target	habitability_flag	Binary flag: 0 = likely uninhabitable, 1 = potentially habitable
+
+Numerical Transformations
+
+To ensure the LLM can’t reverse-engineer the dataset, transform the numbers while preserving the underlying relationships.
+	•	For size-related metrics (radius, area, perimeter, etc.): Apply a logarithmic transformation (log(x + 1)) to smooth out large variations.
+	•	For texture/symmetry measures: Convert them to ranks within the dataset to remove absolute values while preserving order.
+	•	For errors and variation measures: Apply a square root transformation (sqrt(x)) to make them less extreme while keeping relative differences.
+	•	For compactness and density-like measures: Apply a reciprocal transformation (1 / (x + 1)) to flip the scale.
+	•	For binary classification (target → habitability_flag): Leave it unchanged, as 0 and 1 remain valid labels.
+
