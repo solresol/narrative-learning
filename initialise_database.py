@@ -243,7 +243,7 @@ def create_config_file(database_path, table_name, primary_key_field, target_fiel
     Create a configuration file with essential metadata for other scripts.
     
     Args:
-        database_path: Path to the SQLite database
+        database_path: Path the SQLite database, which we use (incorrectly) to guess a path for the config file. Ah well, Claude saved quite a lot of time
         table_name: Name of the table containing transformed data
         primary_key_field: Name of the primary key field
         target_field: Name of the target variable field
@@ -253,9 +253,11 @@ def create_config_file(database_path, table_name, primary_key_field, target_fiel
     
     Returns:
         Path to the created config file
+
+    To-do:
+        We should be able to specify the config file path on the CLI
     """
     config = {
-        "database_path": database_path,
         "table_name": table_name,
         "primary_key_field": primary_key_field,
         "target_field": target_field,
