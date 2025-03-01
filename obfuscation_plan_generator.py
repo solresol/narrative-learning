@@ -48,7 +48,7 @@ save_obfuscation_plan_documentation = {
                             },
                             "obfuscated_column": {
                                 "type": "string",
-                                "description": "The name of the column in the obfuscated dataset.",
+                                "description": "The name of the column in the obfuscated dataset. This should not contain spaces. Use underscores instead.",
                                 "nullable": True
                             },
                             "transformation": {
