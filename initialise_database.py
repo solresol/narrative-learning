@@ -68,7 +68,18 @@ def extract_obfuscation_plan(db_path):
         "columns": columns
     }
 
-def generate_schema_sql(obfuscation_plan, table_name, primary_key_field):
+#!/usr/bin/env python3
+import argparse
+import sqlite3
+import pandas as pd
+import uuid
+import sys
+import random
+import os
+import json
+import pathlib
+
+def generate_schema_sql(obfuscation_plan, table_name, primary_key_field, target_field):
     """
     Generate SQL schema based on the obfuscation plan.
     
@@ -76,6 +87,7 @@ def generate_schema_sql(obfuscation_plan, table_name, primary_key_field):
         obfuscation_plan: The obfuscation plan dictionary
         table_name: Name of the main data table
         primary_key_field: Name of the primary key field
+        target_field: Name of the transformed target field
     
     Returns:
         SQL string for creating the schema
@@ -208,8 +220,9 @@ def apply_transformation(original_df, obfuscation_plan):
     """
     # Create a new DataFrame to store the transformed data
     obfuscated_df = pd.DataFrame()
+    # Make an alias for it, because that's what the eval ops do.
     obfuscated = obfuscated_df
-    
+
     # Keep track of the original DataFrame as it gets modified during transformation
     source_df = original_df.copy()
     
@@ -225,13 +238,17 @@ def apply_transformation(original_df, obfuscation_plan):
         
         # Get obfuscated column name
         obfuscated_column = column_info.get("obfuscated_column", original_column)
+        
         # If there's a transformation, apply it
         if column_info.get("transformation"):
             # Create local variables for use in eval
             original = source_df
             # Execute the transformation
-            print("Running", column_info['transformation'])
-            exec(column_info["transformation"])
+            try:
+                result = exec(column_info["transformation"])
+                obfuscated_df[obfuscated_column] = result
+            except Exception as e:
+                sys.exit(f"Error applying transformation for {original_column}: {e}")
         else:
             # No transformation, just copy the column
             obfuscated_df[obfuscated_column] = source_df[original_column]
@@ -243,7 +260,7 @@ def create_config_file(database_path, table_name, primary_key_field, target_fiel
     Create a configuration file with essential metadata for other scripts.
     
     Args:
-        database_path: Path the SQLite database, which we use (incorrectly) to guess a path for the config file. Ah well, Claude saved quite a lot of time
+        database_path: Path to the SQLite database
         table_name: Name of the table containing transformed data
         primary_key_field: Name of the primary key field
         target_field: Name of the target variable field
@@ -253,11 +270,9 @@ def create_config_file(database_path, table_name, primary_key_field, target_fiel
     
     Returns:
         Path to the created config file
-
-    To-do:
-        We should be able to specify the config file path on the CLI
     """
     config = {
+        "database_path": database_path,
         "table_name": table_name,
         "primary_key_field": primary_key_field,
         "target_field": target_field,
@@ -332,10 +347,13 @@ def main():
         sys.exit("Must specify a database via --database or NARRATIVE_LEARNING_DATABASE env")
     
     # Extract the obfuscation plan
-    obfuscation_plan = extract_obfuscation_plan(args.obfuscation)
-    if args.verbose:
-        print("Obfuscation plan extracted:")
-        print(json.dumps(obfuscation_plan, indent=2))
+    try:
+        obfuscation_plan = extract_obfuscation_plan(args.obfuscation)
+        if args.verbose:
+            print("Obfuscation plan extracted:")
+            print(json.dumps(obfuscation_plan, indent=2))
+    except Exception as e:
+        sys.exit(f"Failed to extract obfuscation plan: {e}")
     
     # Load the source CSV
     try:
@@ -377,15 +395,18 @@ def main():
             sys.exit(f"Failed to apply additional schema from '{args.schema}': {e}")
         
     # Generate dynamic schema SQL
-    schema_sql = generate_schema_sql(obfuscation_plan, table_name, primary_key_field)
+    schema_sql = generate_schema_sql(obfuscation_plan, table_name, primary_key_field, target_field)
     if args.verbose:
         print("Generated schema SQL:")
         print(schema_sql)
         
     # Initialize the schema
-    conn.executescript(schema_sql)
-    if args.verbose:
-        print("Schema initialized dynamically")
+    try:
+        conn.executescript(schema_sql)
+        if args.verbose:
+            print("Schema initialized dynamically")
+    except Exception as e:
+        sys.exit(f"Failed to initialize dynamic schema: {e}")
     
     # Generate a unique ID for each row if needed
     
@@ -445,7 +466,12 @@ def main():
     
     if not target_field:
         print(f"Warning: Target field '{obfuscation_plan['target_variable']}' not found in obfuscation plan")
+        # Default to the original target variable name
         target_field = obfuscation_plan["target_variable"]
+    
+    if args.verbose:
+        print(f"Target field identified as: {target_field}")
+
     
     config_path = create_config_file(
         args.database,
