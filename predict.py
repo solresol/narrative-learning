@@ -80,7 +80,7 @@ Entity Data:
             insert_query,
             (round_id, entity_id, prediction_output['narrative_text'], run_info, prediction_output['prediction'])
         )
-        conn.commit()
+        config.conn.commit()
 
     except llmcall.MissingPrediction:
         sys.stderr.write("There was a field missing in the response. Skipping.\n")
