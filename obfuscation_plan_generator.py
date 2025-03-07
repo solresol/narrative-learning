@@ -26,11 +26,19 @@ save_obfuscation_plan_documentation = {
                 },
                 "obfuscated_dataset_type": {
                     "type": "string",
-                    "description": "A generic name for the obfuscated dataset (e.g., 'planetary nebular')."
+                    "description": "A generic name for the obfuscated dataset (e.g., 'exoplanet observations')."
                 },
                 "target_variable": {
                     "type": "string",
                     "description": "The name of the target variable in the original dataset."
+                },
+                "obfuscated_table_name": {
+                    "type": "string",
+                    "description": "The name of the table in the obfuscated dataset (e.g. 'exoplanets')"
+                },
+                "obfuscated_split_table_name": {
+                    "type": "string",
+                    "description": "The name of the table that holds information about train, validation and test splits. This is usually the singular noun form of the obfuscated_table_name, e.g. exoplanet_splits or patient_splits or passenger_splits"
                 },
                 "columns": {
                     "type": "array",
@@ -48,7 +56,7 @@ save_obfuscation_plan_documentation = {
                             },
                             "obfuscated_column": {
                                 "type": "string",
-                                "description": "The name of the column in the obfuscated dataset. This should not contain spaces. Use underscores instead.",
+                                "description": "The name of the column in the obfuscated dataset.",
                                 "nullable": True
                             },
                             "transformation": {
@@ -69,19 +77,21 @@ def create_database_schema(db_path):
     """Create the SQLite database schema for storing the obfuscation plan."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     # Create table for the obfuscation plan metadata
     cursor.execute('''
     CREATE TABLE obfuscation_metadata (
         id INTEGER PRIMARY KEY,
         primary_key TEXT NOT NULL,
+        target_variable TEXT NOT NULL,
         original_dataset_type TEXT NOT NULL,
         obfuscated_dataset_type TEXT NOT NULL,
-        target_variable TEXT NOT NULL,
+        obfuscated_table_name TEXT NOT NULL,
+        obfuscated_split_table_name TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     ''')
-    
+
     # Create table for the column transformations
     cursor.execute('''
     CREATE TABLE column_transformations (
@@ -94,7 +104,7 @@ def create_database_schema(db_path):
         FOREIGN KEY (obfuscation_id) REFERENCES obfuscation_metadata(id)
     )
     ''')
-    
+
     conn.commit()
     conn.close()
 
@@ -102,25 +112,29 @@ def save_obfuscation_to_db(db_path, obfuscation_json):
     """Save the obfuscation plan to the SQLite database."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     # Insert obfuscation metadata
     cursor.execute('''
     INSERT INTO obfuscation_metadata (
-        primary_key, 
-        original_dataset_type, 
-        obfuscated_dataset_type, 
-        target_variable
-    ) VALUES (?, ?, ?, ?)
+        primary_key,
+        original_dataset_type,
+        obfuscated_dataset_type,
+        target_variable,
+        obfuscated_table_name,
+        obfuscated_split_table_name
+    ) VALUES (?, ?, ?, ?, ?, ?)
     ''', (
         obfuscation_json['primary_key'],
         obfuscation_json['original_dataset_type'],
         obfuscation_json['obfuscated_dataset_type'],
-        obfuscation_json['target_variable']
+        obfuscation_json['target_variable'],
+        obfuscation_json['obfuscated_table_name'],
+        obfuscation_json['obfuscated_split_table_name']
     ))
-    
+
     # Get the ID of the inserted metadata
     obfuscation_id = cursor.lastrowid
-    
+
     # Insert column transformations
     for column in obfuscation_json['columns']:
         cursor.execute('''
@@ -134,11 +148,11 @@ def save_obfuscation_to_db(db_path, obfuscation_json):
         ''', (
             obfuscation_id,
             column['original_column'],
-            column['remove'],
+            column.get('remove', False),
             column.get('obfuscated_column'),  # Using get() to handle None values
             column.get('transformation')      # Using get() to handle None values
         ))
-    
+
     conn.commit()
     conn.close()
 
@@ -153,7 +167,7 @@ if __name__ == '__main__':
     guidelines = open(args.guidelines).read()
     csv_file = pandas.read_csv(args.csv_file)
     prompt = f"{guidelines}\nFor reference, here are the columns and their types:\n{csv_file.dtypes}"
-    
+
     messages = [
         {
             "role": "system",
@@ -185,5 +199,5 @@ if __name__ == '__main__':
     print(json.dumps(obfuscation_json, indent=2))
     create_database_schema(args.obfuscation_plan)
     save_obfuscation_to_db(args.obfuscation_plan, obfuscation_json)
-    
+
     print(f"Obfuscation plan successfully saved to {args.obfuscation_plan}")
