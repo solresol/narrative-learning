@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import sqlite3
-import common
 import os
 import json
 
@@ -13,15 +12,22 @@ if __name__ == '__main__':
                         required = default_database is None, help="Path to the SQLite database file")
     # In the future, I'd like to be able to find the round that with --patience=x --validation
     parser.add_argument('--round-id', type=int, required=True, help="Round ID")
-    parser.add_argument("--encoder-program", required=True, help="The python program that you used to obfuscate the data")
+    parser.add_argument("--encoding-instructions", required=True, help="The conversions/* text that you passed to obfuscation_plan_generator.py")
     parser.add_argument("--model", default="gpt-4o", help="What AI model will do the untranslating")
     parser.add_argument("--output-file", help="Where to put the output")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
+    encoding_instructions = open(args.encoding_instructions).read()
     conn = sqlite3.connect(args.database)
-    encoder = open(args.encoder_program).read()
-    encoded_prompt = common.get_round_prompt(conn, args.round_id)
+    cur = conn.cursor()
+    cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (args.round_id,))
+    row = cur.fetchone()
+
+    if row is None:
+        sys.exit(f"Round ID {round_id} not found")
+
+    encoded_prompt = row[0]
     if args.verbose:
         print("Prompt that was used")
         print("--------------------")
@@ -29,7 +35,7 @@ if __name__ == '__main__':
         print(encoded_prompt)
     from openai import OpenAI
     client = OpenAI(api_key=open(os.path.expanduser("~/.openai.key")).read().strip())
-    prompt = f"""To run my experiment, I encoded my data using this program:\n\n```\n{encoder}\n```\n\nThe prompt that was used in the experiment was this:\n\n```\n{encoded_prompt}\n```\n\nWhat would the prompt have been if had been using the original data? i.e. do the inverse of the operations from the program to the text of the experiment's prompt. Note that the target of the rule (what is being predicted) has also been transformed."""
+    prompt = f"""To run my experiment, I encoded my data using these encoding instructions:\n\n```\n{encoding_instructions}\n```\n\nThe prompt that was used in the experiment was this:\n\n```\n{encoded_prompt}\n```\n\nWhat would the prompt have been if had been using the original data? i.e. do the inverse of the operations from the encoding instructions to the text of the experiment's prompt. Note that the target of the rule (what is being predicted) has also been transformed."""
     messages = [{
         "role": "user",
         "content": prompt
