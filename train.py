@@ -5,21 +5,17 @@ import sys
 import json
 import llmcall
 import os
+import datasetconfig
 
-from common import get_round_prompt, get_confusion_matrix, get_printable_confusion_matrix_and_examples, get_split_id
-import subprocess
-
-def get_prompt_for_updating_model(conn, round_id, example_count, history_rounds):
+def get_prompt_for_updating_model(config, round_id, example_count, history_rounds):
     answer = """
 
-You are part of a program that is trying to learn the causes for
-success or failure of a medical intervention. At each round, a prompt
-is shown to an LLM together with the each patient's medical details
-one at a time. It then attempts to predict the outcome based on the
+You are part of a program that is trying to learn inference rules on
+this dataset. At each round, a prompt is shown to an LLM together with
+one row of data at a time. It then attempts to predict the outcome based on the
 rules in the prompt. This process works well if the prompt has very
 explicit and clear rules: aim for unambiguous thresholds for values,
-clear criteria for labels and careful wording for and 'AND' or 'OR'
-logic you need to express.
+clear criteria for labels and careful wording.
 
 We would like to improve the prompt that is being used.
 
@@ -32,13 +28,13 @@ didn't work.
 ----------------------------
 
 """
-    prompt = get_round_prompt(conn, round_id)
-    matrix = get_confusion_matrix(conn, round_id, example_count=example_count)
-    answer += get_printable_confusion_matrix_and_examples(round_id, prompt, matrix, show_examples=True)
+    prompt = config.get_round_prompt(round_id)
+    matrix = config.get_confusion_matrix(round_id, example_count=example_count)
+    answer += config.get_printable_confusion_matrix_and_examples(round_id, matrix, show_examples=True)
 
     # History rounds (without examples)
     if history_rounds > 0:
-        cur = conn.cursor()
+        cur = config.conn.cursor()
         cur.execute("""
             SELECT round_id, prompt
               FROM rounds
@@ -51,25 +47,25 @@ didn't work.
         if history_rounds:
             answer += "# Historical results:"
             for r_id, r_prompt in history_rounds:
-                hist_matrix = get_confusion_matrix(conn, r_id, example_count=0)
-                answer += get_printable_confusion_matrix_and_examples(r_id, r_prompt, hist_matrix, show_examples=False)
+                hist_matrix = config.get_confusion_matrix(r_id, example_count=0)
+                answer += config.get_printable_confusion_matrix_and_examples(r_id, hist_matrix, show_examples=False)
         else:
             #print("No previous rounds found.")
             pass
     answer += "\n\n---------------------\n\n"
     return answer
 
-def run_reprompt(conn, prompting_creation_prompt, old_round_id, model):
+def run_reprompt(config, prompting_creation_prompt, old_round_id, model):
     new_prompt, process_info = llmcall.dispatch_reprompt_prompt(model, prompting_creation_prompt)
-    split_id = get_split_id(conn, old_round_id)
-    cur = conn.cursor()
+    split_id = config.get_split_id(old_round_id)
+    cur = config.conn.cursor()
     cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?,?) returning round_id",
                 [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info])
     row = cur.fetchone()
     if row is None:
         sys.exit("Failed to create a new round")
     new_round_id = row[0]
-    conn.commit()
+    config.conn.commit()
     return (new_round_id, new_prompt)
 
 
@@ -77,6 +73,7 @@ def main():
     default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
     default_model = os.environ.get('NARRATIVE_LEARNING_TRAINING_MODEL', None)
     default_example_count = int(os.environ.get('NARRATIVE_LEARNING_EXAMPLE_COUNT', '3'))
+    default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
     parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
     parser.add_argument('--round-id', type=int, required=True, help="Round ID")
@@ -86,20 +83,24 @@ def main():
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--model", default=default_model, help="Model to do the retraining, not the model that does the inference")
     parser.add_argument("--round-tracking-file", help="A file that will have the new round ID written to it")
+    parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
     if args.database is None:
         sys.exit("Must specify a database via --database or NARRATIVE_LEARNING_DATABASE env")
     if args.model is None:
         sys.exit("Must specify a model via --model or NARRATIVE_LEARNING_TRAINING_MODEL env")
+    if args.config is None:
+        sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
     conn = sqlite3.connect(args.database)
-    prompting_creation_prompt = get_prompt_for_updating_model(conn, args.round_id, args.example_count, args.show_history)
+    config = datasetconfig.DatasetConfig(conn, args.config)
+    prompting_creation_prompt = get_prompt_for_updating_model(config, args.round_id, args.example_count, args.show_history)
     if args.dry_run or args.verbose:
         print(prompting_creation_prompt)
     if args.dry_run:
         sys.exit(0)
-    new_round_id, details = run_reprompt(conn, prompting_creation_prompt, args.round_id, args.model)
+    new_round_id, details = run_reprompt(config, prompting_creation_prompt, args.round_id, args.model)
     if args.verbose:
         print(f"REASONING: {details['reasoning']}")
         print()
