@@ -5,6 +5,23 @@ import json
 import os
 from typing import Dict, List, Any, Optional, Tuple
 
+class MissingConfigElementException(Exception):
+    """Exception raised when a required configuration element is missing.
+
+    Attributes:
+        column_name -- The name of the missing configuration element
+        config_path -- The path to the configuration file being read
+    """
+
+    def __init__(self, column_name, config_path):
+        self.column_name = column_name
+        self.config_path = config_path
+        self.message = f"Missing required configuration element: '{column_name}' in config file: '{config_path}'"
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message
+
 class DatasetConfig:
     """
     Class for handling dataset configuration and database connection.
@@ -22,29 +39,22 @@ class DatasetConfig:
         self.conn = conn
 
         # Load configuration
-        try:
-            with open(config_path, 'r') as f:
-                self.config = json.load(f)
-        except Exception as e:
-            sys.exit(f"Failed to load configuration from {config_path}: {e}")
+        with open(config_path, 'r') as f:
+            self.config = json.load(f)
 
         # Required configuration fields
-        required_fields = [
-            "table_name", "primary_key_field", "target_field",
-            "entity_id_field", "entity_split_table", "columns"
-        ]
+        required_fields = [ "table_name", "primary_key", "target_field", "splits_table", "columns" ]
 
         # Verify configuration has all required fields
         for field in required_fields:
             if field not in self.config:
-                sys.exit(f"Configuration missing required field: {field}")
+                raise MissingConfigElementException(field, config_path)
 
         # Store key configuration values as attributes for convenience
         self.table_name = self.config["table_name"]
-        self.primary_key_field = self.config["primary_key_field"]
+        self.primary_key = self.config["primary_key"]
         self.target_field = self.config["target_field"]
-        self.entity_id_field = self.config["entity_id_field"]
-        self.entity_split_table = self.config["entity_split_table"]
+        self.splits_table = self.config["splits_table"]
         self.columns = self.config["columns"]
 
     def get_entity_features(self, entity_id: str) -> str:
@@ -68,7 +78,7 @@ class DatasetConfig:
         query = f"""
         SELECT {column_list}
         FROM {self.table_name}
-        WHERE {self.primary_key_field} = ?
+        WHERE {self.primary_key} = ?
         """
 
         cur = self.conn.cursor()
@@ -76,7 +86,7 @@ class DatasetConfig:
         row = cur.fetchone()
 
         if not row:
-            sys.exit(f"Entity ID '{entity_id}' not found.")
+            raise KeyError(f"Entity ID '{entity_id}' not found.")
 
         # Format the result as a string
         result = ""
@@ -95,6 +105,11 @@ class DatasetConfig:
         Returns:
             Dictionary with entity data
         """
+        # I think this function isn't used. The only difference between
+        # this and get_entity_features is that this supplies the entity_id
+        # (which the caller already knew) and the target (which is only used
+        # in the training phase, when it's an aggregate query and we wouldn't
+        # ask for one element).
         column_list = ", ".join([f'"{col}"' for col in self.columns])
 
         query = f"""
@@ -131,8 +146,8 @@ class DatasetConfig:
         cur = self.conn.cursor()
         query = f"""
         SELECT holdout
-        FROM {self.entity_split_table}
-        WHERE {self.entity_id_field}_id = ? AND split_id = ?
+        FROM {self.splits_table}
+        WHERE {self.primary_key} = ? AND split_id = ?
         """
 
         cur.execute(query, (entity_id, split_id))
@@ -199,11 +214,11 @@ class DatasetConfig:
         split_id = self.get_split_id(round_id)
 
         query = f"""
-            SELECT m.{self.target_field}, i.prediction, i.{self.entity_id_field}_id,
+            SELECT m.{self.target_field}, i.prediction, i.{self.primary_key},
                    i.narrative_text, s.holdout, s.validation
               FROM inferences i
-              JOIN {self.table_name} m ON i.{self.entity_id_field}_id = m.{self.primary_key_field}
-              JOIN {self.entity_split_table} s ON (s.{self.entity_id_field}_id = i.{self.entity_id_field}_id)
+              JOIN {self.table_name} m ON i.{self.primary_key} = m.{self.primary_key}
+              JOIN {self.entity_split_table} s ON (s.{self.primary_key} = i.{self.primary_key})
              WHERE i.round_id = ? AND s.split_id = ?
              ORDER BY RANDOM()
         """
@@ -324,148 +339,3 @@ class DatasetConfig:
                     answer += "\n"
 
         return answer
-
-# Helper function to find and load config file
-def find_config_for_database(database_path):
-    """
-    Find the corresponding config file for a database.
-
-    Args:
-        database_path: Path to the database file
-
-    Returns:
-        Path to the config file
-    """
-    # Check for config file in the same directory with .config.json extension
-    config_path = os.path.splitext(database_path)[0] + '.config.json'
-    if os.path.exists(config_path):
-        return config_path
-
-    # If not found, look for any .config.json file in the same directory
-    directory = os.path.dirname(database_path)
-    for file in os.listdir(directory):
-        if file.endswith('.config.json'):
-            return os.path.join(directory, file)
-
-    sys.exit(f"Could not find a config file for database {database_path}")
-
-# Function to create a DatasetConfig from a database path
-def create_config_from_database(database_path, config_path=None):
-    """
-    Create a DatasetConfig object from a database path.
-
-    Args:
-        database_path: Path to the database file
-        config_path: Optional path to the config file
-
-    Returns:
-        DatasetConfig object
-    """
-    try:
-        conn = sqlite3.connect(database_path)
-    except Exception as e:
-        sys.exit(f"Failed to connect to database '{database_path}': {e}")
-
-    if config_path is None:
-        config_path = find_config_for_database(database_path)
-
-    return DatasetConfig(conn, config_path)
-
-# These functions remain for backward compatibility
-def get_round_prompt(conn, round_id):
-    """Legacy function that creates a temporary DatasetConfig to get round prompt."""
-    # This is inefficient but maintains backward compatibility
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    config_path = find_config_for_database(db_path)
-    dataset_config = DatasetConfig(conn, config_path)
-    return dataset_config.get_round_prompt(round_id)
-
-def get_split_id(conn, round_id):
-    """Legacy function that creates a temporary DatasetConfig to get split ID."""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    config_path = find_config_for_database(db_path)
-    dataset_config = DatasetConfig(conn, config_path)
-    return dataset_config.get_split_id(round_id)
-
-def is_holdout_data(conn, entity_id, split_id):
-    """Legacy function that creates a temporary DatasetConfig to check holdout status."""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    config_path = find_config_for_database(db_path)
-    dataset_config = DatasetConfig(conn, config_path)
-    return dataset_config.is_holdout_data(entity_id, split_id)
-
-def get_confusion_matrix(conn, round_id, example_count=0, on_holdout_data=False, on_test_data=False):
-    """Legacy function that creates a temporary DatasetConfig to get confusion matrix."""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    config_path = find_config_for_database(db_path)
-    dataset_config = DatasetConfig(conn, config_path)
-    return dataset_config.get_confusion_matrix(round_id, example_count, on_holdout_data, on_test_data)
-
-def get_patient_features(conn, patient_id):
-    """Legacy function for backward compatibility."""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    config_path = find_config_for_database(db_path)
-    dataset_config = DatasetConfig(conn, config_path)
-    return dataset_config.get_entity_features(patient_id)
-
-def get_printable_confusion_matrix_and_examples(round_id, prompt, matrix, show_examples=True):
-    """Legacy function for backward compatibility."""
-    # This doesn't use DatasetConfig but replicates the functionality
-    answer = ""
-    answer += f"Round ID: {round_id}\n"
-    answer += "Prompt used:\n\t"
-    answer += prompt.replace('\n', '\n\t')
-    answer += "\n\nConfusion Matrix:\n"
-    # Layout: rows are Actual values; columns are Predicted.
-    answer += (f"{'':15s} {'Predicted Positive':20s} {'Predicted Negative':20s}\n")
-    # For actual positive:
-    tp = matrix['TP']['count']
-    fn = matrix['FN']['count']
-    answer += (f"{'Actual Positive':15s} {tp:20d} {fn:20d}\n")
-    # For actual negative:
-    fp = matrix['FP']['count']
-    tn = matrix['TN']['count']
-    answer += (f"{'Actual Negative':15s} {fp:20d} {tn:20d}\n")
-    answer += "\n"
-    total_count = tp + fn + fp + tn
-    accuracy = (tp + tn) / total_count
-    answer += f"Accuracy: {accuracy:.3f}\n"
-    # Calculate precision, recall, and F1-score
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-
-    answer += f"Precision: {precision:.3f}\n"
-    answer += f"Recall: {recall:.3f}\n"
-    answer += f"F1 Score: {f1_score:.3f}\n\n"
-    if show_examples:
-        for cell in ['TP', 'FN', 'FP', 'TN']:
-            examples = matrix[cell]['examples']
-            if examples:
-                cell_full = {
-                    'TP': "True Positives",
-                    'FN': "False Negatives",
-                    'FP': "False Positives",
-                    'TN': "True Negatives"
-                }[cell]
-                ex = examples[0]
-                answer += (f"Examples for {cell_full}: (Outcome: {ex['outcome']}, Prediction: {ex['prediction']})\n")
-                for ex in examples:
-                    answer += (f"  EntityData:\n{ex['features']}\n")
-                answer += "\n"
-    return answer
