@@ -44,6 +44,8 @@ Output in JSON format like this:
         raise InvalidPrediction
     if 'prediction' not in answer:
         raise MissingPrediction
+    if answer['prediction'] is None:
+        raise MissingPrediction
     if answer['prediction'] not in valid_predictions:
         # Maybe there might be a way out of this
         rescued = False
