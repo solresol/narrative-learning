@@ -66,7 +66,7 @@ class DatasetConfig:
         self.columns = self.config["columns"]
 
         cursor = conn.cursor()
-        cursor.execute(f"select distinct {self.target_field} from {self.table_name}")
+        cursor.execute(f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}")
         self.valid_predictions = []
         for row in cursor:
             self.valid_predictions.append(row[0])
@@ -212,6 +212,24 @@ class DatasetConfig:
 
         return row[0]
 
+    def positive_label(self):
+        # This ain't great. Fundamentally, we are trying to shoe-horn into a "true positive" / "false positive"
+        # labelling system and it's not all that well-defined what positive or negative is here.
+        return self.valid_predictions[0]
+
+    def negative_label(self):
+        return self.valid_predictions[1]
+
+    def get_matrix_label_for_prediction(self, ground_truth, prediction):
+        if ground_truth == self.positive_label():
+            if ground_truth == prediction:
+                return 'TP'
+            return 'FN'
+        if ground_truth == prediction:
+            return 'TN'
+        else:
+            return 'FP'
+
     def get_confusion_matrix(self, round_id: int, example_count: int = 0,
                            on_holdout_data: bool = False, on_test_data: bool = False) -> Dict:
         """
@@ -261,21 +279,7 @@ class DatasetConfig:
                 if not validation and not on_test_data:
                     continue
 
-            # Standardize outcome and prediction values
-            outcome_label = 'Success' if outcome.strip().lower() == 'success' else 'Failure'
-            prediction_label = 'Success' if prediction.strip().lower() == 'success' else 'Failure'
-
-            # Determine which matrix cell this belongs to
-            if outcome_label == 'Success' and prediction_label == 'Success':
-                cell = 'TP'
-            elif outcome_label == 'Success' and prediction_label == 'Failure':
-                cell = 'FN'
-            elif outcome_label == 'Failure' and prediction_label == 'Success':
-                cell = 'FP'
-            elif outcome_label == 'Failure' and prediction_label == 'Failure':
-                cell = 'TN'
-            else:
-                continue  # Shouldn't happen
+            cell = self.get_matrix_label_for_prediction(outcome, prediction)
 
             # Update counts and collect examples if needed
             matrix[cell]['count'] += 1
