@@ -1,4 +1,14 @@
-all: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
+all:
+
+obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
+	uv run obfuscation_plan_generator.py --csv-file datasets/breast_cancer.csv  --obfuscation-plan obfuscations/breast_cancer --guidelines conversions/breast_cancer
+
+# should also have obfuscations/breast_cancer
+dbtemplates/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config.json: datasets/breast_cancer.csv initialise_database.py
+	uv run initialise_database.py --database dbtemplates/wisconsin_exoplanets.sqlite --source datasets/breast_cancer.csv --config-file configs/wisconsin_exoplanets.config.json --obfuscation obfuscations/breast_cancer --verbose
+
+
+old-all: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
      results/titanic_medical-anthropic.results.csv results/titanic_medical-anthropic.decoded-best-prompt.txt results/titanic_medical-anthropic.estimate.txt \
      results/titanic_medical-anthropic-10example.results.csv results/titanic_medical-anthropic-10example.decoded-best-prompt.txt results/titanic_medical-anthropic-10example.estimate.txt \
      results/titanic_medical-falcon.results.csv results/titanic_medical-falcon.decoded-best-prompt.txt results/titanic_medical-falcon.estimate.txt \
