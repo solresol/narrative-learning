@@ -55,7 +55,18 @@ Check to see if it works... this should produce a long list:
 
 ## To-do
 
-- Make the code less specific --- it shouldn't be tied to Titanic Medical.
+- Make the code less dataset specific --- it shouldn't be tied to Titanic Medical.
 
-- Make a decoder which takes a prompt and a list of transformations that were applied to the data, and undoes
-  them to generate the actual prompt.
+- Add Google Gemini as an option
+
+- Check to see if it's the overseer model or the underling model that has the most effect on the result
+
+- Create some baseline predictor results
+
+- Try phi4-mini as an evaluator
+
+- Try claude sonnet 3.7
+
+- Try o1 pro and gpt4.5
+
+- Confirm that I can delete `initialise_titanic.py` and can get the same answers out of `initialise_database.py`
