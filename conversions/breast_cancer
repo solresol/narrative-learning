@@ -36,7 +36,7 @@ Column Renaming (Space Science Theme)
 | worst concave points       | max_impact_crater_count             | Highest recorded impact crater count                         |
 | worst symmetry             | max_axial_symmetry                  | Highest detected axial symmetry                              |
 | worst fractal dimension    | max_cloud_turbulence                | Most chaotic cloud formations detected                       |
-| target                     | habitability_flag                   | Binary flag: 0 = likely uninhabitable, 1 = potentially habitable |
+| target                     | occupying_species                   | Fylaran or Qtharri |
 
 Numerical Transformations
 
@@ -45,5 +45,5 @@ To ensure the LLM can’t reverse-engineer the dataset, transform the numbers wh
 	•	For texture/symmetry measures: Convert them to ranks within the dataset to remove absolute values while preserving order.
 	•	For errors and variation measures: Apply a square root transformation (sqrt(x)) to make them less extreme while keeping relative differences.
 	•	For compactness and density-like measures: Apply a reciprocal transformation (1 / (x + 1)) to flip the scale.
-	•	For binary classification (target → habitability_flag): Where it had the word malignant, make that "uninhabitable" and change the word "benign" to "habitable".
+	•	For binary classification (target → occupying_species): Where it had the word malignant, make that "Fylaran" and change the word "benign" to "Qtharri".
 
