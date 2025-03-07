@@ -234,7 +234,7 @@ class DatasetConfig:
                    i.narrative_text, s.holdout, s.validation
               FROM inferences i
               JOIN {self.table_name} m ON i.{self.primary_key} = m.{self.primary_key}
-              JOIN {self.entity_split_table} s ON (s.{self.primary_key} = i.{self.primary_key})
+              JOIN {self.splits_table} s ON (s.{self.primary_key} = i.{self.primary_key})
              WHERE i.round_id = ? AND s.split_id = ?
              ORDER BY RANDOM()
         """
