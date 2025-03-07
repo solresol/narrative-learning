@@ -1,14 +1,57 @@
-all:
+WISCONSIN_DATASET := wisconsin_exoplanets
+TITANIC_DATASET := titanic_medical
+MODELS := openai phi
+TEMPLATES_DIR := dbtemplates
+RESULTS_DIR := results
+
+.PHONY: all wisconsin titanic
+
+all: wisconsin titanic
+	echo Done
+
+
+######################################################################
+
+# Wisconsin
+
+# Define variables for reuse
+
+# Main targets
+.PHONY: all wisconsin
+
+all: wisconsin
+
+wisconsin: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).best-round.txt)
+	@echo Wisconsin is ready
+
+# Pattern rule for .best-round.txt files
+$(RESULTS_DIR)/%.best-round.txt: $(RESULTS_DIR)/%.sqlite
+	. ./envs/$(firstword $(subst _, ,$(basename $*)))/$(lastword $(subst -, ,$(basename $*))).env && ./loop.sh
+
+# Pattern rule for database files
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite
+	cp $< $@
+
+# You can easily add more datasets or models by updating the variables
+# For example, to add 'claude' model:
+# MODELS := openai phi claude
+#
+# Or to add another dataset variable:
+
 
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
 	uv run obfuscation_plan_generator.py --csv-file datasets/breast_cancer.csv  --obfuscation-plan obfuscations/breast_cancer --guidelines conversions/breast_cancer
 
-# should also have obfuscations/breast_cancer
-dbtemplates/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config.json: datasets/breast_cancer.csv initialise_database.py
-	uv run initialise_database.py --database dbtemplates/wisconsin_exoplanets.sqlite --source datasets/breast_cancer.csv --config-file configs/wisconsin_exoplanets.config.json --obfuscation obfuscations/breast_cancer --verbose
+# Should add obfuscations/breast_cancer as a dependency, but that means the template seems to get rebuilt
+# too often. I guess it's because obfuscations/breast_cancer gets opened and updated by initialise_database.py
+$(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config.json: datasets/breast_cancer.csv initialise_database.py
+	uv run initialise_database.py --database $(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite --source datasets/breast_cancer.csv --config-file configs/wisconsin_exoplanets.config.json --obfuscation obfuscations/breast_cancer --verbose
 
 
-old-all: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
+######################################################################
+
+
+titanic: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
      results/titanic_medical-anthropic.results.csv results/titanic_medical-anthropic.decoded-best-prompt.txt results/titanic_medical-anthropic.estimate.txt \
      results/titanic_medical-anthropic-10example.results.csv results/titanic_medical-anthropic-10example.decoded-best-prompt.txt results/titanic_medical-anthropic-10example.estimate.txt \
      results/titanic_medical-falcon.results.csv results/titanic_medical-falcon.decoded-best-prompt.txt results/titanic_medical-falcon.estimate.txt \
@@ -17,7 +60,7 @@ old-all: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma
      results/titanic_medical-openai-10examples.results.csv results/titanic_medical-openai-10examples.decoded-best-prompt.txt results/titanic_medical-openai-10examples.estimate.txt \
      results/titanic_medical-openai-o1-10examples.results.csv results/titanic_medical-openai-o1-10examples.decoded-best-prompt.txt results/titanic_medical-openai-o1-10examples.estimate.txt \
      results/titanic_medical-llama-phi.results.csv results/titanic_medical-llama-phi.decoded-best-prompt.txt results/titanic_medical-llama-phi.estimate.txt
-	echo Done
+	echo Titanic is ready
 
 # Gemma2, 3 examples
 results/titanic_medical-gemma.estimate.txt: results/titanic_medical-gemma.best-round.txt
