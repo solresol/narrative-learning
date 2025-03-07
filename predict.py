@@ -5,9 +5,26 @@ import sys
 import os
 import json
 import llmcall
-from common import create_config_from_database
+import datasetconfig
 
-def predict(conn, round_id, entity_id, model='phi4:latest', dry_run=False):
+class AlreadyPredictedException(Exception):
+    """Exception raised when a prediction has already been made for a specific primary key in a round.
+
+    Attributes:
+        primary_key_value -- The value of the primary key that already has a prediction
+        round_id -- The ID of the round where the prediction exists
+    """
+
+    def __init__(self, primary_key_value, round_id):
+        self.primary_key_value = primary_key_value
+        self.round_id = round_id
+        self.message = f"A prediction for primary key '{primary_key_value}' already exists in round '{round_id}'"
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message
+
+def predict(config, round_id, entity_id, model='phi4:latest', dry_run=False):
     """
     Predict the outcome for a specific entity in a specific round.
 
@@ -19,28 +36,21 @@ def predict(conn, round_id, entity_id, model='phi4:latest', dry_run=False):
         dry_run: If True, just print the prompt and don't actually run prediction
     """
     # Create a DatasetConfig object
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    db_path = cursor.fetchone()[2]  # Get the database file path
-
-    dataset_config = create_config_from_database(db_path)
+    cursor = config.conn.cursor()
 
     # Get the round instructions
-    instructions = dataset_config.get_round_prompt(round_id)
+    instructions = config.get_round_prompt(round_id)
     if instructions is None:
         sys.exit(f"Round ID {round_id} not found.")
 
-    # Check if the entity has already been evaluated in this round
-    entity_field = dataset_config.entity_id_field
-
-    query = f"SELECT COUNT(*) FROM inferences WHERE round_id = ? AND {entity_field}_id = ?"
+    query = f"SELECT COUNT(*) FROM inferences WHERE round_id = ? AND {config.primary_key} = ?"
     cursor.execute(query, [round_id, entity_id])
     row = cursor.fetchone()
     if row[0] == 1:
-        sys.exit(f"Entity {entity_id} has already been evaluated in round {round_id}")
+        raise AlreadyPredictedException(entity_id, round_id)
 
     # Get the entity features
-    entity_features = dataset_config.get_entity_features(entity_id)
+    entity_features = config.get_entity_features(entity_id)
 
     # Create the prompt
     prompt = f"""This is an experiment in identifying whether an LLM can predict outcomes. Use the following methodology for predicting the outcome for this entity.
@@ -57,16 +67,12 @@ Entity Data:
         print(prompt)
         return
 
-    # Valid predictions should be derived from the target field values
-    # For now, hardcoding to Success/Failure which matches the Titanic dataset
-    valid_predictions = ['Success', 'Failure']
-
     try:
-        prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, valid_predictions)
+        prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, config.valid_predictions)
 
         # Insert the prediction into the database
         insert_query = f"""
-        INSERT INTO inferences (round_id, {entity_field}_id, narrative_text, llm_stderr, prediction)
+        INSERT INTO inferences (round_id, {config.primary_key}, narrative_text, llm_stderr, prediction)
         VALUES (?, ?, ?, ?, ?)
         """
 
@@ -86,6 +92,7 @@ Entity Data:
 if __name__ == '__main__':
     default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
     default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', None)
+    default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
 
     parser = argparse.ArgumentParser(
         description="Make predictions for an entity based on the round prompt"
@@ -101,8 +108,15 @@ if __name__ == '__main__':
                         help="Just show the prompt, then exit")
     parser.add_argument("--model", default=default_model,
                         help="AI model to use for prediction")
+    parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.database)
+    if args.database is None:
+        sys.exit("Must specify --database or set the env variable NARRATIVE_LEARNING_DATABASE")
+    if args.config is None:
+        sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
-    predict(conn, args.round_id, args.entity_id, args.model, args.dry_run)
+    conn = sqlite3.connect(args.database)
+    config = datasetconfig.DatasetConfig(conn, args.config)
+
+    predict(config, args.round_id, args.entity_id, args.model, args.dry_run)
