@@ -3,39 +3,40 @@ Let’s completely disguise this dataset. Turn it into a space science dataset, 
 Column Renaming (Space Science Theme)
 
 
-Original Column	New Column (Space Science)	Interpretation
-patient_id	exoplanet_id	Unique identifier for each exoplanet
-mean radius	mean orbital radius	Average distance of the exoplanet from its star
-mean texture	mean surface roughness	Surface irregularities of the exoplanet
-mean perimeter	mean magnetosphere extent	Strength of the planet’s magnetic field boundary
-mean area	mean atmospheric depth	Average depth of the planet’s atmosphere
-mean smoothness	mean tidal distortion	Degree to which the planet’s shape is deformed by tidal forces
-mean compactness	mean core density	Density of the planet’s core
-mean concavity	mean ring system complexity	Complexity of rings around the planet (if any)
-mean concave points	mean impact crater count	Number of impact craters detected on the surface
-mean symmetry	mean axial symmetry	How symmetrical the planet appears in infrared imaging
-mean fractal dimension	mean cloud turbulence	Measure of the complexity of cloud formations in the planet’s atmosphere
-radius error	orbital radius error	Measurement uncertainty in the orbital radius
-texture error	surface roughness error	Measurement uncertainty in surface roughness
-perimeter error	magnetosphere extent error	Error in magnetic boundary estimates
-area error	atmospheric depth error	Error in atmospheric depth measurements
-smoothness error	tidal distortion error	Uncertainty in tidal distortion measurement
-compactness error	core density error	Error in core density estimation
-concavity error	ring system complexity error	Error in measuring ring complexity
-concave points error	impact crater count error	Uncertainty in crater count
-symmetry error	axial symmetry error	Uncertainty in axial symmetry measurement
-fractal dimension error	cloud turbulence error	Uncertainty in cloud turbulence estimation
-worst radius	max orbital radius	Largest measured orbital radius
-worst texture	max surface roughness	Highest recorded surface roughness
-worst perimeter	max magnetosphere extent	Largest estimated magnetosphere size
-worst area	max atmospheric depth	Thickest atmospheric measurement
-worst smoothness	max tidal distortion	Maximum recorded tidal deformation
-worst compactness	max core density	Highest estimated core density
-worst concavity	max ring system complexity	Most complex ring system observed
-worst concave points	max impact crater count	Highest recorded impact crater count
-worst symmetry	max axial symmetry	Highest detected axial symmetry
-worst fractal dimension	max cloud turbulence	Most chaotic cloud formations detected
-target	habitability_flag	Binary flag: 0 = likely uninhabitable, 1 = potentially habitable
+| Original Column            | New Column (Space Science)          | Interpretation                                               |
+|----------------------------|-------------------------------------|--------------------------------------------------------------|
+| patient_id                 | exoplanet_id                        | Unique identifier for each exoplanet                         |
+| mean radius                | mean_orbital_radius                 | Average distance of the exoplanet from its star              |
+| mean texture               | mean_surface_roughness              | Surface irregularities of the exoplanet                      |
+| mean perimeter             | mean_magnetosphere_extent           | Strength of the planet’s magnetic field boundary             |
+| mean area                  | mean_atmospheric_depth              | Average depth of the planet’s atmosphere                     |
+| mean smoothness            | mean_tidal_distortion               | Degree to which the planet’s shape is deformed by tidal forces |
+| mean compactness           | mean_core_density                   | Density of the planet’s core                                 |
+| mean concavity             | mean_ring_system_complexity         | Complexity of rings around the planet (if any)               |
+| mean concave points        | mean_impact_crater_count            | Number of impact craters detected on the surface             |
+| mean symmetry              | mean_axial_symmetry                 | How symmetrical the planet appears in infrared imaging       |
+| mean fractal dimension     | mean_cloud_turbulence               | Measure of the complexity of cloud formations in the planet’s atmosphere |
+| radius error               | orbital_radius_error                | Measurement uncertainty in the orbital radius                |
+| texture error              | surface_roughness_error             | Measurement uncertainty in surface roughness                 |
+| perimeter error            | magnetosphere_extent_error          | Error in magnetic boundary estimates                         |
+| area error                 | atmospheric_depth_error             | Error in atmospheric depth measurements                      |
+| smoothness error           | tidal_distortion_error              | Uncertainty in tidal distortion measurement                  |
+| compactness error          | core_density_error                  | Error in core density estimation                             |
+| concavity error            | ring_system_complexity_error        | Error in measuring ring complexity                           |
+| concave points error       | impact_crater_count_error           | Uncertainty in crater count                                  |
+| symmetry error             | axial_symmetry_error                | Uncertainty in axial symmetry measurement                    |
+| fractal dimension error    | cloud_turbulence_error              | Uncertainty in cloud turbulence estimation                   |
+| worst radius               | max_orbital_radius                  | Largest measured orbital radius                              |
+| worst texture              | max_surface_roughness               | Highest recorded surface roughness                           |
+| worst perimeter            | max_magnetosphere_extent            | Largest estimated magnetosphere size                         |
+| worst area                 | max_atmospheric_depth               | Thickest atmospheric measurement                             |
+| worst smoothness           | max_tidal_distortion                | Maximum recorded tidal deformation                           |
+| worst compactness          | max_core_density                    | Highest estimated core density                               |
+| worst concavity            | max_ring_system_complexity          | Most complex ring system observed                           |
+| worst concave points       | max_impact_crater_count             | Highest recorded impact crater count                         |
+| worst symmetry             | max_axial_symmetry                  | Highest detected axial symmetry                              |
+| worst fractal dimension    | max_cloud_turbulence                | Most chaotic cloud formations detected                       |
+| target                     | habitability_flag                   | Binary flag: 0 = likely uninhabitable, 1 = potentially habitable |
 
 Numerical Transformations
 
@@ -44,5 +45,5 @@ To ensure the LLM can’t reverse-engineer the dataset, transform the numbers wh
 	•	For texture/symmetry measures: Convert them to ranks within the dataset to remove absolute values while preserving order.
 	•	For errors and variation measures: Apply a square root transformation (sqrt(x)) to make them less extreme while keeping relative differences.
 	•	For compactness and density-like measures: Apply a reciprocal transformation (1 / (x + 1)) to flip the scale.
-	•	For binary classification (target → habitability_flag): Leave it unchanged, as 0 and 1 remain valid labels.
+	•	For binary classification (target → habitability_flag): Where it had the word malignant, make that "uninhabitable" and change the word "benign" to "habitable".
 
