@@ -351,7 +351,7 @@ def main():
         holdout = random.random() < args.holdout
         validation = holdout and (random.random() < args.validation)
         cur.execute(f"INSERT INTO {obfuscated_split_table_name} (split_id, {obfuscated_primary_key}, holdout, validation) VALUES (?, ?, ?, ?)",
-                   (split_id, index, holdout, validation))
+                   (split_id, row[obfuscated_primary_key], holdout, validation))
     
     conn.commit()
     
