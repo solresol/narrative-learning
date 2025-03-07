@@ -44,10 +44,16 @@ Output in JSON format like this:
         raise InvalidPrediction
     if 'prediction' not in answer:
         raise MissingPrediction
-    if answer['prediction'] not in ['Success', 'Failure']:
-        # We didn't do anything. Leave it for now, and hopefully we'll come
-        # back in another round
-        raise InvalidPrediction
+    if answer['prediction'] not in valid_predictions:
+        # Maybe there might be a way out of this
+        rescued = False
+        for valid in valid_predictions:
+            if answer['prediction'].lower() == valid.lower():
+                answer['prediction'] = valid
+                rescued = True
+                break
+        if not rescued:
+            raise InvalidPrediction
     if 'narrative_text' not in answer:
         sys.stderr.write("No narrative text\n")
         answer['narrative_text'] = ''
