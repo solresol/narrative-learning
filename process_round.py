@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--round-id', type=int, required=True, help="Round ID to check")
     parser.add_argument("--loop", action="store_true", help="Loop until there are no more patients to process")
     parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
-
+    parser.add_argument("--progress-bar", action="store_true", help="Show a progress bar")
     parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
     # Maybe one day I will find the latest round by default, or have an option for a split_id
     parser.add_argument("--model", default=default_model)
@@ -41,7 +41,7 @@ def main():
     predictions_done = 0
 
     while True:
-        # Get patientIDs from medical_treatment_data that are NOT present in inferences for this round.
+        # Get IDs that are not already inferred
         query = f"""
         SELECT {config.primary_key}
         FROM {config.table_name}
@@ -50,8 +50,13 @@ def main():
         );
         """
         cur.execute(query, (args.round_id,))
+        # I think I should try doing a fetchall so that tqdm knows the appropriate length
+        iterator = cur
+        if args.progress_bar:
+            import tqdm
+            iterator = tqdm.tqdm(cur.fetchall())
         anything_left = False
-        for row in cur:
+        for row in iterator:
             anything_left = True
             if args.list:
                 print(row[0])
