@@ -1,7 +1,7 @@
 {
   "table_name": "exoplanets",
   "primary_key": "exoplanet_id",
-  "target_field": "habitability_flag",
+  "target_field": "occupying_species",
   "splits_table": "exoplanet_splits",
   "columns": [
     "exoplanet_id",
@@ -35,6 +35,6 @@
     "max_impact_crater_count",
     "max_axial_symmetry",
     "max_cloud_turbulence",
-    "habitability_flag"
+    "occupying_species"
   ]
 }
