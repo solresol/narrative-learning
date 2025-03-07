@@ -1,9 +1,8 @@
 {
-  "table_name": "astronomical_survey_data",
-  "primary_key_field": "astronomical_ID",
+  "table_name": "exoplanets",
+  "primary_key": "exoplanet_id",
   "target_field": "habitability_flag",
-  "entity_id_field": "astronomical",
-  "entity_split_table": "astronomical_split",
+  "splits_table": "exoplanet_splits",
   "columns": [
     "exoplanet_id",
     "mean_orbital_radius",
