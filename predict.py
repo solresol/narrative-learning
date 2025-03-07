@@ -6,6 +6,7 @@ import os
 import json
 import llmcall
 import datasetconfig
+import random
 
 class AlreadyPredictedException(Exception):
     """Exception raised when a prediction has already been made for a specific primary key in a round.
@@ -68,7 +69,12 @@ Entity Data:
         return
 
     try:
-        prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, config.valid_predictions)
+        if instructions == 'Choose randomly':
+            # We don't need the LLM for that
+            prediction_output = {'narrative_text': "Random choice", 'prediction': random.choice(config.valid_predictions) }
+            run_info = "Instructions were to pick randomly. LLM was not used."
+        else:
+            prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, config.valid_predictions)
 
         # Insert the prediction into the database
         insert_query = f"""
