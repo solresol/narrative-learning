@@ -5,6 +5,14 @@ import json
 import os
 from typing import Dict, List, Any, Optional, Tuple
 
+class TargetClassingException(Exception):
+    def __init__(self, target, num_classes):
+        self.message = f"{target} has {num_classes}, but narrative learning can only cope with binary classification at the moment"
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message
+
 class MissingConfigElementException(Exception):
     """Exception raised when a required configuration element is missing.
 
@@ -56,6 +64,14 @@ class DatasetConfig:
         self.target_field = self.config["target_field"]
         self.splits_table = self.config["splits_table"]
         self.columns = self.config["columns"]
+
+        cursor = conn.cursor()
+        cursor.execute(f"select distinct {self.target_field} from {self.table_name}")
+        self.valid_predictions = []
+        for row in cursor:
+            self.valid_predictions.append(row[0])
+        if len(self.valid_predictions) != 2:
+            raise TargetClassingException(self.target_field, len(self.valid_predictions))
 
     def get_entity_features(self, entity_id: str) -> str:
         """
