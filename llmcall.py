@@ -265,7 +265,7 @@ def openai_prediction(model, prompt, valid_predictions):
 
 
     # Debug print (can remove if not needed)
-    print(response)
+    #print(response)
     usage = response.usage
     prompt_tokens = usage.prompt_tokens
     completion_tokens = usage.completion_tokens
