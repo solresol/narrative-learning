@@ -86,7 +86,7 @@ class DatasetConfig:
         # Build a query that selects all columns except primary key and target
         columns_to_select = []
         for column in self.columns:
-            if column != self.primary_key_field and column != self.target_field:
+            if column != self.primary_key and column != self.target_field:
                 columns_to_select.append(column)
 
         column_list = ", ".join([f'"{col}"' for col in columns_to_select])
