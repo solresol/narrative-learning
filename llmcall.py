@@ -374,7 +374,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_prediction(model, prompt, valid_predictions)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_prediction(model, prompt, valid_predictions)
     raise UnknownModel
 
@@ -384,6 +384,6 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_reprompt(model, prompting_creation_prompt)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_reprompt(model, prompting_creation_prompt)
     raise UnknownModel
