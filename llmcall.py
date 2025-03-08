@@ -41,12 +41,16 @@ Output in JSON format like this:
         answer = json.loads(stdout)
     except json.decoder.JSONDecodeError:
         # If I hadn't already printed it, I would print it here
+        sys.stderr.write("Non-JSON returned\n")
         raise InvalidPrediction
     if 'prediction' not in answer:
+        sys.stderr.write(f"There was no prediction. The keys were {list(answer.keys())}\n")
         raise MissingPrediction
     if answer['prediction'] is None:
+        sys.stderr.write(f"Prediction was null\n")
         raise MissingPrediction
     if answer['prediction'] not in valid_predictions:
+        sys.stderr.write(f"Prediction was not a valid prediction: {answer['prediction']}\n")
         # Maybe there might be a way out of this
         rescued = False
         for valid in valid_predictions:
@@ -55,6 +59,7 @@ Output in JSON format like this:
                 rescued = True
                 break
         if not rescued:
+            sys.stderr.write("Could not match that case-insensitively to any valid prediction\n")
             raise InvalidPrediction
     if 'narrative_text' not in answer:
         sys.stderr.write("No narrative text\n")
@@ -274,9 +279,14 @@ def openai_prediction(model, prompt, valid_predictions):
 
     answer = json.loads(message.tool_calls[0].function.arguments)
 
+    if 'prediction' not in answer:
+        sys.stderr.write(f"There was no prediction. The keys were {list(answer.keys())}\n")
+        raise MissingPrediction
     if answer.get("prediction") not in valid_predictions:
+        sys.stderr.write(f"Prediction was not a valid prediction: {answer['prediction']}\n")
         raise MissingPrediction
     if "narrative_text" not in answer:
+        sys.stderr.write("Missing narrative text\n")
         answer["narrative_text"] = ""
 
     if 'gpt-4o-mini' in model:
