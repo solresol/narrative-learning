@@ -361,7 +361,7 @@ def openai_reprompt(model, prompting_creation_prompt):
     elif 'gpt-4o' in model:
         cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
     elif 'o1' in model:
-        cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000        
+        cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
