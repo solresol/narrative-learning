@@ -30,7 +30,7 @@ echo "Starting at round $ROUND"
 
 while uv run report-script.py --metric accuracy --validation --patience 3 
 do
-    uv run process_round.py --round $ROUND --loop
+    uv run process_round.py --round $ROUND --loop --progress-bar
     # This runs train one more time than is actually necessary
     uv run train.py --round-id $ROUND --round-tracking-file $ROUND_TRACKING_FILE
     ROUND=$(< $ROUND_TRACKING_FILE)
