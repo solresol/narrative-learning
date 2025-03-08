@@ -1,6 +1,7 @@
 WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
-MODELS := openai phi
+#To add to models... MODELS := openai phi
+MODELS := anthropic10 falcon10 gemma openai10 openai-o1-10anthropic falcon llamaphi openai openai45
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
@@ -21,24 +22,43 @@ all: wisconsin titanic
 
 all: wisconsin
 
-wisconsin: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).best-round.txt)
-	@echo Wisconsin is ready
+wisconsin: wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best
+	echo Wisconsin is ready
 
-# Pattern rule for .best-round.txt files
+# Add these targets to depend on all models
+wisconsin-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).estimate.txt)
+	echo All Wisconsin estimates are ready
+
+wisconsin-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).results.csv)
+	echo All Wisconsin results are ready
+
+wisconsin-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).decoded-best-prompt.txt)
+	echo All Wisconsin prompts are ready
+
+wisconsin-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).best-round.txt)
+	echo All Wisconsin best-round files are ready
+
+# Pattern rule for .best-round.txt files. This is super-generic. It would be better to specialise this
+# for Wisconsin, and then have another one for the Titanic data
 $(RESULTS_DIR)/%.best-round.txt: $(RESULTS_DIR)/%.sqlite
 	. ./envs/$(firstword $(subst _, ,$(basename $*)))/$(lastword $(subst -, ,$(basename $*))).env && ./loop.sh
 
-# Pattern rule for database files
+
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite
 	cp $< $@
 
-# You can easily add more datasets or models by updating the variables
-# For example, to add 'claude' model:
-# MODELS := openai phi claude
-#
-# Or to add another dataset variable:
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt
+	. ./envs/wisconsin/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.results.csv: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt
+	. ./envs/wisconsin/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/wisconsin/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt
+	. ./envs/wisconsin/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
 
 
+# How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
 	uv run obfuscation_plan_generator.py --csv-file datasets/breast_cancer.csv  --obfuscation-plan obfuscations/breast_cancer --guidelines conversions/breast_cancer
 
