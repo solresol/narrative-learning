@@ -14,7 +14,7 @@ def extract_obfuscation_plan(db_path):
     """
     Extract the obfuscation plan from the SQLite database.
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     cursor = conn.cursor()
     
     # Get the most recent obfuscation plan. There should only
