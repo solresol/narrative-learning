@@ -67,6 +67,19 @@ $(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config
 
 ######################################################################
 
+# How we created the dataset
+obfuscations/titanic: conversions/titanic obfuscation_plan_generator.py datasets/titanic.csv
+	uv run obfuscation_plan_generator.py --csv-file datasets/titanic.csv  --obfuscation-plan obfuscations/titanic --guidelines conversions/titanic
+
+$(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite configs/titanic_medical.config.json: datasets/titanic.csv initialise_database.py
+	uv run initialise_database.py --database $(TEMPLATES_DIR)/titanic_medical.sqlite --source datasets/titanic.csv --config-file configs/titanic_medical.config.json --obfuscation obfuscations/titanic --verbose
+
+
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite
+	. ./envs/titanic/$*.env && ./loop.sh
+
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite
+	cp $< $@
 
 titanic: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
      results/titanic_medical-anthropic.results.csv results/titanic_medical-anthropic.decoded-best-prompt.txt results/titanic_medical-anthropic.estimate.txt \
