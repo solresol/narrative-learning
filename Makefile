@@ -38,11 +38,8 @@ wisconsin-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)
 wisconsin-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).best-round.txt)
 	echo All Wisconsin best-round files are ready
 
-# Pattern rule for .best-round.txt files. This is super-generic. It would be better to specialise this
-# for Wisconsin, and then have another one for the Titanic data
-$(RESULTS_DIR)/%.best-round.txt: $(RESULTS_DIR)/%.sqlite
-	. ./envs/$(firstword $(subst _, ,$(basename $*)))/$(lastword $(subst -, ,$(basename $*))).env && ./loop.sh
-
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite
+	. ./envs/wisconsin/$*.env && ./loop.sh
 
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite
 	cp $< $@
