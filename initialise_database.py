@@ -149,59 +149,6 @@ def generate_schema_sql(obfuscation_plan, source_df):
 );\n"""
 
     return schema_sql
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    # Get the obfuscation ID if not provided
-    if obfuscation_id is None:
-        cursor.execute("""
-            SELECT id FROM obfuscation_metadata 
-            ORDER BY created_at DESC LIMIT 1
-        """)
-        result = cursor.fetchone()
-        if not result:
-            sys.exit(f"No obfuscation plans found in {db_path}")
-        obfuscation_id = result[0]
-    
-    # Get the metadata
-    cursor.execute("""
-        SELECT primary_key, original_dataset_type, obfuscated_dataset_type, target_variable 
-        FROM obfuscation_metadata 
-        WHERE id = ?
-    """, (obfuscation_id,))
-    
-    metadata_row = cursor.fetchone()
-    if not metadata_row:
-        sys.exit(f"Obfuscation plan with ID {obfuscation_id} not found")
-    
-    primary_key, original_dataset_type, obfuscated_dataset_type, target_variable = metadata_row
-    
-    # Get the column transformations
-    cursor.execute("""
-        SELECT original_column, remove, obfuscated_column, transformation 
-        FROM column_transformations 
-        WHERE obfuscation_id = ?
-    """, (obfuscation_id,))
-    
-    columns = []
-    for row in cursor.fetchall():
-        original_column, remove, obfuscated_column, transformation = row
-        columns.append({
-            "original_column": original_column,
-            "remove": bool(remove),
-            "obfuscated_column": obfuscated_column,
-            "transformation": transformation
-        })
-    
-    conn.close()
-    
-    return {
-        "primary_key": primary_key,
-        "original_dataset_type": original_dataset_type,
-        "obfuscated_dataset_type": obfuscated_dataset_type,
-        "target_variable": target_variable,
-        "columns": columns
-    }
 
 def apply_transformation(original_df, obfuscation_plan):
     """
