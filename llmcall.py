@@ -139,7 +139,7 @@ def claude_prediction(model, prompt, valid_predictions):
             model=model,
         system="Use the store_prediction function to provide your analysis. You must include both a narrative_text explaining your thinking and a prediction.",
         max_tokens=8192,
-            temperature=0,
+        #temperature=0,
             messages=messages,
             tools=[tool_schema['function']],
             tool_choice = {'name': 'store_prediction', 'type': 'tool', 'disable_parallel_tool_use': True }
@@ -197,7 +197,7 @@ def claude_reprompt(model, prompting_creation_prompt):
         model=model,
         system="Use the store_prediction function to provide your analysis. You must include both a narrative_text explaining your thinking and a prediction.",
         max_tokens=8192,
-        temperature=0,
+        #temperature=0,
         messages=messages,
         tools=[tool_schema['function']],
         tool_choice = {'name': 'store_replacement_prompt', 'type': 'tool', 'disable_parallel_tool_use': True }
@@ -264,8 +264,8 @@ def openai_prediction(model, prompt, valid_predictions):
         model=model,
         messages=messages,
         tools=[prediction_function],
-        tool_choice={'type': 'function', 'function': {"name": "store_prediction"}},
-        temperature=0
+        tool_choice={'type': 'function', 'function': {"name": "store_prediction"}}
+        #temperature=0
     )
 
 
