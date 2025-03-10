@@ -153,7 +153,7 @@ def main():
     if args.config is None:
         sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
-    conn = sqlite3.connect(args.database)
+    conn = sqlite3.connect(f'file:{args.database}?mode=ro', uri=True)
     config = datasetconfig.DatasetConfig(conn, args.config)
 
     # If split_id not provided, use the most recent
