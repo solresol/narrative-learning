@@ -81,131 +81,34 @@ $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(TITANIC_DAT
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite
 	cp $< $@
 
-titanic: results/titanic_medical-gemma.results.csv results/titanic_medical-gemma.decoded-best-prompt.txt results/titanic_medical-gemma.estimate.txt \
-     results/titanic_medical-anthropic.results.csv results/titanic_medical-anthropic.decoded-best-prompt.txt results/titanic_medical-anthropic.estimate.txt \
-     results/titanic_medical-anthropic-10example.results.csv results/titanic_medical-anthropic-10example.decoded-best-prompt.txt results/titanic_medical-anthropic-10example.estimate.txt \
-     results/titanic_medical-falcon.results.csv results/titanic_medical-falcon.decoded-best-prompt.txt results/titanic_medical-falcon.estimate.txt \
-     results/titanic_medical-falcon-10examples.results.csv results/titanic_medical-falcon-10examples.decoded-best-prompt.txt results/titanic_medical-falcon-10examples.estimate.txt \
-     results/titanic_medical-openai.results.csv results/titanic_medical-openai.decoded-best-prompt.txt results/titanic_medical-openai.estimate.txt \
-     results/titanic_medical-openai-10examples.results.csv results/titanic_medical-openai-10examples.decoded-best-prompt.txt results/titanic_medical-openai-10examples.estimate.txt \
-     results/titanic_medical-openai-o1-10examples.results.csv results/titanic_medical-openai-o1-10examples.decoded-best-prompt.txt results/titanic_medical-openai-o1-10examples.estimate.txt \
-     results/titanic_medical-llama-phi.results.csv results/titanic_medical-llama-phi.decoded-best-prompt.txt results/titanic_medical-llama-phi.estimate.txt
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
+	. ./envs/titanic/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
+	. ./envs/titanic/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/titanic/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
+	. ./envs/titanic/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
+
+titanic: titanic-estimates titanic-results titanic-prompts titanic-best
 	echo Titanic is ready
 
-# Gemma2, 3 examples
-results/titanic_medical-gemma.estimate.txt: results/titanic_medical-gemma.best-round.txt
-	. ./envs/titanic/gemma.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-gemma.results.csv: results/titanic_medical-gemma.best-round.txt
-	. ./envs/titanic/gemma.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/gemma.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-gemma.decoded-best-prompt.txt: results/titanic_medical-gemma.best-round.txt
-	. ./envs/titanic/gemma.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-gemma.best-round.txt: results/titanic_medical-gemma.sqlite
-	. ./envs/titanic/gemma.env && ./loop.sh
-results/titanic_medical-gemma.sqlite:
-	. ./envs/titanic/gemma.env && uv run initialise_titanic.py
+# Add these targets to depend on all models
+titanic-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).estimate.txt)
+	echo All Titanic estimates are ready
 
-# Anthropic 3 examples
-results/titanic_medical-anthropic.estimate.txt: results/titanic_medical-anthropic.best-round.txt
-	. ./envs/titanic/anthropic.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-anthropic.results.csv: results/titanic_medical-anthropic.best-round.txt
-	. ./envs/titanic/anthropic.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/anthropic.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-anthropic.decoded-best-prompt.txt: results/titanic_medical-anthropic.best-round.txt
-	. ./envs/titanic/anthropic.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-anthropic.best-round.txt: results/titanic_medical-anthropic.sqlite
-	. ./envs/titanic/anthropic.env && ./loop.sh
-results/titanic_medical-anthropic.sqlite:
-	. ./envs/titanic/anthropic.env && uv run initialise_titanic.py
+titanic-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).results.csv)
+	echo All Titanic results are ready
 
-# Anthropic 10 examples
-results/titanic_medical-anthropic-10example.estimate.txt: results/titanic_medical-anthropic-10example.best-round.txt
-	. ./envs/titanic/anthropic10.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-anthropic-10example.results.csv: results/titanic_medical-anthropic-10example.best-round.txt
-	. ./envs/titanic/anthropic10.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/anthropic10.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-anthropic-10example.decoded-best-prompt.txt: results/titanic_medical-anthropic-10example.best-round.txt
-	. ./envs/titanic/anthropic10.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-anthropic-10example.best-round.txt: results/titanic_medical-anthropic-10example.sqlite
-	. ./envs/titanic/anthropic10.env && ./loop.sh
-results/titanic_medical-anthropic-10example.sqlite:
-	. ./envs/titanic/anthropic10.env && uv run initialise_titanic.py
+titanic-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).decoded-best-prompt.txt)
+	echo All Titanic prompts are ready
 
-# Falcon 3 examples
-results/titanic_medical-falcon.estimate.txt: results/titanic_medical-falcon.best-round.txt
-	. ./envs/titanic/falcon.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-falcon.results.csv: results/titanic_medical-falcon.best-round.txt
-	. ./envs/titanic/falcon.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/falcon.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-falcon.decoded-best-prompt.txt: results/titanic_medical-falcon.best-round.txt
-	. ./envs/titanic/falcon.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-falcon.best-round.txt: results/titanic_medical-falcon.sqlite
-	. ./envs/titanic/falcon.env && ./loop.sh
-results/titanic_medical-falcon.sqlite:
-	. ./envs/titanic/falcon.env && uv run initialise_titanic.py
+titanic-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).best-round.txt)
+	echo All Titanic best-round files are ready
 
-# Falcon 10 examples
-results/titanic_medical-falcon-10examples.estimate.txt: results/titanic_medical-falcon-10examples.best-round.txt
-	. ./envs/titanic/falcon10.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-falcon-10examples.results.csv: results/titanic_medical-falcon-10examples.best-round.txt
-	. ./envs/titanic/falcon10.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/falcon10.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-falcon-10examples.decoded-best-prompt.txt: results/titanic_medical-falcon-10examples.best-round.txt
-	. ./envs/titanic/falcon10.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-falcon-10examples.best-round.txt: results/titanic_medical-falcon-10examples.sqlite
-	. ./envs/titanic/falcon10.env && ./loop.sh
-results/titanic_medical-falcon-10examples.sqlite:
-	. ./envs/titanic/falcon10.env && uv run initialise_titanic.py
 
-# OpenAI 3 examples
-results/titanic_medical-openai.estimate.txt: results/titanic_medical-openai.best-round.txt
-	. ./envs/titanic/openai.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-openai.results.csv: results/titanic_medical-openai.best-round.txt
-	. ./envs/titanic/openai.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/openai.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-openai.decoded-best-prompt.txt: results/titanic_medical-openai.best-round.txt
-	. ./envs/titanic/openai.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-openai.best-round.txt: results/titanic_medical-openai.sqlite
-	. ./envs/titanic/openai.env && ./loop.sh
-results/titanic_medical-openai.sqlite:
-	. ./envs/titanic/openai.env && uv run initialise_titanic.py
+	echo Titanic is ready
 
-# OpenAI 10 examples
-results/titanic_medical-openai-10examples.estimate.txt: results/titanic_medical-openai-10examples.best-round.txt
-	. ./envs/titanic/openai10.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-openai-10examples.results.csv: results/titanic_medical-openai-10examples.best-round.txt
-	. ./envs/titanic/openai10.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/openai10.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-openai-10examples.decoded-best-prompt.txt: results/titanic_medical-openai-10examples.best-round.txt
-	. ./envs/titanic/openai10.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-openai-10examples.best-round.txt: results/titanic_medical-openai-10examples.sqlite
-	. ./envs/titanic/openai10.env && ./loop.sh
-results/titanic_medical-openai-10examples.sqlite:
-	. ./envs/titanic/openai10.env && uv run initialise_titanic.py
-
-# OpenAI O1 10 examples
-results/titanic_medical-openai-o1-10examples.estimate.txt: results/titanic_medical-openai-o1-10examples.best-round.txt
-	. ./envs/titanic/openai-o1-10.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-openai-o1-10examples.results.csv: results/titanic_medical-openai-o1-10examples.best-round.txt
-	. ./envs/titanic/openai-o1-10.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/openai-o1-10.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-openai-o1-10examples.decoded-best-prompt.txt: results/titanic_medical-openai-o1-10examples.best-round.txt
-	. ./envs/titanic/openai-o1-10.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-openai-o1-10examples.best-round.txt: results/titanic_medical-openai-o1-10examples.sqlite
-	. ./envs/titanic/openai-o1-10.env && ./loop.sh
-results/titanic_medical-openai-o1-10examples.sqlite:
-	. ./envs/titanic/openai-o1-10.env && uv run initialise_titanic.py
-
-# LLaMA-Phi
-results/titanic_medical-llama-phi.estimate.txt: results/titanic_medical-llama-phi.best-round.txt
-	. ./envs/titanic/llama-phi.env && uv run report-script.py --estimate accuracy > $@
-results/titanic_medical-llama-phi.results.csv: results/titanic_medical-llama-phi.best-round.txt
-	. ./envs/titanic/llama-phi.env && uv run report-script.py --train --validation --test --show
-	. ./envs/titanic/llama-phi.env && uv run report-script.py --train --validation --test --csv $@
-results/titanic_medical-llama-phi.decoded-best-prompt.txt: results/titanic_medical-llama-phi.best-round.txt
-	. ./envs/titanic/llama-phi.env && uv run decode.py --round-id $(shell cat $<) --encoder-program initialise_titanic.py --verbose --output $@
-results/titanic_medical-llama-phi.best-round.txt: results/titanic_medical-llama-phi.sqlite
-	. ./envs/titanic/llama-phi.env && ./loop.sh
-results/titanic_medical-llama-phi.sqlite:
-	. ./envs/titanic/llama-phi.env && uv run initialise_titanic.py
+######################################################################
 
