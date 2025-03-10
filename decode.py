@@ -19,7 +19,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     encoding_instructions = open(args.encoding_instructions).read()
-    conn = sqlite3.connect(args.database)
+    conn = sqlite3.connect(f"file:{args.database}?mode=ro", uri=True)
     cur = conn.cursor()
     cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (args.round_id,))
     row = cur.fetchone()
