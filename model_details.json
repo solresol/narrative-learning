@@ -1,0 +1,90 @@
+{
+  "claude-3-5-haiku-20241022": {
+    "parameters": 175,
+    "reasoning": false
+  },
+  "claude-3-5-sonnet-20241022": {
+    "parameters": 175,
+    "reasoning": false
+  },
+  "claude-3-haiku-20240307": {
+    "parameters": 175,
+    "reasoning": false
+  },
+  "falcon-7b": {
+    "parameters": 10,
+    "reasoning": false
+  },
+  "gemma-2b": {
+    "parameters": 27,
+    "reasoning": false
+  },
+  "gpt-4": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-32k": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-turbo-preview": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4o": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4o-2024-05-13": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4o-mini": {
+    "parameters": 100,
+    "reasoning": false
+  },
+  "gpt-4-1106-preview": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-0125-preview": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-0613": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-1106-vision-preview": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-4-vision-preview": {
+    "parameters": 200,
+    "reasoning": false
+  },
+  "gpt-o1": {
+    "parameters": 300,
+    "reasoning": true
+  },
+    "o1": {
+	"parameters": 300,
+	"reasoning": true
+    },
+  "gpt-o1-preview": {
+    "parameters": 300,
+    "reasoning": true
+  },
+    "falcon3:10b": {
+	"parameters": 10,
+	"reasoning": false
+    },
+    "llama3.3:latest": {
+	"parameters": 70,
+	"reasoning": false
+    },
+    "gpt-4.5-preview": {
+	"parameters": 1800,
+	"reasoning": false
+    }
+}
