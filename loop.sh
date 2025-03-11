@@ -14,7 +14,7 @@ then
     exit 1
 fi
 
-echo "Storing rounds and prompts inn $NARRATIVE_LEARNING_DATABASE"
+echo "Storing rounds and prompts in $NARRATIVE_LEARNING_DATABASE"
 
 if [ ! -e $ROUND_TRACKING_FILE ]
 then
