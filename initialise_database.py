@@ -197,7 +197,7 @@ def create_config_file(output_path, obfuscation_plan):
         "target_field": column_lookup[obfuscation_plan['target_variable']],
         "splits_table": obfuscation_plan['obfuscated_split_table_name']
     }
-    config["columns"] = [col['obfuscated_column'] for col in obfuscation_plan['columns']]
+    config["columns"] = [col['obfuscated_column'] for col in obfuscation_plan['columns'] if not col['remove']]
     
     with open(output_path, 'w') as f:
         json.dump(config, f, indent=2)
