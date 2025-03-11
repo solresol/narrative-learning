@@ -31,11 +31,11 @@ wisconsin: wisconsin_results.txt
 wisconsin_results.txt: wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
 	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output wisconsin_results.csv --results results/wisconsin_exoplanets*.txt
 
-wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt
+wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 	echo Baseline created
 
-$(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt: configs/$(WISCONSIN_DATASET).config.json dbtemplates/$(WISCONSIN_DATASET).sqlite
-	uv run baseline.py --config configs/$(WISCONSIN_DATASET).config.json --database dbtemplates/$(WISCONSIN_DATASET).sqlite --logistic $(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt --dec  $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt
+$(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json: configs/$(WISCONSIN_DATASET).config.json $(RESULTS_DIR)/$(WISCONSIN_DATASET)-baseline.sqlite
+	uv run baseline.py --config configs/$(WISCONSIN_DATASET).config.json --database $(RESULTS_DIR)/$(WISCONSIN_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 
 # Add these targets to depend on all models
 wisconsin-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).estimate.txt)
@@ -53,8 +53,8 @@ wisconsin-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite
 	. ./envs/wisconsin/$*.env && ./loop.sh
 
-$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite
-	cp $< $@
+$(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sql
+	sqlite3 $@ < $<
 
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt
 	. ./envs/wisconsin/$*.env && uv run report-script.py --estimate accuracy > $@
@@ -73,8 +73,10 @@ obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator
 
 # Should add obfuscations/breast_cancer as a dependency, but that means the template seems to get rebuilt
 # too often. I guess it's because obfuscations/breast_cancer gets opened and updated by initialise_database.py
-$(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config.json: datasets/breast_cancer.csv initialise_database.py
+$(TEMPLATES_DIR)/wisconsin_exoplanets.sql configs/wisconsin_exoplanets.config.json: datasets/breast_cancer.csv initialise_database.py
 	uv run initialise_database.py --database $(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite --source datasets/breast_cancer.csv --config-file configs/wisconsin_exoplanets.config.json --obfuscation obfuscations/breast_cancer --verbose
+	sqlite3 $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite .dump > $(TEMPLATES_DIR)/wisconsin_exoplanets.sql
+	rm -f $(TEMPLATES_DIR)/$(WISCONSIN_DATASET).sqlite
 
 
 ######################################################################
@@ -83,15 +85,17 @@ $(TEMPLATES_DIR)/wisconsin_exoplanets.sqlite configs/wisconsin_exoplanets.config
 obfuscations/titanic: conversions/titanic obfuscation_plan_generator.py datasets/titanic.csv
 	uv run obfuscation_plan_generator.py --csv-file datasets/titanic.csv  --obfuscation-plan obfuscations/titanic --guidelines conversions/titanic
 
-$(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite configs/titanic_medical.config.json: datasets/titanic.csv initialise_database.py
+$(TEMPLATES_DIR)/$(TITANIC_DATASET).sql configs/titanic_medical.config.json: datasets/titanic.csv initialise_database.py
 	uv run initialise_database.py --database $(TEMPLATES_DIR)/titanic_medical.sqlite --source datasets/titanic.csv --config-file configs/titanic_medical.config.json --obfuscation obfuscations/titanic --verbose
+	sqlite3 $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(TITANIC_DATASET).sql
+	rm -f $(TEMPLATES_DIR)/$(TEMPLATE_DATASET).sqlite
 
 
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite
 	. ./envs/titanic/$*.env && ./loop.sh
 
-$(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite
-	cp $< $@
+$(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(TITANIC_DATASET).sql
+	sqlite3 $@ < $<
 
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
 	. ./envs/titanic/$*.env && uv run report-script.py --estimate accuracy > $@
@@ -110,11 +114,11 @@ titanic: titanic_results.txt
 titanic_results.txt: titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
 	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output titanic_results.csv --results results/titanic_medical*.txt
 
-titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt
+titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 	echo Baseline created
 
-$(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt: configs/$(TITANIC_DATASET).config.json dbtemplates/$(TITANIC_DATASET).sqlite
-	uv run baseline.py --config configs/$(TITANIC_DATASET).config.json --database dbtemplates/$(TITANIC_DATASET).sqlite --logistic $(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt --dec  $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt
+$(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json: configs/$(TITANIC_DATASET).config.json $(RESULTS_DIR)/$(TITANIC_DATASET)-baseline.sqlite
+	uv run baseline.py --config configs/$(TITANIC_DATASET).config.json --database $(RESULTS_DIR)/$(TITANIC_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 
 # Add these targets to depend on all models
 titanic-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).estimate.txt)

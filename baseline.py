@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.dummy import DummyClassifier
 from datasetconfig import DatasetConfig
 import sys
 import os
@@ -17,8 +18,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Train baseline models using dataset configuration.')
     parser.add_argument('--config', required=True, help='Path to the dataset configuration JSON file')
     parser.add_argument('--database', required=True, help='Path to the SQLite database file')
-    parser.add_argument('--logistic-regression-output', required=True, help='Path for logistic regression results output')
-    parser.add_argument('--decision-tree-output', required=True, help='Path for decision tree results output')
+    parser.add_argument('--output', required=True, help='Path for baseline results JSON file')
     return parser.parse_args()
 
 def load_data(conn, config):
@@ -115,33 +115,38 @@ def preprocess_data(train_df, test_df, config):
     
     return X_train, y_train, X_test, y_test, feature_names
 
-def train_and_evaluate_models(X_train, y_train, X_test, y_test, lr_output_path, dt_output_path, feature_names):
+def train_and_evaluate_models(X_train, y_train, X_test, y_test, output_path):
     """
     Train logistic regression and decision tree models.
     Evaluate on test set and save results to specified files.
     """
     # Train logistic regression model
-    lr_model = LogisticRegression(max_iter=1000, random_state=42)
+    lr_model = LogisticRegression()
     lr_model.fit(X_train, y_train)
     lr_accuracy = lr_model.score(X_test, y_test)
     
     # Train decision tree model
-    dt_model = DecisionTreeClassifier(random_state=42)
+    dt_model = DecisionTreeClassifier()
     dt_model.fit(X_train, y_train)
     dt_accuracy = dt_model.score(X_test, y_test)
-    
-    # Save logistic regression results
-    with open(lr_output_path, 'w') as f:
-        json.dump({'accuracy': lr_accuracy }, f, indent=2)
+
+    dummy_model = DummyClassifier()
+    dummy_model.fit(X_train, y_train)
+    dummy_accuracy = dummy_model.score(X_test, y_test)
+
+    output = {
+        'logistic regression': lr_accuracy,
+        'decision trees': dt_accuracy,
+        'dummy': dummy_accuracy
+    }
         
-    # Save decision tree results
-    with open(dt_output_path, 'w') as f:
-        json.dump({'accuracy': dt_accuracy}, f, indent=2)
+    # Save logistic regression results
+    with open(output_path, 'w') as f:
+        json.dump(output, f, indent=2)
     
     print(f"Logistic Regression Test Accuracy: {lr_accuracy:.4f}")
     print(f"Decision Tree Test Accuracy: {dt_accuracy:.4f}")
-    
-    return lr_model, dt_model
+    print(f"Dummy Accuracy: {dummy_accuracy:.4f}")    
 
 def main():
     """Main function to execute the baseline model training and evaluation."""
@@ -161,12 +166,7 @@ def main():
         sys.exit("Error: No usable features found after preprocessing")
         
     # Train and evaluate models
-    train_and_evaluate_models(
-        X_train, y_train, X_test, y_test, 
-        args.logistic_regression_output, 
-        args.decision_tree_output,
-        feature_names
-    )
+    train_and_evaluate_models(X_train, y_train, X_test, y_test, args.output)
 
     # Close database connection
     conn.close()
