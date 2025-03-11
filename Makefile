@@ -22,8 +22,20 @@ all: wisconsin titanic
 
 all: wisconsin
 
-wisconsin: wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best
-	echo Wisconsin is ready
+
+wisconsin: wisconsin_results.txt
+	echo All Wisconsin results are ready
+
+# I'm not sure that this next rule is right. In particular, whether globbing works in a Makefile.
+# I could change the program to take a directory and a file prefix
+wisconsin_results.txt: wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
+	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output wisconsin_results.csv --results results/wisconsin_exoplanets*.txt
+
+wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt
+	echo Baseline created
+
+$(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt: configs/$(WISCONSIN_DATASET).config.json dbtemplates/$(WISCONSIN_DATASET).sqlite
+	uv run baseline.py --config configs/$(WISCONSIN_DATASET).config.json --database dbtemplates/$(WISCONSIN_DATASET).sqlite --logistic $(RESULTS_DIR)/$(WISCONSIN_DATASET).logreg.baseline.txt --dec  $(RESULTS_DIR)/$(WISCONSIN_DATASET).dectree.baseline.txt
 
 # Add these targets to depend on all models
 wisconsin-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).estimate.txt)
@@ -91,8 +103,18 @@ $(RESULTS_DIR)/$(TITANIC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(TITANIC_DATASE
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
 	. ./envs/titanic/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
 
-titanic: titanic-estimates titanic-results titanic-prompts titanic-best
-	echo Titanic is ready
+titanic: titanic_results.txt
+	echo All Titanic results are ready
+
+# Again, I'm not sure if this globbing will work
+titanic_results.txt: titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
+	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output titanic_results.csv --results results/titanic_medical*.txt
+
+titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt
+	echo Baseline created
+
+$(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt: configs/$(TITANIC_DATASET).config.json dbtemplates/$(TITANIC_DATASET).sqlite
+	uv run baseline.py --config configs/$(TITANIC_DATASET).config.json --database dbtemplates/$(TITANIC_DATASET).sqlite --logistic $(RESULTS_DIR)/$(TITANIC_DATASET).logreg.baseline.txt --dec  $(RESULTS_DIR)/$(TITANIC_DATASET).dectree.baseline.txt
 
 # Add these targets to depend on all models
 titanic-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).estimate.txt)
