@@ -34,28 +34,13 @@ This approach offers several potential advantages:
 - **Regression**: This code shows how to do classifiers. How would we do narrative learning *regressors*?
 
 
-## Data prep
+## Usage
 
-`python initialise_titanic.py`
-
-Maybe do this, but this might be a bad idea after a few inferences. It's not needed
-for any other step.
-
-`sqlite3 titanic_medical.sqlite ".dump" > titanic_medical.sql`
-
-Check to see if it works... this should produce a long list:
-
-`./process_round.py --list --round 1`
-
-
-## Operation
-
-`./loop.sh`
-
+Hopefully, you should be able to say `make` and it should build everything.
 
 ## To-do
 
-- Make the code less dataset specific --- it shouldn't be tied to Titanic Medical.
+- Document the usage a bit better, including all the programs we have
 
 - Add Google Gemini as an option
 
@@ -63,10 +48,23 @@ Check to see if it works... this should produce a long list:
 
 - Create some baseline predictor results
 
-- Try phi4-mini as an evaluator
 
 - Try claude sonnet 3.7
 
 - Try o1 pro and gpt4.5
 
+- Prompt complexity over time
+
+- Prompts without any context
+
 - Confirm that I can delete `initialise_titanic.py` and can get the same answers out of `initialise_database.py`
+
+- `dbtemplates/*.sqlite` seems really dangerous. Maybe we should keep it in `.sql` form; I'm not sure
+  how this will make it less likely to destroy a database of results, but at least it is less likely 
+  to end up with double the number of entities (as it often does).
+
+## Ex to-do
+
+- _Try phi4-mini as an evaluator_ -- it didn't work well, and gave nonsense results. Pity, it was 
+  fast and cheap to run
+
