@@ -7,13 +7,11 @@
     "Outcome",
     "Patient_ID",
     "Histogen_Complex",
-    null,
     "Sex",
     "Treatment_Months",
     "Genetic_Class_A_Matches",
     "Genetic_Class_B_Matches",
     "TcQ_mass",
-    null,
     "Cohort"
   ]
 }
