@@ -148,6 +148,36 @@ class DatasetConfig:
 
         return result
 
+    def get_random_non_holdout_id(self, split_id: int) -> str:
+        """
+        Retrieve the ID of a random entity that is not part of the holdout dataset.
+
+        Args:
+           split_id: The split ID to check against
+
+        Returns:
+           A random entity ID that is not in the holdout set
+
+        Raises:
+           ValueError: If no non-holdout data is available for the given split
+        """
+        cur = self.conn.cursor()
+        query = f"""
+           SELECT s.{self.primary_key}
+           FROM {self.splits_table} s
+           WHERE s.split_id = ? AND s.holdout = 0
+           ORDER BY RANDOM()
+           LIMIT 1
+        """
+
+        cur.execute(query, (split_id,))
+        row = cur.fetchone()
+
+        if row is None:
+            raise ValueError(f"No non-holdout data available for split ID {split_id}")
+
+        return row[0]
+
     def is_holdout_data(self, entity_id: str, split_id: int) -> bool:
         """
         Check if an entity is part of the holdout dataset.
