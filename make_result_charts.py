@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import argparse
+import math
+import json
+import sklearn.linear_model
+import statsmodels.api as sm
+import sys
 
 def load_data(file_path):
     """Load data from a CSV file."""
@@ -88,13 +93,87 @@ def plot_model_size_vs_accuracy(df, output_prefix):
     output_file = f"{output_prefix}_model_size_vs_accuracy.png"
     plt.savefig(output_file)
     print(f"Saved plot to {output_file}")
-    
+
+    return output_file
+
+
+def plot_log_model_size_vs_log_error(df, output_prefix, baselines, dataset_name):
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Create a scatter plot with different colors for each model
+    sns.scatterplot(x='Log_Model_Size', y='Negative_Log_Error_Rate',
+                   hue='Display_Name',
+                    #size='Sampler',
+                    #sizes=(100, 200),
+                    palette='cool', data=df,
+                    ax=ax)
+
+    df = df.dropna(subset=['Log_Model_Size'])
+    print(df[df.Log_Model_Size.isnull()])
+    lr = sklearn.linear_model.LinearRegression()
+    lr.fit(df[['Log_Model_Size']], df.Negative_Log_Error_Rate)
+    X = sm.add_constant(df[['Log_Model_Size']])
+    model = sm.OLS(df.Negative_Log_Error_Rate, X).fit()
+    print(model.summary())
+    # Access specific statistics
+    slope = model.params['Log_Model_Size']
+    intercept = model.params['const']
+    p_value = model.pvalues['Log_Model_Size']
+    r_squared = model.rsquared
+    print(f"Slope: {slope:.4f}, p-value: {p_value:.4f}")
+    print(f"Intercept: {intercept:.4f}")
+    print(f"R-squared: {r_squared:.4f}")
+
+    # Add a trend line
+    extrapolation_x = [9,14]
+    extrapolation_request = pd.DataFrame({'Log_Model_Size': extrapolation_x})
+    extrapolation_y = lr.predict(extrapolation_request)
+    ax.plot(extrapolation_x, extrapolation_y, linestyle="dashed", color="red", label="Trend")
+
+    ax.set_title(f'{dataset_name} Dataset: Model Size vs Error Rate\n(Log-Log)')
+    ax.set_xlabel('Log10 Model Size (parameters)')
+    ax.set_ylabel('Negative Log10 Error Rate')
+    ax.grid(True, linestyle='--', alpha=0.7)
+    draw_baselines(ax, baselines)
+
+
+    ax2 = ax.twinx()
+
+    # Create a function to convert negative log error to accuracy
+    def neg_log_error_to_accuracy(y):
+        # Convert negative log10 error rate to accuracy percentage
+        # If y is Negative_Log_Error_Rate, then error = 10^(-y)
+        # And accuracy = 1 - error = 1 - 10^(-y)
+        calc = (1 - 10**(-y)) * 100
+        print(f"Neg log {y} -> {calc} %")
+        return calc
+
+    y1_ticks = ax.get_yticks()
+    # Calculate corresponding accuracy values for these specific positions
+    y2_ticks = [neg_log_error_to_accuracy(y) for y in y1_ticks]
+    #ax2.set_yticks(y2_ticks)
+    ax2.set_yticks(y1_ticks)
+    ax2.set_yticklabels([f"{y:.0f}%" for y in y2_ticks])
+    y1_min, y1_max = ax.get_ylim()
+    ax2.set_ylim(y1_min, y1_max)
+    #ax2.set_ylim(neg_log_error_to_accuracy(y1_min), neg_log_error_to_accuracy(y1_max))
+
+    # Set secondary axis label
+    ax2.set_ylabel('Accuracy (%)')
+    ax2.tick_params(axis='y')
+
+    fig.tight_layout()
+
+    output_file = f"{output_prefix}_model_size_vs_error_rate.png"
+    fig.savefig(output_file)
+    print(f"Saved plot to {output_file}")
+
     return output_file
 
 def plot_model_size_vs_prompt_word_count(df, output_prefix):
     """Plot Model Size vs Prompt Word Count."""
-    plt.figure(figsize=(10, 6))
-    
+    fig, ax = plt.subplots(figsize=(10, 6))
+
     # Create a scatter plot with bubble size representing accuracy
     accuracy_sizes = df['Accuracy'].fillna(0) * 500  # Scale for visibility
 
