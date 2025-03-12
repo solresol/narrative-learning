@@ -212,12 +212,66 @@ def plot_model_size_vs_prompt_word_count(df, output_prefix):
 
     return output_file
 
+def plot_sample_size_effect(df, output_prefix, dataset_name):
+    scatter_df = pd.DataFrame()
+    scatter_df['3 Samples'] = df[df.Sampler == 3].set_index('Official_Name').Accuracy
+    scatter_df['10 Samples'] = df[df.Sampler == 10].set_index('Official_Name').Accuracy
+    scatter_df.dropna(inplace=True)
+    fig, ax = plt.subplots(figsize = (10,6))
+    sns.scatterplot(data=scatter_df, ax=ax, x='3 Samples', y = '10 Samples',
+                            hue='Official_Name')
+    ax.plot([0,1],[0,1], linestyle="dashed", c='red')
+    output_file = f"{output_prefix}_sample_size_effect.png"
+    ax.set_title(f"{dataset_name} Dataset\nComparison of accuracy of 10 sample runs vs 3 sample runs using the same model")
+    ax.set_xlabel("Accuracy on the 3-sample run")
+    ax.set_ylabel("Accuracy on the 10-sample run")
+    ax.grid(True, linestyle='--', alpha=0.7)
+    fig.tight_layout()
+    fig.savefig(output_file)
+    print(f"Saved plot to {output_file}")
+
+
+def draw_baselines(ax, baselines, xpos=12.5):
+    colours = {
+        'logistic regression': 'teal',
+        'decision trees': 'gold',
+        'dummy': 'orange'
+        }
+    for model, score in baselines.items():
+        ax.axhline(score, linestyle='dotted', c=colours[model])
+        ax.annotate(xy=(xpos,score-0.03), text=model.title(), c=colours[model])
+
+name_lookup = {
+        'openai10': 'gpt-4o',
+        'openai': 'gpt-4o',
+        'openai-o1': 'o1',
+        'openai45': 'gpt-4.5-preview',
+        'llama': "llama 3.3",
+        'anthropic': "claude 3.5",
+        'falcon': "falcon3b",
+        'gemma': "gemma"
+    }
+
+
+def name_model(record):
+    global name_lookup
+    env_name = record['Model']
+    sample_size = record['Sampler']
+    if env_name not in name_lookup:
+        sys.exit(f"Don't know how to interpret {env_name}")
+    return f"{name_lookup[env_name]}, {sample_size} samples"
+
 def main():
     parser = argparse.ArgumentParser(description='Create model analysis plots from CSV data.')
+    parser.add_argument("--dataset-name", required=True, help="Used in the plot title")
     parser.add_argument('--input', required=True, help='Path to the input CSV file')
-    parser.add_argument('--output', default='plot', help='Prefix for output plot files')
+    parser.add_argument('--output', required=True, help='Prefix for output plot files')
+    parser.add_argument("--baselines", required=True, help="Path the JSON file of baselines for this data")
     args = parser.parse_args()
-    
+
+    baselines = json.load(open(args.baselines))
+    error_rate_baseline = { x: 1 - y for x,y in baselines.items() }
+    neg_log_error_rate_baseline = { x : - math.log10(y) for x,y in error_rate_baseline.items() }
     # Load the data
     df = load_data(args.input)
 
@@ -225,7 +279,13 @@ def main():
     if df.empty:
         print("Error: No data loaded from the CSV file.")
         return
-    
+
+    df['Display_Name'] = df.apply(name_model, axis=1)
+    df['Official_Name'] = df.Model.map(name_lookup.get)
+    df['Log_Model_Size'] = (df['Model Size'] * 1000000000.0).map(math.log10)
+    df['Error_Rate'] = 1 - df['Accuracy']
+    # If the next line errors, it's because the error rate was 0
+    df['Negative_Log_Error_Rate'] = - df.Error_Rate.map(math.log10)
     # Print summary of the data
     print(f"Loaded {len(df)} rows from {args.input}")
     print("\nData Summary:")
@@ -234,9 +294,11 @@ def main():
     # Create the plots
     plot_prompt_word_count_vs_accuracy(df, args.output)
     plot_accuracy_by_model(df, args.output)
+    plot_log_model_size_vs_log_error(df, args.output, neg_log_error_rate_baseline, args.dataset_name)
     plot_model_size_vs_accuracy(df, args.output)
     plot_model_size_vs_prompt_word_count(df, args.output)
-    
+    plot_sample_size_effect(df, args.output, args.dataset_name)
+
     print("\nAll plots created successfully!")
 
 if __name__ == "__main__":
