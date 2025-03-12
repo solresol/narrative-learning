@@ -371,7 +371,7 @@ def openai_reprompt(model, prompting_creation_prompt):
 
 
 def dispatch_prediction_prompt(model, prompt, valid_predictions):
-    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini']:
+    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b']:
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_prediction(model, prompt, valid_predictions)
@@ -381,7 +381,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
 
 
 def dispatch_reprompt_prompt(model, prompting_creation_prompt):
-    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini']:
+    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b']:
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_reprompt(model, prompting_creation_prompt)
