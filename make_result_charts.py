@@ -207,7 +207,7 @@ def plot_model_size_vs_prompt_word_count(df, output_prefix):
     fig.tight_layout()
 
     output_file = f"{output_prefix}_model_size_vs_word_count.png"
-    plt.savefig(output_file)
+    fig.savefig(output_file)
     print(f"Saved plot to {output_file}")
 
     return output_file
