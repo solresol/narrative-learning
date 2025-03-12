@@ -383,7 +383,7 @@ class DatasetConfig:
                         'TN': "True Negatives"
                     }[cell]
                     ex = examples[0]
-                    answer += (f"Examples for {cell_full}: (Outcome: {ex['outcome']}, Prediction: {ex['prediction']})\n")
+                    answer += (f"Examples for {cell_full}: (Correct answer: {ex['outcome']}, What the previous set of rules predicted: {ex['prediction']})\n")
                     for ex in examples:
                         answer += (f"  Entity Data:\n{ex['features']}\n")
                     answer += "\n"
