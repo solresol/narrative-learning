@@ -187,7 +187,7 @@ def plot_model_size_vs_prompt_word_count(df, output_prefix):
 
     # Add model names as annotations
     for i, row in df.iterrows():
-        plt.annotate(f"{row['Model']}-{row['Sampler']}", 
+        ax.annotate(f"{row['Model']}-{row['Sampler']}",
                     (row['Model Size'], row['Prompt Word Count']),
                     xytext=(5, 5), textcoords='offset points')
 
@@ -196,8 +196,8 @@ def plot_model_size_vs_prompt_word_count(df, output_prefix):
     legend_bubbles = []
     for acc in accuracy_levels:
         legend_bubbles.append(plt.scatter([], [], s=acc*500, c='gray', alpha=0.6))
-    
-    plt.legend(legend_bubbles, [f'Accuracy: {acc}' for acc in accuracy_levels], 
+
+    ax.legend(legend_bubbles, [f'Accuracy: {acc}' for acc in accuracy_levels],
               scatterpoints=1, loc='upper right', title='Accuracy Reference')
 
     ax.set_title('Model Size vs Prompt Word Count')
