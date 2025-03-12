@@ -75,17 +75,19 @@ def plot_model_size_vs_accuracy(df, output_prefix):
     plt.figure(figsize=(10, 6))
 
     # Create a scatter plot with different colors for each model
-    sns.scatterplot(x='Model Size', y='Accuracy', 
-                   hue='Model', size='Sampler',
-                   sizes=(100, 200), palette='cool', data=df)
-    
+    sns.scatterplot(x='Log_Model_Size', y='Accuracy',
+                   hue='Display_Name',
+                    #size='Sampler',
+                    #sizes=(100, 200),
+                    palette='cool', data=df)
+
     # Add a trend line
     if df['Accuracy'].notna().sum() > 1:  # Need at least 2 non-NA points for regression
-        sns.regplot(x='Model Size', y='Accuracy', 
+        sns.regplot(x='Log_Model_Size', y='Accuracy',
                    scatter=False, ci=None, color='red', data=df)
 
     plt.title('Model Size (Billions of Parameters) vs Accuracy')
-    plt.xlabel('Model Size (B)')
+    plt.xlabel('Log10 Model Size (B)')
     plt.ylabel('Accuracy')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
