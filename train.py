@@ -25,6 +25,11 @@ prompt(s) that have been used previously, and how effective they
 were. There are also some examples of where those prompt(s) did and
 didn't work.
 
+Remember: you need to create rules. Don't just waffle about what
+changes need to happen. Look at the examples where the previous prediction
+system got it wrong, and try to come up with at least one new rule that
+would handle one of those situations correctly.
+
 ----------------------------
 
 """
@@ -55,9 +60,34 @@ didn't work.
     answer += "\n\n---------------------\n\n"
     return answer
 
-def run_reprompt(config, prompting_creation_prompt, old_round_id, model):
-    new_prompt, process_info = llmcall.dispatch_reprompt_prompt(model, prompting_creation_prompt)
+class PromptCreationFailure(Exception):
+    def __init__(self):
+        pass
+
+def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose):
     split_id = config.get_split_id(old_round_id)
+    sanity_check_sample_id = config.get_random_non_holdout_id(split_id)
+    sanity_check_sample = config.get_entity_features(sanity_check_sample_id)
+    history = []
+    remaining_attempts = 20
+    while True:
+        if history:
+            extra = "\n\n" + "\n\n".join([f"THIS DID NOT PASS QUALITY CONTROL, IT IS NOT A GOOD ENOUGH PROMPT: {x}" for x in history])
+        else:
+            extra = ""
+        new_prompt, process_info = llmcall.dispatch_reprompt_prompt(model, prompting_creation_prompt + extra)
+        if llmcall.sanity_check_prompt(new_prompt['updated_prompt'], sanity_check_sample, config.valid_predictions):
+            break
+        if verbose:
+            print(f"The prompt that was generated was:\n\n```\n{new_prompt['updated_prompt']}\n```\n This did not pass quality control.")
+        else:
+            sys.stderr.write("Generated prompt failed quality control.\n")
+        remaining_attempts = remaining_attempts - 1
+        if remaining_attempts == 0:
+            raise PromptCreationFailure
+
+    if verbose:
+        print(f"Quality control passed the following prompt:\n\n```\n{new_prompt}\n```")
     cur = config.conn.cursor()
     cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?,?) returning round_id",
                 [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info])
@@ -95,12 +125,13 @@ def main():
 
     conn = sqlite3.connect(args.database)
     config = datasetconfig.DatasetConfig(conn, args.config)
+
     prompting_creation_prompt = get_prompt_for_updating_model(config, args.round_id, args.example_count, args.show_history)
     if args.dry_run or args.verbose:
         print(prompting_creation_prompt)
     if args.dry_run:
         sys.exit(0)
-    new_round_id, details = run_reprompt(config, prompting_creation_prompt, args.round_id, args.model)
+    new_round_id, details = run_reprompt(config, prompting_creation_prompt, args.round_id, args.model, args.verbose)
     if args.verbose:
         print(f"REASONING: {details['reasoning']}")
         print()
