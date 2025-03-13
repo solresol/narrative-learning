@@ -94,7 +94,12 @@ Supply your answer in JSON format like this:
     )
     # Send the prompt and get outputs
     stdout, stderr = process.communicate(input=prompting_creation_prompt)
-    answer = json.loads(stdout)
+    try:
+        answer = json.loads(stdout)
+    except json.decoder.JSONDecodeError:
+        sys.stderr.write(f"Did not get a JSON response:\n{stdout}\n")
+        sys.stderr.write(f"STDERR was:\n{stderr}\n")
+        sys.exit(1)
     if 'updated_prompt' not in answer:
         sys.exit(f"No updated prompt supplied: {answer}")
     try:
