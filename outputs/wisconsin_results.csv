@@ -1,0 +1,5 @@
+Task,Model,Sampler,Accuracy,Rounds,Prompt Word Count,Model Size
+wisconsin,openai10,10,0.8714285714285714,5,216,200
+wisconsin,openai-o1,10,0.6909090909090909,5,329,300
+wisconsin,openai45,3,0.7,4,331,1800
+wisconsin,openai,3,0.8245614035087719,6,291,200

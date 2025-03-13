@@ -1,0 +1,10 @@
+Task,Model,Sampler,Accuracy,Rounds,Prompt Word Count,Model Size
+titanic,anthropic,10,0.6304347826086957,7,632,175
+titanic,anthropic,3,0.6704545454545454,5,297,175
+titanic,falcon,10,0.45977011494252873,4,211,10
+titanic,falcon,3,0.38961038961038963,6,240,10
+titanic,gemma,3,,1,153,
+titanic,llama,3,0.7045454545454546,7,290,70
+titanic,openai,10,0.6373626373626373,2,310,200
+titanic,openai,3,0.47115384615384615,4,365,200
+titanic,openai-o1,10,0.7472527472527473,2,259,200
