@@ -36,9 +36,9 @@ echo "I will give up once I have had $NARRATIVE_LEARNING_PATIENCE rounds without
 
 while uv run report-script.py --metric accuracy --validation --patience $NARRATIVE_LEARNING_PATIENCE
 do
-    uv run process_round.py --round $ROUND --loop --progress-bar
+    uv run process_round.py --round $ROUND --loop --progress-bar || exit 1
     # This runs train one more time than is actually necessary
-    uv run train.py --round-id $ROUND --round-tracking-file $ROUND_TRACKING_FILE
+    uv run train.py --round-id $ROUND --round-tracking-file $ROUND_TRACKING_FILE --verbose || exit 1
     ROUND=$(< $ROUND_TRACKING_FILE)
 done
 
