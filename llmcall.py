@@ -1,6 +1,7 @@
 import subprocess
 import json
 import os
+import sys
 
 class MissingUpdatedPrompt(Exception):
     pass
@@ -96,7 +97,11 @@ Supply your answer in JSON format like this:
     answer = json.loads(stdout)
     if 'updated_prompt' not in answer:
         sys.exit(f"No updated prompt supplied: {answer}")
-    info_start = stderr.index("total duration:")
+    try:
+        info_start = stderr.index("total duration:")
+    except ValueError:
+        sys.stderr.write("stderr was in an unusual format:\n" + stderr + "\n")
+        info_start = 0
     stderr = stderr[info_start:]
     return answer, stderr
 
@@ -370,7 +375,7 @@ def openai_reprompt(model, prompting_creation_prompt):
 
 
 def dispatch_prediction_prompt(model, prompt, valid_predictions):
-    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini']:
+    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b']:
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_prediction(model, prompt, valid_predictions)
@@ -380,10 +385,89 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
 
 
 def dispatch_reprompt_prompt(model, prompting_creation_prompt):
-    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini']:
+    if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b']:
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"]:
         return claude_reprompt(model, prompting_creation_prompt)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_reprompt(model, prompting_creation_prompt)
     raise UnknownModel
+
+
+
+def sanity_check_prompt(prompt, sample, valid_answers):
+    from openai import OpenAI
+
+    client = OpenAI(api_key=open(os.path.expanduser("~/.openai.key")).read().strip())
+    import json
+    import sys
+
+    # Define the function schema for creating a new prompt.
+    quality_check_doc = {
+        "type": "function",
+        "function": {
+            "name": "store_quality_check",
+            "description": "Store the details of the prompt quality check",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "is_valid": {
+                        "type": "boolean",
+                        "description": "True if the prompt supplied is coherent and able to be used for inference on the data sample."
+                    }
+                },
+                "required": ["is_valid"],
+                "additionalProperties": False
+            }
+        }
+    }
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an assistant doing a quality check on a prompt that will be used later. The question is whether the prompt is a coherent set of rules that can be used to predict where the data point given is '" + ("' or '".join(valid_answers)) + "'."
+        },
+        {"role": "user", "content": f"""
+We are about to launch a large and expensive run where we use the following prompt over
+a huge number of texts. Due to the structure of the task, no human being can review this
+prompt before it is used. We want to make sure that the rules supplied are reproducible and
+relevant. They need to be clear, and uniquely define how to choose between the valid
+outputs:
+
+  - {'\n - '.join(valid_answers)}
+
+Here is the prompt:\
+```
+{prompt}
+```
+
+Now, here is some sample data that is very similar to the kinds of texts that the
+prompt will be used on
+
+```
+{sample}
+```
+
+Give your opinion: if you had just received that prompt and that sample, would you be
+confidently able to give a clear answer by following those rules? Or do we need to
+get the prompt re-written before we deploy it into production?
+"""}
+    ]
+
+    response = client.chat.completions.create(model='gpt-4o-mini',
+                                              messages=messages,
+                                              tools=[quality_check_doc],
+                                              tool_choice={"type": "function", "function": {"name": "store_quality_check"}})
+    #print(response)
+    usage = response.usage
+    prompt_tokens = usage.prompt_tokens
+    completion_tokens = usage.completion_tokens
+
+    message = response.choices[0].message
+    answer = json.loads(message.tool_calls[0].function.arguments)
+
+    if "is_valid" not in answer:
+        sys.exit(f"Couldn't even evaluate whether the prompt was any good.")
+
+    return answer['is_valid']

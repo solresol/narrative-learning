@@ -1,7 +1,11 @@
+.PRECIOUS: %.sqlite
+.SECONDARY: %.sqlite
+
 WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
-#To add to models... MODELS := openai phi
-MODELS := anthropic10 falcon10 gemma openai10 openai-o1-10anthropic falcon llamaphi openai openai45 openailong
+#To add to models... MODELS := gemini (eventually)
+# Models not to add (they don't work)... phi falcon falcon10 gemma llamaphi
+MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openailong deepseek qwq
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
