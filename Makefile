@@ -4,7 +4,7 @@
 WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
 #To add to models... MODELS := gemini (eventually)
-# Models not to add (they don't work)... phi falcon falcon10 gemma llamaphi
+# Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi
 MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openailong deepseek qwq
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
