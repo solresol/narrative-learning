@@ -1,0 +1,190 @@
+We have a dataset to obfuscate. We're going to take a Southern German Credit
+card dataset, and pretend that it is a dataset about coral reef health.
+
+
+Column Renaming (Original → Obfuscated)
+
+Original Column	Coral Reef Obfuscated Column	Explanation (Fictionalised Meaning)
+laufkont	CurrentFlowQuality	Quality of ocean current around reef
+laufzeit	ObservationDuration	Duration (in months) of reef observation
+moral	ReefIntegrityScore	Integrity of coral structures
+verw	PredatorActivityLevel	Level of predator activity near reef
+hoehe	AcousticIntensity	Intensity of acoustic signals (decibels)
+sparkont	AlgalCoverage	Extent of algal growth covering the reef
+beszeit	CoralAgeEstimate	Estimated age of dominant coral species (years)
+rate	BleachingEventsPerYear	Number of bleaching events per year
+famges	BiodiversityIndex	Measure of biodiversity (number of distinct species)
+buerge	NearbyHealthyReef	Presence (yes/no) of nearby healthy reefs influencing recovery
+wohnzeit	ReefMonitoringDuration	Total months since reef was first monitored
+verm	PollutionLevel	Local water pollution level
+alter	ReefAverageAge	Average age of the reef (in decades)
+weitkred	DistantStressIndicators	Signs of stress in reefs further away (yes/no)
+wohn	ReefDepthZone	Depth zone of reef (shallow, mid, deep)
+bishkred	PreviousStressIncidents	Previous recorded major stress incidents
+beruf	CoralDominantType	Dominant coral type (branching, massive, soft)
+pers	SurveyorExperience	Experience level of reef surveyor
+telef	RemoteSensorPresent	Presence (yes/no) of remote underwater sensor
+gastarb	InvasiveSpeciesDetected	Presence (yes/no) of invasive species
+kredit (Target)	ReefHealthStatus	Health status (Healthy, Stressed)
+
+
+# Specific Obfuscation Mappings
+
+Categorical Transformations:
+
+Use marine/ecological terminology:
+
+laufkont → CurrentFlowQuality
+
+Original	Obfuscated
+1	Poor
+2	Fair
+3	Good
+4	Excellent
+
+verw → PredatorActivityLevel
+
+(Map directly numeric to categories)
+
+Original	Obfuscated
+0	None
+1	Very Low
+2	Low
+3	Moderate Low
+4	Moderate
+5	Moderate High
+6	High
+7	Very High
+8	Extreme
+9	Severe
+10	Catastrophic
+
+sparkont → AlgalCoverage
+
+Original	Obfuscated
+1	Minimal
+2	Sparse
+3	Moderate
+4	Heavy
+5	Extensive
+
+buerge → NearbyHealthyReef
+
+Original	Obfuscated
+1	Absent
+2	Nearby
+3	Adjacent
+
+weitkred → DistantStressIndicators
+
+Original	Obfuscated
+1	None
+2	Possible
+3	Confirmed
+
+wohn → ReefDepthZone
+
+Original	Obfuscated
+1	Shallow
+2	Mid-depth
+3	Deep
+
+beruf → CoralDominantType
+
+Original	Obfuscated
+1	Branching
+2	Massive
+3	Encrusting
+4	Soft
+
+Binary (Yes/No):
+
+For columns: pers, telef, gastarb
+
+Original	Obfuscated
+1	No
+2	Yes
+
+
+
+⸻
+
+Ordinal Transformations:
+
+moral → ReefIntegrityScore
+
+Original	Obfuscated
+0	Very Poor
+1	Poor
+2	Moderate
+3	Good
+4	Excellent
+
+rate → BleachingEventsPerYear
+
+Original	Obfuscated
+1	Rare
+2	Occasional
+3	Frequent
+4	Constant
+
+famges → BiodiversityIndex
+
+Original	Obfuscated
+1	Low
+2	Medium
+3	High
+4	Very High
+
+wohnzeit → ReefMonitoringDuration
+
+Original	Obfuscated
+1	< 1 year
+2	1-3 years
+3	4-6 years
+4	> 6 years
+
+verm → PollutionLevel
+
+Original	Obfuscated
+1	Low
+2	Moderate
+3	High
+4	Critical
+
+bishkred → PreviousStressIncidents
+
+Original	Obfuscated
+1	None
+2	Minor
+3	Moderate
+4	Major
+
+
+
+⸻
+
+Numeric Variables Obfuscation:
+
+Apply these transformations:
+
+
+laufzeit → ObservationDuration:
+    NewValue = OriginalValue * 3 + 7
+hoehe → AcousticIntensity:
+    NewValue = OriginalValue / 10 + 2
+beszeit → CoralAgeEstimate (Years):
+    NewValue = OriginalValue * 5 + 1
+alter → ReefAverageAge (Decades):
+    NewValue = OriginalValue + 3
+
+
+⸻
+
+Target Variable (kredit → ReefHealthStatus):
+
+Original	Obfuscated
+0	Stressed
+1	Healthy
+
+
