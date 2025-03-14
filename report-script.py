@@ -26,7 +26,7 @@ def main():
                        help="Report on training data")
     parser.add_argument('--patience', type=int,
                        help="Number of rounds to look back for early stopping")
-    parser.add_argument("--best", action="store_true", 
+    parser.add_argument("--best", action="store_true",
                        help="Show the round where the validation result was best")
     parser.add_argument("--estimate", help="Show the value of the metric given as an argument, based on the round for which the validation result was best (for the --metric argument)")
     parser.add_argument('--csv', type=str,
@@ -59,33 +59,38 @@ def main():
 
     # Get best round ID (for validation metric)
     if args.best:
-        temp_df = config.generate_metrics_data(split_id, args.metric, 'validation')
-        temp_df.set_index('round_id', inplace=True)
-        print(temp_df.metric.idxmax())
+        try:
+            best_round = config.get_best_round_id(split_id, args.metric)
+            print(best_round)
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
         sys.exit(0)
 
     # Estimate specific metric on test set for best validation round
     if args.estimate:
-        temp_df = config.generate_metrics_data(split_id, args.metric, 'validation')
-        temp_df.set_index('round_id', inplace=True)
-        # There's probably a bug here if two rounds had the same value
-        round_id = temp_df.metric.idxmax()
-        estimate_data = config.generate_metrics_data(split_id, args.estimate, 'test')
-        print(estimate_data[estimate_data.round_id == round_id].metric.iloc[0])
+        try:
+            test_metric = config.get_test_metric_for_best_validation_round(
+                split_id, args.metric, args.estimate)
+            print(test_metric)
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
         sys.exit(0)
 
     # If no data type specified, default to training data
     if not any([args.validation, args.test, args.train]):
         args.train = True
 
-    df = pd.DataFrame({})
-    # Generate and output metrics for each requested data type
-    for data_type in ['train', 'validation', 'test']:
-        if getattr(args, data_type):
-            temp_df = config.generate_metrics_data(split_id, args.metric, data_type)
-            temp_df.set_index('round_id', inplace=True)
-            column_name = f"{data_type} {args.metric}"
-            df[column_name] = temp_df['metric']
+    # Determine which data types to include
+    data_types = []
+    if args.train:
+        data_types.append('train')
+    if args.validation:
+        data_types.append('validation')
+    if args.test:
+        data_types.append('test')
+
+    # Generate metrics DataFrame
+    df = config.create_metrics_dataframe(split_id, args.metric, data_types)
 
     did_something = False
     if args.csv:
