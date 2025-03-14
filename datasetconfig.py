@@ -3,6 +3,7 @@ import sqlite3
 import sys
 import json
 import os
+import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 
 class TargetClassingException(Exception):
@@ -389,3 +390,165 @@ class DatasetConfig:
                     answer += "\n"
 
         return answer
+
+
+    def calculate_metric(self, matrix: Dict, metric_name: str) -> float:
+        """
+        Calculate the specified metric from a confusion matrix.
+        
+        Args:
+            matrix: Confusion matrix dictionary
+            metric_name: Name of the metric to calculate ('count', 'accuracy', 'precision', 'recall', 'f1')
+            
+        Returns:
+            Float value of the calculated metric
+            
+        Raises:
+            ValueError: If the metric name is unknown
+        """
+        tp = matrix['TP']['count']
+        fn = matrix['FN']['count']
+        fp = matrix['FP']['count']
+        tn = matrix['TN']['count']
+        
+        if metric_name == 'count':
+            return tp + fn + fp + tn
+        if metric_name == 'accuracy':
+            total = tp + fn + fp + tn
+            return (tp + tn) / total if total > 0 else 0
+        elif metric_name == 'precision':
+            return tp / (tp + fp) if (tp + fp) > 0 else 0
+        elif metric_name == 'recall':
+            return tp / (tp + fn) if (tp + fn) > 0 else 0
+        elif metric_name == 'f1':
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            return (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        else:
+            raise ValueError(f"Unknown metric: {metric_name}")
+
+    def get_latest_split_id(self) -> int:
+        """
+        Get the split_id from the most recent round.
+        
+        Returns:
+            Integer split ID
+            
+        Raises:
+            SystemExit: If no rounds are found in the database
+        """
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT split_id
+            FROM rounds
+            ORDER BY round_id DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row is None:
+            sys.exit("No rounds found in database")
+        split_id = row[0]
+        return split_id
+
+    def get_rounds_for_split(self, split_id: int) -> List[int]:
+        """
+        Get all round IDs for a given split_id.
+        
+        Args:
+            split_id: The split ID to query
+            
+        Returns:
+            List of round IDs
+        """
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT round_id
+            FROM rounds
+            WHERE split_id = ?
+            ORDER BY round_id
+        """, (split_id,))
+        rounds = [row[0] for row in cur.fetchall()]
+        return rounds
+
+    def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
+        """
+        Get all round IDs for a given split_id that have inferences.
+        
+        Args:
+            split_id: The split ID to query
+            
+        Returns:
+            List of round IDs that have inferences
+        """
+        cur = self.conn.cursor()
+        answer = []
+        for r in self.get_rounds_for_split(split_id):
+            cur.execute("select count(*) from inferences where round_id = ?", [r])
+            row = cur.fetchone()
+            if row[0] == 0:
+                continue
+            answer.append(r)
+        return answer
+
+    def check_early_stopping(self, split_id: int, metric: str,
+                            patience: int, on_validation: bool = True) -> bool:
+        """
+        Check if training should be stopped based on validation performance.
+        
+        Args:
+            split_id: The split ID to check
+            metric: The metric to use for evaluation ('accuracy', 'precision', 'recall', 'f1')
+            patience: Number of rounds to look back for improvement
+            on_validation: Whether to use validation data
+            
+        Returns:
+            True if training should stop, False otherwise
+        """
+        rounds = self.get_processed_rounds_for_split(split_id)
+        if len(rounds) < patience + 1:
+            return False
+            
+        # Look at last 'patience' + 1 rounds
+        relevant_rounds = rounds[-(patience + 1):]
+        oldest_round = relevant_rounds[0]
+        
+        # Calculate metric for oldest round
+        oldest_matrix = self.get_confusion_matrix(oldest_round, on_holdout_data=on_validation)
+        best_score = self.calculate_metric(oldest_matrix, metric)
+        
+        # Check if any later round beat this score
+        for round_id in relevant_rounds[1:]:
+            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_validation)
+            score = self.calculate_metric(matrix, metric)
+            if score > best_score:
+                return False
+                
+        return True
+
+    def generate_metrics_data(self, split_id: int, metric: str, data_type: str) -> pd.DataFrame:
+        """
+        Generate a DataFrame with metrics for all rounds in a split.
+        
+        Args:
+            split_id: The split ID to analyze
+            metric: The metric to calculate ('accuracy', 'precision', 'recall', 'f1')
+            data_type: Type of data to analyze ('train', 'validation', or 'test')
+            
+        Returns:
+            DataFrame with round_id and metric columns
+        """
+        rounds = self.get_processed_rounds_for_split(split_id)
+        data = []
+        
+        for round_id in rounds:
+            # Set appropriate flags based on data_type
+            on_holdout = data_type in ('validation', 'test')
+            on_test_data = data_type == 'test'
+            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_holdout, on_test_data=on_test_data)
+            score = self.calculate_metric(matrix, metric)
+            data.append({
+                'round_id': round_id,
+                'metric': score
+            })
+            
+        return pd.DataFrame(data)
