@@ -247,7 +247,7 @@ class DatasetConfig:
             Prompt text
         """
         cur = self.conn.cursor()
-        cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (round_id,))
+        cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (int(round_id),))
         row = cur.fetchone()
 
         if row is None:
