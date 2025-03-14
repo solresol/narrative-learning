@@ -58,6 +58,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     """Get all required data for a model from its env file."""
     # Extract settings from env file
     settings = extract_env_settings(env_file_path)
+    run_name = os.path.basename(env_file_path)[:-3]
 
     # Skip incomplete env files
     if not all(key in settings for key in ['database', 'config', 'model']):
@@ -94,20 +95,17 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
 
     # Get model size from model details
     model_size = model_details.get(settings['model'], {}).get('parameters', '')
+    if model_size is None:
+        sys.exit(f"Couldn't get model size for {settings['model']}")
 
     # Extract model name (simplify if needed)
     model_name = settings['model']
-    if model_name.startswith('gpt-4o'):
-        model_name = 'openai'
-    elif 'claude' in model_name:
-        model_name = 'anthropic'
-    elif ':' in model_name:
-        model_name = model_name.split(':')[0]
 
     # Return all required data
     return {
         'Task': task,
         'Model': model_name,
+        'Run Name': run_name,
         'Sampler': settings.get('sampler', 3),
         'Accuracy': test_accuracy,
         'Rounds': best_round_id,
