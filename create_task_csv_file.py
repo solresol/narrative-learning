@@ -4,158 +4,116 @@ import re
 import argparse
 import json
 import csv
+import sys
+import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional
-
+import datasetconfig
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Create CSV file from result files')
-    parser.add_argument('--task', required=True, help='Task name (e.g., titanic)')
+    parser = argparse.ArgumentParser(description='Create CSV file from env files')
+    parser.add_argument('--task', required=True, help='Task name (e.g., titanic, wisconsin)')
     parser.add_argument('--env-dir', required=True, help='Directory containing env files')
-    parser.add_argument('--results-files', nargs='+', required=True, help='Path to result files')
-    parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
     parser.add_argument('--output', required=True, help='Output path for CSV file')
+    parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
     return parser.parse_args()
 
-
-def read_file_content(filepath: str) -> str:
+def extract_env_settings(env_file_path: str) -> Dict:
+    """Extract configuration settings from an env file."""
+    settings = {}
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return f.read().strip()
-    except Exception as e:
-        print(f"Error reading {filepath}: {e}")
-        return ""
+        with open(env_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
 
+        # Extract database path
+        db_match = re.search(r'NARRATIVE_LEARNING_DATABASE=([^\s]+)', content)
+        if db_match:
+            settings['database'] = db_match.group(1)
+
+        # Extract config path
+        config_match = re.search(r'NARRATIVE_LEARNING_CONFIG=([^\s]+)', content)
+        if config_match:
+            settings['config'] = config_match.group(1)
+
+        # Extract training model
+        model_match = re.search(r'NARRATIVE_LEARNING_TRAINING_MODEL=([^\s]+)', content)
+        if model_match:
+            settings['model'] = model_match.group(1)
+
+        # Extract example count (sampler)
+        example_match = re.search(r'NARRATIVE_LEARNING_EXAMPLE_COUNT=(\d+)', content)
+        if example_match:
+            settings['sampler'] = int(example_match.group(1))
+
+        return settings
+    except Exception as e:
+        print(f"Error processing env file {env_file_path}: {e}")
+        return {}
 
 def count_words(text: str) -> int:
-    """Count the number of words in a text."""
-    # Split on whitespace and filter out empty strings
-    words = [word for word in re.split(r'\s+', text) if word]
-    return len(words)
+    """Count words in a text string."""
+    return len(re.findall(r'\w+', text))
 
+def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Optional[Dict]:
+    """Get all required data for a model from its env file."""
+    # Extract settings from env file
+    settings = extract_env_settings(env_file_path)
 
-def extract_env_data(env_file: str) -> Dict:
-    """Extract relevant data from an env file."""
-    content = read_file_content(env_file)
-    data = {}
-    
-    # Extract example count
-    example_count_match = re.search(r'NARRATIVE_LEARNING_EXAMPLE_COUNT=(\d+)', content)
-    data['sampler'] = int(example_count_match.group(1)) if example_count_match else 3
-    
-    # Extract training model
-    model_match = re.search(r'NARRATIVE_LEARNING_TRAINING_MODEL=([^\s]+)', content)
-    data['model_name'] = model_match.group(1) if model_match else ""
-    
-    return data
+    # Skip incomplete env files
+    if not all(key in settings for key in ['database', 'config', 'model']):
+        sys.exit(f"{env_file_path} is missing required settings")
 
+    # Skip if database doesn't exist
+    if not os.path.exists(settings['database']):
+        print(f"Skipping {env_file_path} - database {settings['database']} not found")
+        return None
 
-def parse_results_files(results_files: List[str], env_dir: str, model_details: Dict) -> List[Dict]:
-    """Parse results files and extract relevant data."""
-    # Group files by base name (e.g., titanic_medical-anthropic-10example)
-    file_groups = {}
-    for filepath in results_files:
-        filename = os.path.basename(filepath)
-        # Extract the base name (everything before the first period)
-        match = re.match(r'(.+?)\.([^.]+)\.txt$', filename)
-        if not match:
-            continue
-            
-        base_name, file_type = match.groups()
-        if base_name not in file_groups:
-            file_groups[base_name] = {}
-        file_groups[base_name][file_type] = filepath
-    
-    results = []
-    for base_name, files in file_groups.items():
-        # Skip baseline files or any others that don't match our pattern
-        if 'baseline' in base_name or 'dectree' in base_name:
-            continue
-            
-        # Extract model name from base name
-        # Format is typically: task_subtype-model-variant
-        model_match = re.search(r'[^-]+-([^-]+)(?:-([^.]+))?', base_name)
-        if not model_match:
-            continue
-            
-        model_base = model_match.group(1)
-        variant = model_match.group(2) if model_match.group(2) else ""
-        
-        # Determine which env file to use
-        env_file_name = None
-        if "10example" in base_name or "10examples" in base_name:
-            env_file_name = f"{model_base}10.env"
-        elif "o1-10example" in base_name or "o1-10examples" in base_name:
-            env_file_name = "openai-o1-10.env"
-        else:
-            env_file_name = f"{model_base}.env"
-            
-        env_file_path = os.path.join(env_dir, env_file_name)
-        
-        # Check if env file exists
-        if not os.path.exists(env_file_path):
-            print(f"Warning: Env file {env_file_path} not found, trying alternatives")
-            # Try to find a matching env file
-            for file in os.listdir(env_dir):
-                if model_base in file.lower():
-                    env_file_path = os.path.join(env_dir, file)
-                    print(f"Using alternative env file: {env_file_path}")
-                    break
-        
-        # If we still don't have an env file, skip this result
-        if not os.path.exists(env_file_path):
-            print(f"Warning: No env file found for {base_name}, skipping")
-            continue
-            
-        # Extract data from env file
-        env_data = extract_env_data(env_file_path)
-        
-        # Get accuracy from estimate.txt
-        accuracy = ""
-        if 'estimate' in files:
-            accuracy = read_file_content(files['estimate'])
-            
-        # Get rounds from best-round.txt
-        rounds = ""
-        if 'best-round' in files:
-            rounds = read_file_content(files['best-round'])
-            
-        # Get prompt word count from decoded-best-prompt.txt
-        prompt_word_count = 0
-        if 'decoded-best-prompt' in files:
-            prompt_text = read_file_content(files['decoded-best-prompt'])
-            prompt_word_count = count_words(prompt_text)
-            
-        # Get model size from model details
-        model_size = ""
-        if env_data['model_name'] in model_details:
-            model_size = model_details[env_data['model_name']]['parameters']
-        
-        # Simplify the model name for the CSV
-        simple_model = model_base
-        if "o1" in base_name:
-            simple_model = "openai-o1"
-            
-        # Create result entry
-        result = {
-            'Task': args.task,
-            'Model': simple_model,
-            'Sampler': env_data['sampler'],
-            'Accuracy': accuracy,
-            'Rounds': rounds,
-            'Prompt Word Count': prompt_word_count,
-            'Model Size': model_size
-        }
-        
-        results.append(result)
-        
-    return results
+    # Skip if config doesn't exist
+    if not os.path.exists(settings['config']):
+        print(f"Skipping {env_file_path} - config {settings['config']} not found")
+        return None
 
+    # Connect to database
+    conn = sqlite3.connect(f"file:{settings['database']}?mode=ro", uri=True)
+    print("Connecting to",settings['database'])
+    config = datasetconfig.DatasetConfig(conn, settings['config'])
 
-def load_model_details(model_details_path: str) -> Dict:
-    """Load model details from JSON file."""
-    with open(model_details_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    # Get the latest split ID
+    split_id = config.get_latest_split_id()
+
+    # Get best round ID based on validation accuracy
+    best_round_id = config.get_best_round_id(split_id, 'accuracy')
+
+    # Get test accuracy for the best round
+    test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
+
+    # Get the prompt from the best round and count words
+    print(f"{config=} {split_id=} {best_round_id=} {test_accuracy=}")
+    prompt = config.get_round_prompt(best_round_id)
+    word_count = count_words(prompt)
+
+    # Get model size from model details
+    model_size = model_details.get(settings['model'], {}).get('parameters', '')
+
+    # Extract model name (simplify if needed)
+    model_name = settings['model']
+    if model_name.startswith('gpt-4o'):
+        model_name = 'openai'
+    elif 'claude' in model_name:
+        model_name = 'anthropic'
+    elif ':' in model_name:
+        model_name = model_name.split(':')[0]
+
+    # Return all required data
+    return {
+        'Task': task,
+        'Model': model_name,
+        'Sampler': settings.get('sampler', 3),
+        'Accuracy': test_accuracy,
+        'Rounds': best_round_id,
+        'Prompt Word Count': word_count,
+        'Model Size': model_size
+    }
 
 
 def write_csv(data: List[Dict], output_path: str):
@@ -163,10 +121,10 @@ def write_csv(data: List[Dict], output_path: str):
     if not data:
         print("No data to write to CSV")
         return
-        
+
     # Get fieldnames from first data item
     fieldnames = list(data[0].keys())
-    
+
     try:
         with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -176,15 +134,25 @@ def write_csv(data: List[Dict], output_path: str):
     except Exception as e:
         print(f"Error writing CSV: {e}")
 
-
 if __name__ == "__main__":
     args = parse_args()
-    
+
     # Load model details
-    model_details = load_model_details(args.model_details)
-    
-    # Parse results files
-    results = parse_results_files(args.results_files, args.env_dir, model_details)
-    
-    # Write to CSV
+    with open(args.model_details, 'r', encoding='utf-8') as f:
+        model_details = json.load(f)
+
+    # Get list of env files to process
+    env_files = [os.path.join(args.env_dir, f) for f in os.listdir(args.env_dir)
+                    if f.endswith('.env')]
+
+    # Process each env file
+    results = []
+    for env_file in env_files:
+        print(f"Processing {env_file}...")
+        model_data = get_model_data(env_file, args.task, model_details)
+        if model_data:
+            results.append(model_data)
+
+    # Write results to CSV
     write_csv(results, args.output)
+    print(f"Processed {len(results)} models")
