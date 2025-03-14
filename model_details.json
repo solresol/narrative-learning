@@ -90,5 +90,13 @@
     "gpt-4.5-preview": {
 	"parameters": 1800,
 	"reasoning": false
+    },
+    "qwq:32b": {
+	"parameters": 32,
+	"reasoning": true
+    },
+    "phi4:latest": {
+	"parameters": 14,
+	"reasoning": true
     }
 }
