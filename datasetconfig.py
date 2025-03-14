@@ -550,5 +550,244 @@ class DatasetConfig:
                 'round_id': round_id,
                 'metric': score
             })
-            
+
         return pd.DataFrame(data)
+
+
+    def calculate_metric(self, matrix: Dict, metric_name: str) -> float:
+        """
+        Calculate the specified metric from a confusion matrix.
+
+        Args:
+            matrix: Confusion matrix dictionary
+            metric_name: Name of the metric to calculate ('count', 'accuracy', 'precision', 'recall', 'f1')
+
+        Returns:
+            Float value of the calculated metric
+
+        Raises:
+            ValueError: If the metric name is unknown
+        """
+        tp = matrix['TP']['count']
+        fn = matrix['FN']['count']
+        fp = matrix['FP']['count']
+        tn = matrix['TN']['count']
+
+        if metric_name == 'count':
+            return tp + fn + fp + tn
+        if metric_name == 'accuracy':
+            total = tp + fn + fp + tn
+            return (tp + tn) / total if total > 0 else 0
+        elif metric_name == 'precision':
+            return tp / (tp + fp) if (tp + fp) > 0 else 0
+        elif metric_name == 'recall':
+            return tp / (tp + fn) if (tp + fn) > 0 else 0
+        elif metric_name == 'f1':
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            return (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        else:
+            raise ValueError(f"Unknown metric: {metric_name}")
+
+    def get_latest_split_id(self) -> int:
+        """
+        Get the split_id from the most recent round.
+
+        Returns:
+            Integer split ID
+
+        Raises:
+            SystemExit: If no rounds are found in the database
+        """
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT split_id
+            FROM rounds
+            ORDER BY round_id DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row is None:
+            sys.exit("No rounds found in database")
+        split_id = row[0]
+        return split_id
+
+    def get_rounds_for_split(self, split_id: int) -> List[int]:
+        """
+        Get all round IDs for a given split_id.
+
+        Args:
+            split_id: The split ID to query
+
+        Returns:
+            List of round IDs
+        """
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT round_id
+            FROM rounds
+            WHERE split_id = ?
+            ORDER BY round_id
+        """, (split_id,))
+        rounds = [row[0] for row in cur.fetchall()]
+        return rounds
+
+    def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
+        """
+        Get all round IDs for a given split_id that have inferences.
+
+        Args:
+            split_id: The split ID to query
+
+        Returns:
+            List of round IDs that have inferences
+        """
+        cur = self.conn.cursor()
+        answer = []
+        for r in self.get_rounds_for_split(split_id):
+            cur.execute("select count(*) from inferences where round_id = ?", [r])
+            row = cur.fetchone()
+            if row[0] == 0:
+                continue
+            answer.append(r)
+        return answer
+
+    def check_early_stopping(self, split_id: int, metric: str,
+                            patience: int, on_validation: bool = True) -> bool:
+        """
+        Check if training should be stopped based on validation performance.
+
+        Args:
+            split_id: The split ID to check
+            metric: The metric to use for evaluation ('accuracy', 'precision', 'recall', 'f1')
+            patience: Number of rounds to look back for improvement
+            on_validation: Whether to use validation data
+
+        Returns:
+            True if training should stop, False otherwise
+        """
+        rounds = self.get_processed_rounds_for_split(split_id)
+        if len(rounds) < patience + 1:
+            return False
+
+        # Look at last 'patience' + 1 rounds
+        relevant_rounds = rounds[-(patience + 1):]
+        oldest_round = relevant_rounds[0]
+
+        # Calculate metric for oldest round
+        oldest_matrix = self.get_confusion_matrix(oldest_round, on_holdout_data=on_validation)
+        best_score = self.calculate_metric(oldest_matrix, metric)
+
+        # Check if any later round beat this score
+        for round_id in relevant_rounds[1:]:
+            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_validation)
+            score = self.calculate_metric(matrix, metric)
+            if score > best_score:
+                return False
+
+        return True
+
+    def generate_metrics_data(self, split_id: int, metric: str, data_type: str) -> pd.DataFrame:
+        """
+        Generate a DataFrame with metrics for all rounds in a split.
+
+        Args:
+            split_id: The split ID to analyze
+            metric: The metric to calculate ('accuracy', 'precision', 'recall', 'f1')
+            data_type: Type of data to analyze ('train', 'validation', or 'test')
+
+        Returns:
+            DataFrame with round_id and metric columns
+        """
+        rounds = self.get_processed_rounds_for_split(split_id)
+        data = []
+
+        for round_id in rounds:
+            # Set appropriate flags based on data_type
+            on_holdout = data_type in ('validation', 'test')
+            on_test_data = data_type == 'test'
+            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_holdout, on_test_data=on_test_data)
+            score = self.calculate_metric(matrix, metric)
+            data.append({
+                'round_id': round_id,
+                'metric': score
+            })
+
+        return pd.DataFrame(data)
+
+    def get_best_round_id(self, split_id: int, metric: str = 'accuracy') -> int:
+        """
+        Find the round with the best validation performance for a given metric.
+
+        Args:
+            split_id: The split ID to analyze
+            metric: The metric to calculate ('accuracy', 'precision', 'recall', 'f1')
+
+        Returns:
+            Round ID with the best metric on validation data
+
+        Raises:
+            ValueError: If no processed rounds are found
+        """
+        temp_df = self.generate_metrics_data(split_id, metric, 'validation')
+        if temp_df.empty:
+            raise ValueError(f"No processed rounds found for split {split_id}")
+
+        temp_df.set_index('round_id', inplace=True)
+        return temp_df.metric.idxmax()
+
+    def get_test_metric_for_best_validation_round(self, split_id: int,
+                                                 validation_metric: str = 'accuracy',
+                                                 test_metric: Optional[str] = None) -> float:
+        """
+        Get the test set performance of the round with the best validation performance.
+
+        Args:
+            split_id: The split ID to analyze
+            validation_metric: The metric to use for finding the best validation round
+            test_metric: The metric to calculate on the test set (defaults to same as validation_metric)
+
+        Returns:
+            Test metric value for the best validation round
+
+        Raises:
+            ValueError: If no processed rounds are found or the best round has no test data
+        """
+        if test_metric is None:
+            test_metric = validation_metric
+
+        best_round_id = self.get_best_round_id(split_id, validation_metric)
+        test_data = self.generate_metrics_data(split_id, test_metric, 'test')
+
+        row = test_data[test_data.round_id == best_round_id]
+        if row.empty:
+            raise ValueError(f"No test data available for best round {best_round_id}")
+
+        return row.metric.iloc[0]
+
+    def create_metrics_dataframe(self, split_id: int, metric: str,
+                                data_types: List[str]) -> pd.DataFrame:
+        """
+        Create a DataFrame with metrics for all specified data types.
+
+        Args:
+            split_id: The split ID to analyze
+            metric: The metric to calculate
+            data_types: List of data types to include ('train', 'validation', 'test')
+
+        Returns:
+            DataFrame with columns for each data type metric
+        """
+        df = pd.DataFrame({})
+
+        for data_type in data_types:
+            if data_type not in ['train', 'validation', 'test']:
+                continue
+
+            temp_df = self.generate_metrics_data(split_id, metric, data_type)
+            if not temp_df.empty:
+                temp_df.set_index('round_id', inplace=True)
+                column_name = f"{data_type} {metric}"
+                df[column_name] = temp_df['metric']
+
+        return df
