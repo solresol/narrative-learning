@@ -6,7 +6,7 @@ TITANIC_DATASET := titanic_medical
 #To add to models... MODELS := gemini (eventually)
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openai4510 openailong deepseek qwq openaio1 anthropic37
+MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openai4510 openailong deepseek qwq openaio1 anthropic37 anthropic3710
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
