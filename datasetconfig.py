@@ -14,6 +14,16 @@ class TargetClassingException(Exception):
     def __str__(self):
         return self.message
 
+class NonexistentRoundException(Exception):
+    def __init__(self, round_id, db_path=None):
+        if db_path is None:
+            self.message = f"Round {round_id} not found"
+        else:
+            self.message = f"Round {round_id} not found in the sqlite database {db_path}"
+        super().__init__(self.message)
+    def __str__(self):
+        return self.message
+
 class MissingConfigElementException(Exception):
     """Exception raised when a required configuration element is missing.
 
@@ -73,6 +83,27 @@ class DatasetConfig:
             self.valid_predictions.append(row[0])
         if len(self.valid_predictions) != 2:
             raise TargetClassingException(self.target_field, len(self.valid_predictions))
+
+        self.database_path = self.get_database_path()
+
+
+    def get_database_path(self):
+        """Get the file path of an SQLite database from its connection object."""
+        cursor = self.conn.cursor()
+        cursor.execute("PRAGMA database_list")
+        # The database info is returned as (seq, name, file)
+        db_info = cursor.fetchall()
+
+        # The main database is usually the one with name 'main'
+        for entry in db_info:
+            if entry[1] == 'main':
+                return entry[2]
+
+        # If we didn't find one labeled 'main', return the first file path
+        if db_info:
+            return db_info[0][2]
+
+        return None
 
     def get_entity_features(self, entity_id: str) -> str:
         """
@@ -220,7 +251,7 @@ class DatasetConfig:
         row = cur.fetchone()
 
         if row is None:
-            sys.exit(f"Round ID {round_id} not found")
+            raise NonexistentRoundException(round_id, self.database_path)
 
         return row[0]
 
@@ -239,7 +270,7 @@ class DatasetConfig:
         row = cur.fetchone()
 
         if row is None:
-            sys.exit(f"Round ID {round_id} not found")
+            raise NonexistentRoundException(round_id, self.database_path)
 
         return row[0]
 
