@@ -255,6 +255,7 @@ name_lookup = {
 
 def name_model(record):
     global name_lookup
+    return record['Model']
     env_name = record['Model']
     sample_size = record['Sampler']
     if env_name not in name_lookup:
@@ -271,7 +272,7 @@ def main():
 
     baselines = json.load(open(args.baselines))
     error_rate_baseline = { x: 1 - y for x,y in baselines.items() }
-    neg_log_error_rate_baseline = { x : - math.log10(y) for x,y in error_rate_baseline.items() }
+    neg_log_error_rate_baseline = { x : - math.log10(y) if y > 0 else math.log10(0.01) for x,y in error_rate_baseline.items() }
     # Load the data
     df = load_data(args.input)
 
@@ -284,8 +285,10 @@ def main():
     df['Official_Name'] = df.Model.map(name_lookup.get)
     df['Log_Model_Size'] = (df['Model Size'] * 1000000000.0).map(math.log10)
     df['Error_Rate'] = 1 - df['Accuracy']
+
+    df = df[df.Error_Rate > 0]
     # If the next line errors, it's because the error rate was 0
-    df['Negative_Log_Error_Rate'] = - df.Error_Rate.map(math.log10)
+    df['Negative_Log_Error_Rate'] = - df.Error_Rate.map(lambda x: math.log10(x) if x > 0 else math.log10(0.01))
     # Print summary of the data
     print(f"Loaded {len(df)} rows from {args.input}")
     print("\nData Summary:")
@@ -297,7 +300,7 @@ def main():
     plot_log_model_size_vs_log_error(df, args.output, neg_log_error_rate_baseline, args.dataset_name)
     plot_model_size_vs_accuracy(df, args.output)
     plot_model_size_vs_prompt_word_count(df, args.output)
-    plot_sample_size_effect(df, args.output, args.dataset_name)
+    #plot_sample_size_effect(df, args.output, args.dataset_name)
 
     print("\nAll plots created successfully!")
 
