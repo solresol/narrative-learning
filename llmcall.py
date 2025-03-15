@@ -287,7 +287,11 @@ def openai_prediction(model, prompt, valid_predictions):
 
     message = response.choices[0].message
 
-    answer = json.loads(message.tool_calls[0].function.arguments)
+    try:
+       answer = json.loads(message.tool_calls[0].function.arguments)
+    except json.decoder.JSONDecodeError:
+       sys.stderr.write(f"Received something that wasn't valid JSON: {message.tool_calls[0].function.arguments}\n")
+       raise MissingPrediction
 
     if 'prediction' not in answer:
         sys.stderr.write(f"There was no prediction. The keys were {list(answer.keys())}\n")
