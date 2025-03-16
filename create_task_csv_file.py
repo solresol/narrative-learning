@@ -6,9 +6,11 @@ import json
 import csv
 import sys
 import sqlite3
+import math
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import datasetconfig
+from statsmodels.stats.proportion import proportion_confint
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create CSV file from env files')
@@ -107,12 +109,19 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Get the count of data points
     data_point_count = config.get_data_point_count()
 
+    # Calculate 95% confidence lower bound for accuracy
+    count_correct = round(test_accuracy * data_point_count)
+    # Using the Clopper-Pearson method to find the lower bound of the 95% confidence interval
+    lower_bound, _ = proportion_confint(count=count_correct, nobs=data_point_count, 
+                                       alpha=0.05, method='beta')
+    
     # Return all required data
     return {
         'Task': task,
         'Model': model_name,
         'Sampler': settings.get('sampler', 3),
         'Accuracy': test_accuracy,
+        'Accuracy Lower Bound': lower_bound,
         'Rounds': best_round_id,
         'Prompt Word Count': word_count,
         'Model Size': model_size,
