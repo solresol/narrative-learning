@@ -95,6 +95,10 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     reasoning = config.get_round_reasoning(best_round_id)
     prompt_word_count = count_words(prompt)
     reasoning_word_count = count_words(reasoning)
+    
+    # Calculate Herdan and Zipf's law coefficients
+    herdan_result = config.calculate_herdans_law(split_id)
+    zipf_result = config.calculate_zipfs_law(split_id)
 
     # Get model size from model details
     model_size = model_details.get(settings['model'], {}).get('parameters', '')
@@ -127,6 +131,10 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Rounds': best_round_id,
         'Prompt Word Count': prompt_word_count,
         'Reasoning Word Count': reasoning_word_count,
+        'Herdan Coefficient': herdan_result['coefficient'],
+        'Herdan R-squared': herdan_result['r_squared'],
+        'Zipf Coefficient': zipf_result['coefficient'],
+        'Zipf R-squared': zipf_result['r_squared'],
         'Model Size': model_size,
         'Data Points': data_point_count
     }

@@ -927,20 +927,19 @@ class DatasetConfig:
         
         return Counter(all_words)
     
-    def calculate_zipfs_law(self, split_id: Optional[int] = None, text_type: str = 'prompts') -> Dict[str, Union[float, dict]]:
+    def calculate_zipfs_law(self, split_id: Optional[int] = None) -> Dict[str, Union[float, dict]]:
         """
-        Calculate Zipf's law coefficient from prompts or reasoning.
+        Calculate Zipf's law coefficient from all prompts and reasoning combined.
         Zipf's law states that the frequency of a word is inversely proportional to its rank.
         
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
-            text_type: Type of text to analyze ('prompts' or 'reasoning')
             
         Returns:
             Dictionary with Zipf coefficient and related statistics
         """
         corpus = self.get_all_prompts_and_reasoning(split_id)
-        text_list = corpus.get(text_type, [])
+        text_list = corpus.get('prompts', []) + corpus.get('reasoning', [])
         
         if not text_list:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
@@ -986,20 +985,19 @@ class DatasetConfig:
             }
         }
     
-    def calculate_herdans_law(self, split_id: Optional[int] = None, text_type: str = 'prompts') -> Dict[str, Union[float, dict]]:
+    def calculate_herdans_law(self, split_id: Optional[int] = None) -> Dict[str, Union[float, dict]]:
         """
-        Calculate Herdan's law (Heaps' law) coefficient from prompts or reasoning.
+        Calculate Herdan's law (Heaps' law) coefficient from all prompts and reasoning combined.
         Herdan's law describes the relationship between vocabulary size and text length.
         
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
-            text_type: Type of text to analyze ('prompts' or 'reasoning')
             
         Returns:
             Dictionary with Herdan coefficient and related statistics
         """
         corpus = self.get_all_prompts_and_reasoning(split_id)
-        text_list = corpus.get(text_type, [])
+        text_list = corpus.get('prompts', []) + corpus.get('reasoning', [])
         
         if not text_list:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
