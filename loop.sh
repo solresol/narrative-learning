@@ -49,3 +49,9 @@ then
     OUTFILE="${NARRATIVE_LEARNING_DATABASE%.sqlite}.best-round.txt"
     echo $BEST_ROUND > $OUTFILE
 fi
+
+if [ "$NARRATIVE_LEARNING_DUMP" != "" ]
+then
+    echo "Dumping database to $NARRATIVE_LEARNING_DUMP"
+    sqlite3 "$NARRATIVE_LEARNING_DATABASE" .dump > "$NARRATIVE_LEARNING_DUMP"
+fi
