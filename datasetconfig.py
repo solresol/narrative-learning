@@ -254,6 +254,25 @@ class DatasetConfig:
             raise NonexistentRoundException(round_id, self.database_path)
 
         return row[0]
+        
+    def get_round_reasoning(self, round_id: int) -> str:
+        """
+        Retrieve the reasoning for the prompt text for a given round.
+
+        Args:
+            round_id: ID of the round
+
+        Returns:
+            Reasoning text for the prompt
+        """
+        cur = self.conn.cursor()
+        cur.execute("SELECT reasoning_for_this_prompt FROM rounds WHERE round_id = ?", (int(round_id),))
+        row = cur.fetchone()
+
+        if row is None:
+            raise NonexistentRoundException(round_id, self.database_path)
+
+        return row[0] if row[0] is not None else ""
 
     def get_split_id(self, round_id: int) -> int:
         """

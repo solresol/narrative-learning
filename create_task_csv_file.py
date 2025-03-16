@@ -89,10 +89,12 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Get test accuracy for the best round
     test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
 
-    # Get the prompt from the best round and count words
+    # Get the prompt and reasoning from the best round and count words
     print(f"{config=} {split_id=} {best_round_id=} {test_accuracy=}")
     prompt = config.get_round_prompt(best_round_id)
-    word_count = count_words(prompt)
+    reasoning = config.get_round_reasoning(best_round_id)
+    prompt_word_count = count_words(prompt)
+    reasoning_word_count = count_words(reasoning)
 
     # Get model size from model details
     model_size = model_details.get(settings['model'], {}).get('parameters', '')
@@ -123,7 +125,8 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Accuracy': test_accuracy,
         'Accuracy Lower Bound': lower_bound,
         'Rounds': best_round_id,
-        'Prompt Word Count': word_count,
+        'Prompt Word Count': prompt_word_count,
+        'Reasoning Word Count': reasoning_word_count,
         'Model Size': model_size,
         'Data Points': data_point_count
     }
