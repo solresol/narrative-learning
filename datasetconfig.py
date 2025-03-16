@@ -4,7 +4,11 @@ import sys
 import json
 import os
 import pandas as pd
-from typing import Dict, List, Any, Optional, Tuple
+import numpy as np
+import re
+from collections import Counter
+import math
+from typing import Dict, List, Any, Optional, Tuple, Union
 
 class TargetClassingException(Exception):
     def __init__(self, target, num_classes):
@@ -853,3 +857,203 @@ class DatasetConfig:
                 df[column_name] = temp_df['metric']
 
         return df
+        
+    def get_all_prompts_and_reasoning(self, split_id: Optional[int] = None) -> Dict[str, List[str]]:
+        """
+        Retrieve all prompts and reasoning for all rounds in a split.
+        
+        Args:
+            split_id: The split ID to analyze. If None, uses the most recent split.
+        
+        Returns:
+            Dictionary with 'prompts' and 'reasoning' lists containing text from all rounds
+        """
+        if split_id is None:
+            split_id = self.get_latest_split_id()
+            
+        rounds = self.get_processed_rounds_for_split(split_id)
+        prompts = []
+        reasoning = []
+        
+        for round_id in rounds:
+            try:
+                prompt_text = self.get_round_prompt(round_id)
+                reasoning_text = self.get_round_reasoning(round_id)
+                
+                if prompt_text:
+                    prompts.append(prompt_text)
+                if reasoning_text:
+                    reasoning.append(reasoning_text)
+            except NonexistentRoundException:
+                continue
+                
+        return {
+            'prompts': prompts,
+            'reasoning': reasoning
+        }
+
+    def _preprocess_text(self, text: str) -> List[str]:
+        """
+        Preprocess text for linguistic analysis.
+        
+        Args:
+            text: Raw text string
+            
+        Returns:
+            List of tokens (words)
+        """
+        # Convert to lowercase and split into words
+        text = text.lower()
+        # Remove special characters and numbers
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\d+', ' ', text)
+        # Split into words and filter out empty strings
+        words = [word for word in text.split() if word]
+        return words
+    
+    def _get_word_frequencies(self, text_list: List[str]) -> Counter:
+        """
+        Calculate word frequencies from a list of texts.
+        
+        Args:
+            text_list: List of text strings
+            
+        Returns:
+            Counter object with word frequencies
+        """
+        all_words = []
+        for text in text_list:
+            all_words.extend(self._preprocess_text(text))
+        
+        return Counter(all_words)
+    
+    def calculate_zipfs_law(self, split_id: Optional[int] = None, text_type: str = 'prompts') -> Dict[str, Union[float, dict]]:
+        """
+        Calculate Zipf's law coefficient from prompts or reasoning.
+        Zipf's law states that the frequency of a word is inversely proportional to its rank.
+        
+        Args:
+            split_id: The split ID to analyze. If None, uses the most recent split.
+            text_type: Type of text to analyze ('prompts' or 'reasoning')
+            
+        Returns:
+            Dictionary with Zipf coefficient and related statistics
+        """
+        corpus = self.get_all_prompts_and_reasoning(split_id)
+        text_list = corpus.get(text_type, [])
+        
+        if not text_list:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+        
+        # Get word frequencies and sort by frequency (descending)
+        word_counts = self._get_word_frequencies(text_list)
+        if not word_counts:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+            
+        # Get frequency and rank
+        frequencies = []
+        ranks = []
+        
+        sorted_items = word_counts.most_common()
+        for rank, (word, count) in enumerate(sorted_items, 1):
+            frequencies.append(count)
+            ranks.append(rank)
+        
+        # Convert to numpy arrays and calculate log values
+        log_ranks = np.log(ranks)
+        log_frequencies = np.log(frequencies)
+        
+        # Linear regression to find Zipf coefficient
+        # Zipf's law: frequency ∝ 1/rank^α where α is the Zipf coefficient
+        # In log space: log(frequency) = -α * log(rank) + constant
+        slope, intercept = np.polyfit(log_ranks, log_frequencies, 1)
+        zipf_coefficient = -slope  # The slope is negative, so we negate it
+        
+        # Calculate R-squared
+        y_pred = slope * log_ranks + intercept
+        ss_total = np.sum((log_frequencies - np.mean(log_frequencies))**2)
+        ss_residual = np.sum((log_frequencies - y_pred)**2)
+        r_squared = 1 - (ss_residual / ss_total)
+        
+        return {
+            'coefficient': zipf_coefficient,
+            'r_squared': r_squared,
+            'data': {
+                'ranks': ranks,
+                'frequencies': frequencies,
+                'slope': slope,
+                'intercept': intercept
+            }
+        }
+    
+    def calculate_herdans_law(self, split_id: Optional[int] = None, text_type: str = 'prompts') -> Dict[str, Union[float, dict]]:
+        """
+        Calculate Herdan's law (Heaps' law) coefficient from prompts or reasoning.
+        Herdan's law describes the relationship between vocabulary size and text length.
+        
+        Args:
+            split_id: The split ID to analyze. If None, uses the most recent split.
+            text_type: Type of text to analyze ('prompts' or 'reasoning')
+            
+        Returns:
+            Dictionary with Herdan coefficient and related statistics
+        """
+        corpus = self.get_all_prompts_and_reasoning(split_id)
+        text_list = corpus.get(text_type, [])
+        
+        if not text_list:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+            
+        # For each text, calculate vocabulary size vs. text length
+        vocab_sizes = []
+        text_lengths = []
+        
+        cumulative_words = set()
+        cumulative_length = 0
+        
+        for text in text_list:
+            words = self._preprocess_text(text)
+            text_length = len(words)
+            
+            if text_length == 0:
+                continue
+                
+            # Update cumulative counts
+            cumulative_words.update(words)
+            cumulative_length += text_length
+            
+            # Herdan's law applies to the relationship between the size of a text
+            # and the size of its vocabulary
+            vocab_sizes.append(len(cumulative_words))
+            text_lengths.append(cumulative_length)
+        
+        if not vocab_sizes or not text_lengths:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+        
+        # Convert to numpy arrays and calculate log values
+        log_text_lengths = np.log(text_lengths)
+        log_vocab_sizes = np.log(vocab_sizes)
+        
+        # Linear regression to find Herdan coefficient
+        # Herdan's law: V = K * N^β where V is vocabulary size, N is text length,
+        # K is a constant, and β is the Herdan coefficient
+        # In log space: log(V) = β * log(N) + log(K)
+        slope, intercept = np.polyfit(log_text_lengths, log_vocab_sizes, 1)
+        herdan_coefficient = slope
+        
+        # Calculate R-squared
+        y_pred = slope * log_text_lengths + intercept
+        ss_total = np.sum((log_vocab_sizes - np.mean(log_vocab_sizes))**2)
+        ss_residual = np.sum((log_vocab_sizes - y_pred)**2)
+        r_squared = 1 - (ss_residual / ss_total)
+        
+        return {
+            'coefficient': herdan_coefficient,
+            'r_squared': r_squared,
+            'data': {
+                'text_lengths': text_lengths,
+                'vocab_sizes': vocab_sizes,
+                'slope': slope,
+                'intercept': intercept
+            }
+        }
