@@ -746,6 +746,18 @@ class DatasetConfig:
 
         return pd.DataFrame(data)
 
+    def get_data_point_count(self) -> int:
+        """
+        Get the total number of data points in the dataset.
+
+        Returns:
+            Integer count of data points in the table
+        """
+        cur = self.conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {self.table_name}")
+        row = cur.fetchone()
+        return row[0] if row else 0
+
     def get_best_round_id(self, split_id: int, metric: str = 'accuracy') -> int:
         """
         Find the round with the best validation performance for a given metric.

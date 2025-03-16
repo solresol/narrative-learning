@@ -104,6 +104,9 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     elif ':' in model_name:
         model_name = model_name.split(':')[0]
 
+    # Get the count of data points
+    data_point_count = config.get_data_point_count()
+
     # Return all required data
     return {
         'Task': task,
@@ -112,7 +115,8 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Accuracy': test_accuracy,
         'Rounds': best_round_id,
         'Prompt Word Count': word_count,
-        'Model Size': model_size
+        'Model Size': model_size,
+        'Data Points': data_point_count
     }
 
 
