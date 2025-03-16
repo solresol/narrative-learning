@@ -93,6 +93,7 @@ def main():
     parser.add_argument('--width', type=int, default=None,
                       help='Override terminal width detection with custom width')
     parser.add_argument('--no-color', action='store_true', help='Disable colored output')
+    parser.add_argument("--glob-pattern", default="*/*.env")
     args = parser.parse_args()
 
     terminal_width = args.width
@@ -106,11 +107,11 @@ def main():
     print(f"Terminal width detected: {terminal_width} columns")
     
     # Find all environment files
-    env_pattern = os.path.join(args.envs, '*', '*.env')
+    env_pattern = os.path.join(args.envs, args.glob_pattern)
     env_files = glob.glob(env_pattern)
     
     if not env_files:
-        print(f"No environment files found in {args.envs_dir}")
+        print(f"No environment files found in {args.envs}")
         return
     
     # Process each environment file

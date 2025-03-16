@@ -287,7 +287,11 @@ def openai_prediction(model, prompt, valid_predictions):
 
     message = response.choices[0].message
 
-    answer = json.loads(message.tool_calls[0].function.arguments)
+    try:
+       answer = json.loads(message.tool_calls[0].function.arguments)
+    except json.decoder.JSONDecodeError:
+       sys.stderr.write(f"Received something that wasn't valid JSON: {message.tool_calls[0].function.arguments}\n")
+       raise MissingPrediction
 
     if 'prediction' not in answer:
         sys.stderr.write(f"There was no prediction. The keys were {list(answer.keys())}\n")
@@ -379,6 +383,75 @@ def openai_reprompt(model, prompting_creation_prompt):
 
 
 
+def gemini_prediction(model, prompt, valid_predictions):
+    from google import genai
+    from google.genai import types
+    
+    # Initialize the Gemini client
+    api_key = open(os.path.expanduser("~/.gemini.key")).read().strip()
+    client = genai.Client(api_key=api_key)
+    
+    def store_prediction(narrative_text: str, prediction: str) -> dict:
+        """Store the prediction
+        
+        Args:
+            narrative_text: Your thinking process in evaluating the prompt.
+            prediction: Either """ + " or ".join(valid_predictions) + """
+        """
+        return {"narrative_text": narrative_text, "prediction": prediction}
+    
+    prompt += """
+Use the tool provided to submit your answer. You must include both a narrative_text explaining your thinking and a prediction.
+"""
+    
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[store_prediction]
+        ),
+    )
+    
+    print(response)
+    
+    # Extract function call results
+    function_call = response.candidates[0].content.parts[0].function_call
+    tool_call = {
+        "narrative_text": function_call.args["narrative_text"],
+        "prediction": function_call.args["prediction"]
+    }
+    
+    if 'prediction' not in tool_call:
+        sys.stderr.write(f"There was no prediction. The keys were {list(tool_call.keys())}\n")
+        raise MissingPrediction
+        
+    if tool_call.get("prediction") not in valid_predictions:
+        sys.stderr.write(f"Prediction was not a valid prediction: {tool_call['prediction']}\n")
+        # Maybe there might be a way out of this
+        rescued = False
+        for valid in valid_predictions:
+            if tool_call['prediction'].lower() == valid.lower():
+                tool_call['prediction'] = valid
+                rescued = True
+                break
+        if not rescued:
+            sys.stderr.write("Could not match that case-insensitively to any valid prediction\n")
+            raise InvalidPrediction
+            
+    if "narrative_text" not in tool_call:
+        sys.stderr.write("Missing narrative text\n")
+        tool_call["narrative_text"] = ""
+    
+    # Calculate usage and cost - will need to be updated when proper usage stats are available
+    usage_obj = {
+        'input_tokens': 0,  # Placeholder
+        'output_tokens': 0, # Placeholder
+        'cost': None        # Placeholder
+    }
+    
+    return tool_call, json.dumps(usage_obj)
+
+
 def dispatch_prediction_prompt(model, prompt, valid_predictions):
     if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b']:
         return ollama_prediction(model, prompt, valid_predictions)
@@ -386,7 +459,66 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return claude_prediction(model, prompt, valid_predictions)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_prediction(model, prompt, valid_predictions)
+    if model in ["gemini-2.0-flash", "gemini-2.0-pro"]:
+        return gemini_prediction(model, prompt, valid_predictions)
     raise UnknownModel
+
+
+def gemini_reprompt(model, prompting_creation_prompt):
+    from google import genai
+    from google.genai import types
+    
+    # Initialize the Gemini client
+    api_key = open(os.path.expanduser("~/.gemini.key")).read().strip()
+    client = genai.Client(api_key=api_key)
+    
+    def store_replacement_prompt(reasoning: str, updated_prompt: str) -> dict:
+        """Store the updated prompt along with reasoning for the change.
+        
+        Args:
+            reasoning: Why you are making the change.
+            updated_prompt: The prompt that you think we should run next.
+        """
+        return {"reasoning": reasoning, "updated_prompt": updated_prompt}
+    
+    prompting_creation_prompt += """
+Supply your answer using the tool provided. You must include both reasoning explaining why you are making the change and an updated_prompt containing the prompt that should be run next.
+"""
+    
+    response = client.models.generate_content(
+        model=model,
+        contents=prompting_creation_prompt,
+        config=types.GenerateContentConfig(
+            tools=[store_replacement_prompt],
+            automatic_function_calling= {'disable': True},
+            tool_config = {
+                  'function_calling_config': {
+                  'mode': 'any'
+                }
+             }
+        ),
+    )
+    
+    print(response)
+    
+    # Extract function call results
+    function_call = response.candidates[0].content.parts[0].function_call
+    tool_call = {
+        "reasoning": function_call.args["reasoning"],
+        "updated_prompt": function_call.args["updated_prompt"]
+    }
+    
+    if 'updated_prompt' not in tool_call:
+        raise MissingUpdatedPrompt
+    
+    # Calculate usage and cost - will need to be updated when proper usage stats are available
+    usage_obj = {
+        'input_tokens': 0,  # Placeholder
+        'output_tokens': 0, # Placeholder
+        'cost': None        # Placeholder
+    }
+    
+    return tool_call, json.dumps(usage_obj)
 
 
 def dispatch_reprompt_prompt(model, prompting_creation_prompt):
@@ -396,6 +528,9 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return claude_reprompt(model, prompting_creation_prompt)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_reprompt(model, prompting_creation_prompt)
+    if model in ["gemini-2.0-flash", "gemini-2.0-pro"]:
+        return gemini_reprompt(model, prompting_creation_prompt)
+    sys.stderr.write(f"{model}\n")
     raise UnknownModel
 
 

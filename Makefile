@@ -6,7 +6,7 @@ TITANIC_DATASET := titanic_medical
 #To add to models... MODELS := gemini (eventually)
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openai4510 openailong deepseek qwq openaio1 anthropic37
+MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openai4510 openailong deepseek qwq openaio1 anthropic37 anthropic3710
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
@@ -31,10 +31,9 @@ all: wisconsin
 wisconsin: wisconsin_results.txt
 	echo All Wisconsin results are ready
 
-# I'm not sure that this next rule is right. In particular, whether globbing works in a Makefile.
-# I could change the program to take a directory and a file prefix
-wisconsin_results.txt: wisconsin-databases wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
-	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output wisconsin_results.csv --results results/wisconsin_exoplanets*.txt
+# Should depend on ... wisconsin-databases wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
+outputs/wisconsin_results.csv:
+	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output outputs/wisconsin_results.csv --model-details model_details.json
 
 wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 	echo Baseline created
@@ -117,9 +116,10 @@ $(RESULTS_DIR)/$(TITANIC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(TI
 titanic: titanic_results.txt
 	echo All Titanic results are ready
 
-# Again, I'm not sure if this globbing will work
-titanic_results.txt: titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
-	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output titanic_results.csv --results results/titanic_medical*.txt
+# Again, should depend on titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
+# I'm not sure if this globbing will work
+outputs/titanic_results.csv:
+	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output outputs/titanic_results.csv --model-details model_details.json
 
 titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 	echo Baseline created

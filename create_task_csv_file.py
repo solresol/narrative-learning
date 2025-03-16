@@ -6,9 +6,11 @@ import json
 import csv
 import sys
 import sqlite3
+import math
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import datasetconfig
+from statsmodels.stats.proportion import proportion_confint
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create CSV file from env files')
@@ -88,10 +90,16 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Get test accuracy for the best round
     test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
 
-    # Get the prompt from the best round and count words
+    # Get the prompt and reasoning from the best round and count words
     print(f"{config=} {split_id=} {best_round_id=} {test_accuracy=}")
     prompt = config.get_round_prompt(best_round_id)
-    word_count = count_words(prompt)
+    reasoning = config.get_round_reasoning(best_round_id)
+    prompt_word_count = count_words(prompt)
+    reasoning_word_count = count_words(reasoning)
+    
+    # Calculate Herdan and Zipf's law coefficients
+    herdan_result = config.calculate_herdans_law(split_id)
+    zipf_result = config.calculate_zipfs_law(split_id)
 
     # Get model size from model details
     model_size = model_details.get(settings['model'], {}).get('parameters', '')
@@ -101,6 +109,15 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Extract model name (simplify if needed)
     model_name = settings['model']
 
+    # Get the count of data points
+    data_point_count = config.get_data_point_count()
+
+    # Calculate 95% confidence lower bound for accuracy
+    count_correct = round(test_accuracy * data_point_count)
+    # Using the Clopper-Pearson method to find the lower bound of the 95% confidence interval
+    lower_bound, _ = proportion_confint(count=count_correct, nobs=data_point_count, 
+                                       alpha=0.05, method='beta')
+    
     # Return all required data
     return {
         'Task': task,
@@ -108,9 +125,16 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Run Name': run_name,
         'Sampler': settings.get('sampler', 3),
         'Accuracy': test_accuracy,
+        'Accuracy Lower Bound': lower_bound,
         'Rounds': best_round_id,
-        'Prompt Word Count': word_count,
-        'Model Size': model_size
+        'Prompt Word Count': prompt_word_count,
+        'Reasoning Word Count': reasoning_word_count,
+        'Herdan Coefficient': herdan_result['coefficient'],
+        'Herdan R-squared': herdan_result['r_squared'],
+        'Zipf Coefficient': zipf_result['coefficient'],
+        'Zipf R-squared': zipf_result['r_squared'],
+        'Model Size': model_size,
+        'Data Points': data_point_count
     }
 
 
