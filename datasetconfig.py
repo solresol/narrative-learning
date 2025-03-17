@@ -932,6 +932,9 @@ class DatasetConfig:
         Calculate Zipf's law coefficient from all prompts and reasoning combined.
         Zipf's law states that the frequency of a word is inversely proportional to its rank.
         
+        This implementation samples 1000 words with replacement 5 times and averages the results
+        to handle documents of different lengths.
+        
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
             
@@ -944,44 +947,76 @@ class DatasetConfig:
         if not text_list:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
         
-        # Get word frequencies and sort by frequency (descending)
-        word_counts = self._get_word_frequencies(text_list)
-        if not word_counts:
+        # Preprocess all text and get a list of all words
+        all_words = []
+        for text in text_list:
+            all_words.extend(self._preprocess_text(text))
+            
+        if not all_words:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+        
+        # Number of runs, sample size and results storage
+        num_runs = 5
+        sample_size = 1000
+        zipf_coefficients = []
+        r_squared_values = []
+        
+        # Run multiple times and average the results
+        for _ in range(num_runs):
+            # Sample words with replacement
+            if len(all_words) == 0:
+                continue
+                
+            # Sample with replacement
+            sampled_words = np.random.choice(all_words, size=sample_size, replace=True)
+            
+            # Count word frequencies in the sample
+            word_counts = Counter(sampled_words)
+            if not word_counts:
+                continue
+                
+            # Get frequency and rank
+            frequencies = []
+            ranks = []
+            
+            sorted_items = word_counts.most_common()
+            for rank, (word, count) in enumerate(sorted_items, 1):
+                frequencies.append(count)
+                ranks.append(rank)
+            
+            # Convert to numpy arrays and calculate log values
+            log_ranks = np.log(ranks)
+            log_frequencies = np.log(frequencies)
+            
+            # Linear regression to find Zipf coefficient
+            # Zipf's law: frequency ∝ 1/rank^α where α is the Zipf coefficient
+            # In log space: log(frequency) = -α * log(rank) + constant
+            slope, intercept = np.polyfit(log_ranks, log_frequencies, 1)
+            zipf_coefficient = -slope  # The slope is negative, so we negate it
+            
+            # Calculate R-squared
+            y_pred = slope * log_ranks + intercept
+            ss_total = np.sum((log_frequencies - np.mean(log_frequencies))**2)
+            ss_residual = np.sum((log_frequencies - y_pred)**2)
+            r_squared = 1 - (ss_residual / ss_total)
+            
+            zipf_coefficients.append(zipf_coefficient)
+            r_squared_values.append(r_squared)
+        
+        # Calculate average values
+        if not zipf_coefficients:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
             
-        # Get frequency and rank
-        frequencies = []
-        ranks = []
+        avg_zipf_coefficient = sum(zipf_coefficients) / len(zipf_coefficients)
+        avg_r_squared = sum(r_squared_values) / len(r_squared_values)
         
-        sorted_items = word_counts.most_common()
-        for rank, (word, count) in enumerate(sorted_items, 1):
-            frequencies.append(count)
-            ranks.append(rank)
-        
-        # Convert to numpy arrays and calculate log values
-        log_ranks = np.log(ranks)
-        log_frequencies = np.log(frequencies)
-        
-        # Linear regression to find Zipf coefficient
-        # Zipf's law: frequency ∝ 1/rank^α where α is the Zipf coefficient
-        # In log space: log(frequency) = -α * log(rank) + constant
-        slope, intercept = np.polyfit(log_ranks, log_frequencies, 1)
-        zipf_coefficient = -slope  # The slope is negative, so we negate it
-        
-        # Calculate R-squared
-        y_pred = slope * log_ranks + intercept
-        ss_total = np.sum((log_frequencies - np.mean(log_frequencies))**2)
-        ss_residual = np.sum((log_frequencies - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
-        
+        # Return the average values and some additional information
         return {
-            'coefficient': zipf_coefficient,
-            'r_squared': r_squared,
+            'coefficient': avg_zipf_coefficient,
+            'r_squared': avg_r_squared,
             'data': {
-                'ranks': ranks,
-                'frequencies': frequencies,
-                'slope': slope,
-                'intercept': intercept
+                'individual_coefficients': zipf_coefficients,
+                'individual_r_squared': r_squared_values
             }
         }
     
@@ -989,6 +1024,9 @@ class DatasetConfig:
         """
         Calculate Herdan's law (Heaps' law) coefficient from all prompts and reasoning combined.
         Herdan's law describes the relationship between vocabulary size and text length.
+        
+        This implementation samples 1000 words with replacement 5 times and averages the results
+        to handle documents of different lengths.
         
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
@@ -1002,56 +1040,77 @@ class DatasetConfig:
         if not text_list:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
             
-        # For each text, calculate vocabulary size vs. text length
-        vocab_sizes = []
-        text_lengths = []
-        
-        cumulative_words = set()
-        cumulative_length = 0
-        
+        # Preprocess all text and get a list of all words
+        all_words = []
         for text in text_list:
-            words = self._preprocess_text(text)
-            text_length = len(words)
+            all_words.extend(self._preprocess_text(text))
             
-            if text_length == 0:
+        if not all_words:
+            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+            
+        # Number of runs, sample size and results storage
+        num_runs = 5
+        sample_size = 1000
+        herdan_coefficients = []
+        r_squared_values = []
+        
+        # Run multiple times and average the results
+        for _ in range(num_runs):
+            if len(all_words) == 0:
+                continue
+            
+            # Sample with replacement
+            sampled_words = list(np.random.choice(all_words, size=sample_size, replace=True))
+            
+            # Calculate vocabulary growth as we read through the sample
+            vocab_sizes = []
+            text_lengths = []
+            
+            seen_words = set()
+            for i, word in enumerate(sampled_words, 1):
+                seen_words.add(word)
+                
+                # Add a data point for every 10 words or so to get enough data points
+                if i % 10 == 0 or i == len(sampled_words):
+                    vocab_sizes.append(len(seen_words))
+                    text_lengths.append(i)
+            
+            if len(vocab_sizes) < 3:  # Need at least 3 points for a meaningful regression
                 continue
                 
-            # Update cumulative counts
-            cumulative_words.update(words)
-            cumulative_length += text_length
+            # Convert to numpy arrays and calculate log values
+            log_text_lengths = np.log(text_lengths)
+            log_vocab_sizes = np.log(vocab_sizes)
             
-            # Herdan's law applies to the relationship between the size of a text
-            # and the size of its vocabulary
-            vocab_sizes.append(len(cumulative_words))
-            text_lengths.append(cumulative_length)
+            # Linear regression to find Herdan coefficient
+            # Herdan's law: V = K * N^β where V is vocabulary size, N is text length,
+            # K is a constant, and β is the Herdan coefficient
+            # In log space: log(V) = β * log(N) + log(K)
+            slope, intercept = np.polyfit(log_text_lengths, log_vocab_sizes, 1)
+            herdan_coefficient = slope
+            
+            # Calculate R-squared
+            y_pred = slope * log_text_lengths + intercept
+            ss_total = np.sum((log_vocab_sizes - np.mean(log_vocab_sizes))**2)
+            ss_residual = np.sum((log_vocab_sizes - y_pred)**2)
+            r_squared = 1 - (ss_residual / ss_total)
+            
+            herdan_coefficients.append(herdan_coefficient)
+            r_squared_values.append(r_squared)
         
-        if not vocab_sizes or not text_lengths:
+        # Calculate average values
+        if not herdan_coefficients:
             return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
+            
+        avg_herdan_coefficient = sum(herdan_coefficients) / len(herdan_coefficients)
+        avg_r_squared = sum(r_squared_values) / len(r_squared_values)
         
-        # Convert to numpy arrays and calculate log values
-        log_text_lengths = np.log(text_lengths)
-        log_vocab_sizes = np.log(vocab_sizes)
-        
-        # Linear regression to find Herdan coefficient
-        # Herdan's law: V = K * N^β where V is vocabulary size, N is text length,
-        # K is a constant, and β is the Herdan coefficient
-        # In log space: log(V) = β * log(N) + log(K)
-        slope, intercept = np.polyfit(log_text_lengths, log_vocab_sizes, 1)
-        herdan_coefficient = slope
-        
-        # Calculate R-squared
-        y_pred = slope * log_text_lengths + intercept
-        ss_total = np.sum((log_vocab_sizes - np.mean(log_vocab_sizes))**2)
-        ss_residual = np.sum((log_vocab_sizes - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
-        
+        # Return the average values and some additional information
         return {
-            'coefficient': herdan_coefficient,
-            'r_squared': r_squared,
+            'coefficient': avg_herdan_coefficient,
+            'r_squared': avg_r_squared,
             'data': {
-                'text_lengths': text_lengths,
-                'vocab_sizes': vocab_sizes,
-                'slope': slope,
-                'intercept': intercept
+                'individual_coefficients': herdan_coefficients,
+                'individual_r_squared': r_squared_values
             }
         }
