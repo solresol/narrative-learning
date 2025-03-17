@@ -28,3 +28,5 @@
 - `predict.py`: Make predictions using trained models
 - `report-script.py`: Generate performance reports
 - `make_result_charts.py`: Create visualization charts
+- `create_task_csv_file.py`: Generate CSV results from environment files
+- `env_settings.py`: Parse and validate model environment settings
