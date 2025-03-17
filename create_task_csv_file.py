@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 import os
-import re
 import argparse
 import json
 import csv
 import sys
 import sqlite3
 import math
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import datasetconfig
 from statsmodels.stats.proportion import proportion_confint
+from env_settings import EnvSettings
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create CSV file from env files')
@@ -20,38 +21,6 @@ def parse_args():
     parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
     return parser.parse_args()
 
-def extract_env_settings(env_file_path: str) -> Dict:
-    """Extract configuration settings from an env file."""
-    settings = {}
-    try:
-        with open(env_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Extract database path
-        db_match = re.search(r'NARRATIVE_LEARNING_DATABASE=([^\s]+)', content)
-        if db_match:
-            settings['database'] = db_match.group(1)
-
-        # Extract config path
-        config_match = re.search(r'NARRATIVE_LEARNING_CONFIG=([^\s]+)', content)
-        if config_match:
-            settings['config'] = config_match.group(1)
-
-        # Extract training model
-        model_match = re.search(r'NARRATIVE_LEARNING_TRAINING_MODEL=([^\s]+)', content)
-        if model_match:
-            settings['model'] = model_match.group(1)
-
-        # Extract example count (sampler)
-        example_match = re.search(r'NARRATIVE_LEARNING_EXAMPLE_COUNT=(\d+)', content)
-        if example_match:
-            settings['sampler'] = int(example_match.group(1))
-
-        return settings
-    except Exception as e:
-        print(f"Error processing env file {env_file_path}: {e}")
-        return {}
-
 def count_words(text: str) -> int:
     """Count words in a text string."""
     return len(re.findall(r'\w+', text))
@@ -59,26 +28,18 @@ def count_words(text: str) -> int:
 def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Optional[Dict]:
     """Get all required data for a model from its env file."""
     # Extract settings from env file
-    settings = extract_env_settings(env_file_path)
+    settings = EnvSettings.from_file(env_file_path)
 
-    # Skip incomplete env files
-    if not all(key in settings for key in ['database', 'config', 'model']):
-        sys.exit(f"{env_file_path} is missing required settings")
-
-    # Skip if database doesn't exist
-    if not os.path.exists(settings['database']):
-        print(f"Skipping {env_file_path} - database {settings['database']} not found")
-        return None
-
-    # Skip if config doesn't exist
-    if not os.path.exists(settings['config']):
-        print(f"Skipping {env_file_path} - config {settings['config']} not found")
+    # Validate settings
+    is_valid, error_message = settings.validate()
+    if not is_valid:
+        print(f"Skipping {env_file_path} - {error_message}")
         return None
 
     # Connect to database
-    conn = sqlite3.connect(f"file:{settings['database']}?mode=ro", uri=True)
-    print("Connecting to",settings['database'])
-    config = datasetconfig.DatasetConfig(conn, settings['config'])
+    conn = sqlite3.connect(f"file:{settings.database}?mode=ro", uri=True)
+    print("Connecting to", settings.database)
+    config = datasetconfig.DatasetConfig(conn, settings.config)
 
     # Get the latest split ID
     split_id = config.get_latest_split_id()
@@ -104,10 +65,10 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     zipf_result = config.calculate_zipfs_law(split_id)
 
     # Get model size from model details
-    model_size = model_details.get(settings['model'], {}).get('parameters', '')
+    model_size = model_details.get(settings.model, {}).get('parameters', '')
 
     # Extract model name (simplify if needed)
-    model_name = settings['model']
+    model_name = settings.model
     if model_name.startswith('gpt-4o'):
         model_name = 'openai'
     elif 'claude' in model_name:
@@ -131,7 +92,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     return {
         'Task': task,
         'Model': model_name,
-        'Sampler': settings.get('sampler', 3),
+        'Sampler': settings.sampler,
         'Accuracy': test_accuracy,
         'Accuracy Lower Bound': lower_bound,
         'Neg Log Error': neg_log_error,
