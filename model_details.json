@@ -90,5 +90,13 @@
     "gpt-4.5-preview": {
 	"parameters": 1800,
 	"reasoning": false
+    },
+    "gemini-2.0-flash": {
+	"parameters": 40,
+	"reasoning": false
+    },
+    "gemini-2.0-pro-exp": {
+	"parameters": 1500,
+	"reasoning": false
     }
 }
