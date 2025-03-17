@@ -124,6 +124,9 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     lower_bound, _ = proportion_confint(count=count_correct, nobs=data_point_count, 
                                        alpha=0.05, method='beta')
     
+    # Calculate negative log of the 95th percentile error rate
+    neg_log_error = -math.log(1 - lower_bound) if lower_bound < 1 else float('inf')
+    
     # Return all required data
     return {
         'Task': task,
@@ -131,6 +134,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Sampler': settings.get('sampler', 3),
         'Accuracy': test_accuracy,
         'Accuracy Lower Bound': lower_bound,
+        'Neg Log Error': neg_log_error,
         'Rounds': best_round_id,
         'Prompt Word Count': prompt_word_count,
         'Reasoning Word Count': reasoning_word_count,
