@@ -858,12 +858,13 @@ class DatasetConfig:
 
         return df
         
-    def get_all_prompts_and_reasoning(self, split_id: Optional[int] = None) -> Dict[str, List[str]]:
+    def get_all_prompts_and_reasoning(self, split_id: Optional[int] = None, up_to_round: Optional[int] = None) -> Dict[str, List[str]]:
         """
         Retrieve all prompts and reasoning for all rounds in a split.
         
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
+            up_to_round: If provided, only include rounds up to and including this round ID.
         
         Returns:
             Dictionary with 'prompts' and 'reasoning' lists containing text from all rounds
@@ -872,6 +873,11 @@ class DatasetConfig:
             split_id = self.get_latest_split_id()
             
         rounds = self.get_processed_rounds_for_split(split_id)
+        
+        # Filter rounds if up_to_round is specified
+        if up_to_round is not None:
+            rounds = [r for r in rounds if r <= up_to_round]
+            
         prompts = []
         reasoning = []
         
@@ -890,6 +896,31 @@ class DatasetConfig:
         return {
             'prompts': prompts,
             'reasoning': reasoning
+        }
+        
+    def get_total_word_count(self, split_id: Optional[int] = None, up_to_round: Optional[int] = None) -> Dict[str, int]:
+        """
+        Calculate the total word count of all prompts and reasoning up to a specific round.
+        
+        Args:
+            split_id: The split ID to analyze. If None, uses the most recent split.
+            up_to_round: If provided, only include rounds up to and including this round ID.
+            
+        Returns:
+            Dictionary with total word counts for prompts, reasoning, and combined
+        """
+        corpus = self.get_all_prompts_and_reasoning(split_id, up_to_round)
+        prompts = corpus.get('prompts', [])
+        reasoning = corpus.get('reasoning', [])
+        
+        prompt_word_count = sum(len(re.findall(r'\w+', text)) for text in prompts)
+        reasoning_word_count = sum(len(re.findall(r'\w+', text)) for text in reasoning)
+        total_word_count = prompt_word_count + reasoning_word_count
+        
+        return {
+            'prompt_words': prompt_word_count,
+            'reasoning_words': reasoning_word_count,
+            'total_words': total_word_count
         }
 
     def _preprocess_text(self, text: str) -> List[str]:

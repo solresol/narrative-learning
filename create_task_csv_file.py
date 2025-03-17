@@ -96,6 +96,10 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     prompt_word_count = count_words(prompt)
     reasoning_word_count = count_words(reasoning)
     
+    # Calculate total word count up to best round
+    total_words = config.get_total_word_count(split_id, best_round_id)
+    cumulative_reasoning_word_count = total_words['reasoning_words']
+    
     # Calculate Herdan and Zipf's law coefficients
     herdan_result = config.calculate_herdans_law(split_id)
     zipf_result = config.calculate_zipfs_law(split_id)
@@ -131,6 +135,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         'Rounds': best_round_id,
         'Prompt Word Count': prompt_word_count,
         'Reasoning Word Count': reasoning_word_count,
+        'Cumulative Reasoning Words': cumulative_reasoning_word_count,
         'Herdan Coefficient': herdan_result['coefficient'],
         'Herdan R-squared': herdan_result['r_squared'],
         'Zipf Coefficient': zipf_result['coefficient'],
