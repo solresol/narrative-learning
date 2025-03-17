@@ -3,16 +3,19 @@
 
 WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
+SGC_DATASET := sgc_coral
+
 #To add to models... MODELS := gemini (eventually)
-# Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi
+# Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
+# More problematic models: anthropic anthropic10
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := anthropic10 openai openai10 openai10o1 anthropic llama openai45 openai4510 openailong deepseek qwq openaio1 anthropic37 anthropic3710
+MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
-.PHONY: all wisconsin titanic
+.PHONY: all wisconsin titanic sgc
 
-all: wisconsin titanic
+all: wisconsin titanic sgc
 	echo Done
 
 
@@ -94,7 +97,7 @@ obfuscations/titanic: conversions/titanic obfuscation_plan_generator.py datasets
 $(TEMPLATES_DIR)/$(TITANIC_DATASET).sql configs/titanic_medical.config.json: datasets/titanic.csv initialise_database.py
 	uv run initialise_database.py --database $(TEMPLATES_DIR)/titanic_medical.sqlite --source datasets/titanic.csv --config-file configs/titanic_medical.config.json --obfuscation obfuscations/titanic --verbose
 	sqlite3 $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(TITANIC_DATASET).sql
-	rm -f $(TEMPLATES_DIR)/$(TEMPLATE_DATASET).sqlite
+	rm -f $(TEMPLATES_DIR)/$(TITANIC_DATASET).sqlite
 
 
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.sqlite
@@ -144,8 +147,64 @@ titanic-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(m
 titanic-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).best-round.txt)
 	echo All Titanic best-round files are ready
 
+######################################################################
 
-	echo Titanic is ready
+
+# How we created the dataset
+obfuscations/southgermancredit: conversions/southgermancredit obfuscation_plan_generator.py datasets/southgermancredit.csv
+	uv run obfuscation_plan_generator.py --csv-file datasets/southgermancredit.csv  --obfuscation-plan obfuscations/southgermancredit --guidelines conversions/southgermancredit
+
+$(TEMPLATES_DIR)/$(SGC_DATASET).sql configs/$(SGC_DATASET).config.json: datasets/southgermancredit.csv initialise_database.py
+	uv run initialise_database.py --database $(TEMPLATES_DIR)/$(SGC_DATASET).sqlite --source datasets/southgermancredit.csv --config-file configs/$(SGC_DATASET).config.json --obfuscation obfuscations/southgermancredit --verbose
+	sqlite3 $(TEMPLATES_DIR)/$(SGC_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(SGC_DATASET).sql
+	rm -f $(TEMPLATES_DIR)/$(SGC_DATASET).sqlite
+
+
+$(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(SGC_DATASET)-%.sqlite
+	. ./envs/southgermancredit/$*.env && ./loop.sh
+
+$(RESULTS_DIR)/$(SGC_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(SGC_DATASET).sql
+	sqlite3 $@ < $<
+
+$(RESULTS_DIR)/$(SGC_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt
+	. ./envs/southgermancredit/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(SGC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt
+	. ./envs/southgermancredit/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/southgermancredit/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+$(RESULTS_DIR)/$(SGC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt
+	. ./envs/southgermancredit/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
+
+southgermancredit: southgermancredit_results.txt
+	echo All SouthGermanCredit results are ready
+
+# Again, should depend on southgermancredit-estimates southgermancredit-results southgermancredit-prompts southgermancredit-best southgermancredit-baseline
+outputs/southgermancredit_results.csv:
+	uv run create_task_csv_file.py --task southgermancredit --env-dir envs/southgermancredit --output outputs/southgermancredit_results.csv --model-details model_details.json
+
+southgermancredit-baseline: $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
+	echo Baseline created
+
+$(RESULTS_DIR)/$(SGC_DATASET).baseline.json: configs/$(SGC_DATASET).config.json $(RESULTS_DIR)/$(SGC_DATASET)-baseline.sqlite
+	uv run baseline.py --config configs/$(SGC_DATASET).config.json --database $(RESULTS_DIR)/$(SGC_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
+
+# Add these targets to depend on all models
+southgermancredit-databases: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).sqlite)
+	@echo All SouthGermanCredit databases are initialised
+
+
+southgermancredit-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).estimate.txt)
+	echo All SouthGermanCredit estimates are ready
+
+southgermancredit-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).results.csv)
+	echo All SouthGermanCredit results are ready
+
+southgermancredit-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).decoded-best-prompt.txt)
+	echo All SouthGermanCredit prompts are ready
+
+southgermancredit-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).best-round.txt)
+	echo All SouthGermanCredit best-round files are ready
 
 ######################################################################
 

@@ -5,6 +5,7 @@ card dataset, and pretend that it is a dataset about coral reef health.
 Column Renaming (Original → Obfuscated)
 
 Original Column	Coral Reef Obfuscated Column	Explanation (Fictionalised Meaning)
+k_id	CoralReefID	Identifier
 laufkont	CurrentFlowQuality	Quality of ocean current around reef
 laufzeit	ObservationDuration	Duration (in months) of reef observation
 moral	ReefIntegrityScore	Integrity of coral structures
