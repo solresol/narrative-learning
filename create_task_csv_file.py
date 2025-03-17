@@ -90,7 +90,6 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
 
     # Get the prompt and reasoning from the best round and count words
-    print(f"{config=} {split_id=} {best_round_id=} {test_accuracy=}")
     prompt = config.get_round_prompt(best_round_id)
     reasoning = config.get_round_reasoning(best_round_id)
     prompt_word_count = count_words(prompt)
