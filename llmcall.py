@@ -66,7 +66,11 @@ Output in JSON format like this:
         sys.stderr.write("No narrative text\n")
         answer['narrative_text'] = ''
     #print(f"stdout = {json.dumps(answer,indent=4)}")
-    info_start = stderr.index("total duration:")
+    try:
+        info_start = stderr.index("total duration:")
+    except ValueError:
+        sys.stderr.write("stderr was in an unusual format\n" + stderr + "\n")
+        info_start = 0
     stderr = stderr[info_start:]
     print(f"stderr = {stderr}")
     return answer, stderr
