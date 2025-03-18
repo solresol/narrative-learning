@@ -103,19 +103,19 @@ def plot_log_model_size_vs_log_error(df, output_prefix, baselines, dataset_name)
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Create a scatter plot with different colors for each model
-    sns.scatterplot(x='Log_Model_Size', y='Negative_Log_Error_Rate',
+    sns.scatterplot(x='Log_Model_Size', y='Neg Log Error',
                    hue='Display_Name',
                     #size='Sampler',
                     #sizes=(100, 200),
-                    palette='cool', data=df,
+                    data=df,
                     ax=ax)
 
     df = df.dropna(subset=['Log_Model_Size'])
     print(df[df.Log_Model_Size.isnull()])
     lr = sklearn.linear_model.LinearRegression()
-    lr.fit(df[['Log_Model_Size']], df.Negative_Log_Error_Rate)
+    lr.fit(df[['Log_Model_Size']], df['Neg Log Error'])
     X = sm.add_constant(df[['Log_Model_Size']])
-    model = sm.OLS(df.Negative_Log_Error_Rate, X).fit()
+    model = sm.OLS(df['Neg Log Error'], X).fit()
     print(model.summary())
     # Access specific statistics
     slope = model.params['Log_Model_Size']
@@ -136,7 +136,7 @@ def plot_log_model_size_vs_log_error(df, output_prefix, baselines, dataset_name)
     ax.set_xlabel('Log10 Model Size (parameters)')
     ax.set_ylabel('Negative Log10 Error Rate')
     ax.grid(True, linestyle='--', alpha=0.7)
-    draw_baselines(ax, baselines)
+    draw_baselines(ax, df, baselines)
 
 
     ax2 = ax.twinx()
@@ -144,7 +144,7 @@ def plot_log_model_size_vs_log_error(df, output_prefix, baselines, dataset_name)
     # Create a function to convert negative log error to accuracy
     def neg_log_error_to_accuracy(y):
         # Convert negative log10 error rate to accuracy percentage
-        # If y is Negative_Log_Error_Rate, then error = 10^(-y)
+        # If y is Neg Log Error_Rate, then error = 10^(-y)
         # And accuracy = 1 - error = 1 - 10^(-y)
         calc = (1 - 10**(-y)) * 100
         print(f"Neg log {y} -> {calc} %")
@@ -231,15 +231,21 @@ def plot_sample_size_effect(df, output_prefix, dataset_name):
     print(f"Saved plot to {output_file}")
 
 
-def draw_baselines(ax, baselines, xpos=12.5):
+def draw_baselines(ax, df, baselines, xpos=12.5):
     colours = {
         'logistic regression': 'teal',
         'decision trees': 'gold',
         'dummy': 'orange'
         }
-    for model, score in baselines.items():
+    for model, colour in colours.items():
+        # Don't need to take the mean -- they will all be the same value
+        score = df[model].mean()
         ax.axhline(score, linestyle='dotted', c=colours[model])
         ax.annotate(xy=(xpos,score-0.03), text=model.title(), c=colours[model])
+        
+    #for model, score in baselines.items():
+    #    ax.axhline(score, linestyle='dotted', c=colours[model])
+    #    ax.annotate(xy=(xpos,score-0.03), text=model.title(), c=colours[model])
 
 name_lookup = {
         'openai10': 'gpt-4o',
@@ -286,9 +292,10 @@ def main():
     df['Log_Model_Size'] = (df['Model Size'] * 1000000000.0).map(math.log10)
     df['Error_Rate'] = 1 - df['Accuracy']
 
-    df = df[df.Error_Rate > 0]
+    # Need to fix these. I want to get a 99th percentile confidence that the error
+    # rate was above some number
+    df = df[df.Accuracy > baselines['dummy']]
     # If the next line errors, it's because the error rate was 0
-    df['Negative_Log_Error_Rate'] = - df.Error_Rate.map(lambda x: math.log10(x) if x > 0 else math.log10(0.01))
     # Print summary of the data
     print(f"Loaded {len(df)} rows from {args.input}")
     print("\nData Summary:")
