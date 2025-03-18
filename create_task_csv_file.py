@@ -89,7 +89,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
                                        alpha=0.05, method='beta')
     
     # Calculate negative log of the 95th percentile error rate
-    neg_log_error = -math.log(1 - lower_bound) if lower_bound < 1 else float('inf')
+    neg_log_error = -math.log10(1 - lower_bound) if lower_bound < 1 else float('inf')
     
     # Return all required data
     return {
