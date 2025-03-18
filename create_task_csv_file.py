@@ -45,7 +45,11 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     split_id = config.get_latest_split_id()
 
     # Get best round ID based on validation accuracy
-    best_round_id = config.get_best_round_id(split_id, 'accuracy')
+    try:
+        best_round_id = config.get_best_round_id(split_id, 'accuracy')
+    except ValueError as e:
+        sys.stderr.write(f"Could not get best round for {split_id}: {e}\n")
+        return None
 
     # Get test accuracy for the best round
     test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
