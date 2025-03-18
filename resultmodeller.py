@@ -49,7 +49,7 @@ def prepare_data(df):
     
     return X, y
 
-def train_models(X, y):
+def train_models(X, y, n_splits=5):
     """Train multiple models and report their performance."""
     # Create a column transformer to one-hot encode categorical features
     categorical_features = ['Task']  # Only Task is categorical now
@@ -83,7 +83,7 @@ def train_models(X, y):
     ])
     
     # Set up cross-validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=42)
+    cv = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     
     # Perform cross-validation for each model
     rf_cv_results = cross_validate(rf_model, X, y, cv=cv, 
@@ -107,67 +107,38 @@ def train_models(X, y):
     feature_names = np.concatenate([cat_feature_names, numeric_features])
     
     # Calculate average feature importances across all folds
-    rf_importances = np.zeros(len(feature_names))
+    rf_importances = pd.Series(data=np.zeros(len(feature_names)), index=feature_names)
     for estimator in rf_cv_results['estimator']:
-        rf_importances += estimator.named_steps['regressor'].feature_importances_
+        these_cat_feature_names = estimator.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out()
+        these_feature_names = np.concatenate([these_cat_feature_names, numeric_features])
+        these_importances = pd.Series(index=these_feature_names, data = estimator.named_steps['regressor'].feature_importances_)
+        rf_importances += these_importances
     rf_importances /= len(rf_cv_results['estimator'])
     
     # Calculate average coefficients for linear regression across all folds
-    lr_coeffs = np.zeros(len(feature_names))
+    lr_coeffs = pd.Series(data=np.zeros(len(feature_names)), index=feature_names)
     for estimator in lr_cv_results['estimator']:
-        lr_coeffs += estimator.named_steps['regressor'].coef_
+        these_cat_feature_names = estimator.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out()
+        these_feature_names = np.concatenate([these_cat_feature_names, numeric_features])
+        these_importances = pd.Series(index=these_feature_names, data = estimator.named_steps['regressor'].coef_)
+        lr_coeffs += these_importances
     lr_coeffs /= len(lr_cv_results['estimator'])
-    
-    # Get sample coefficients from the first fold to determine the shape
-    sample_poly_coeffs = poly_ridge_cv_results['estimator'][0].named_steps['regressor'].coef_
-    
-    # Calculate average coefficients for polynomial regression across all folds
-    poly_ridge_coeffs = np.zeros(len(sample_poly_coeffs))
-    for estimator in poly_ridge_cv_results['estimator']:
-        poly_ridge_coeffs += estimator.named_steps['regressor'].coef_
-    poly_ridge_coeffs /= len(poly_ridge_cv_results['estimator'])
-    
-    # Get feature names for polynomial features
-    # First get transformed feature names from the preprocessor
-    preprocessed_features = list(feature_names)
-    
-    # Generate polynomial feature names (this is approximate since sklearn doesn't provide this directly)
-    poly_features = []
-    
-    # Add individual features
-    poly_features.extend(preprocessed_features)
-    
-    # Add interaction terms (degree 2)
-    for i in range(len(preprocessed_features)):
-        for j in range(i, len(preprocessed_features)):
-            poly_features.append(f"{preprocessed_features[i]}*{preprocessed_features[j]}")
-    
-    # Truncate if necessary (in case our calculation doesn't match exactly)
-    poly_features = poly_features[:len(poly_ridge_coeffs)]
-    
-    # Create dictionary of significant coefficients
-    significant_coeffs = {}
-    for feature, coeff in zip(poly_features, poly_ridge_coeffs):
-        if abs(coeff) >= 0.01:  # Only keep coefficients >= 0.01
-            significant_coeffs[feature] = coeff
     
     return {
         'Random Forest': {
             'R^2': rf_r2,
-            'Importances': dict(zip(feature_names, rf_importances))
+            'Importances': rf_importances.to_dict()
         },
         'Linear Regression': {
             'R^2': lr_r2,
-            'Coefficients': dict(zip(feature_names, lr_coeffs))
-        },
-        'Polynomial Ridge': {
-            'R^2': poly_ridge_r2,
-            'Coefficients': significant_coeffs
+            'Coefficients': lr_coeffs.to_dict()
         }
     }
 
 def main():
     parser = argparse.ArgumentParser(description='Model Neg Log Error from features in results CSV files')
+    parser.add_argument("--remove-extremely-bad", action="store_true", help="Remove narrative learning results that weren't even a match for the dummy regressor")
+    parser.add_argument("--crossval", type=int, default=5, help="Number of cross-validation folds")
     parser.add_argument('csv_files', nargs='+', help='CSV files containing results data')
     args = parser.parse_args()
     
@@ -177,15 +148,20 @@ def main():
     
     # Load and prepare data
     df = load_data(args.csv_files)
+    
+    # Ignore the really bad models
+    if args.remove_extremely_bad:
+        df = df[df['Neg Log Error'] > df['dummy']]
+    
     print(df.columns)
     X, y = prepare_data(df)
     
     print(f"Loaded data from {', '.join(args.csv_files)}")
     print(f"Number of samples: {len(X)}")
-    print("Using 5-fold cross-validation to evaluate models")
+    print(f"Using {args.crossval}-fold cross-validation to evaluate models")
     
     # Train models and get results
-    results = train_models(X, y)
+    results = train_models(X, y, args.crossval)
     
     # Print results
     print("\n=== Random Forest ===")
@@ -210,16 +186,6 @@ def main():
     for feature, coeff in sorted_coeffs:
         print(f"  {feature}: {coeff:.4f}")
     
-    print("\n=== Polynomial Ridge Regression ===")
-    print(f"Cross-validated R^2 Score: {results['Polynomial Ridge']['R^2']:.4f}")
-    print("Average Significant Coefficients across folds (abs value >= 0.01):")
-    sorted_poly_coeffs = sorted(
-        results['Polynomial Ridge']['Coefficients'].items(),
-        key=lambda x: abs(x[1]),
-        reverse=True
-    )
-    for feature, coeff in sorted_poly_coeffs:
-        print(f"  {feature}: {coeff:.4f}")
 
 if __name__ == "__main__":
     main()
