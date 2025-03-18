@@ -5,7 +5,7 @@ import numpy as np
 import argparse
 import sys
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -72,7 +72,8 @@ def train_models(X, y, n_splits=5):
     # Linear Regression model
     lr_model = Pipeline([
         ('preprocessor', preprocessor),
-        ('regressor', LinearRegression())
+        #('regressor', LinearRegression())
+        ('regressor', RidgeCV())
     ])
     
     # Polynomial features with Ridge regression
