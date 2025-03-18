@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument('--env-dir', required=True, help='Directory containing env files')
     parser.add_argument('--output', required=True, help='Output path for CSV file')
     parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
+    parser.add_argument('--baseline', help='Path to baseline JSON file with additional columns')
     return parser.parse_args()
 
 def count_words(text: str) -> int:
@@ -132,6 +133,13 @@ if __name__ == "__main__":
     # Load model details
     with open(args.model_details, 'r', encoding='utf-8') as f:
         model_details = json.load(f)
+        
+    # Load baseline data if provided
+    baseline_data = {}
+    if args.baseline and os.path.exists(args.baseline):
+        with open(args.baseline, 'r', encoding='utf-8') as f:
+            baseline_data = json.load(f)
+            print(f"Loaded baseline data from {args.baseline}")
 
     # Get list of env files to process
     env_files = [os.path.join(args.env_dir, f) for f in os.listdir(args.env_dir)
@@ -143,6 +151,9 @@ if __name__ == "__main__":
         print(f"Processing {env_file}...")
         model_data = get_model_data(env_file, args.task, model_details)
         if model_data:
+            # Add baseline data as additional columns
+            for key, value in baseline_data.items():
+                model_data[key] = value
             results.append(model_data)
 
     # Write results to CSV
