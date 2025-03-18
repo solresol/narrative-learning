@@ -31,7 +31,6 @@ def count_words(text: str) -> int:
 def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Optional[Dict]:
     """Get all required data for a model from its env file."""
     # Extract settings from env file
-    settings = extract_env_settings(env_file_path)
     run_name = os.path.basename(env_file_path)[:-3]
     settings = EnvSettings.from_file(env_file_path)
 
