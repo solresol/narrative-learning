@@ -41,7 +41,7 @@ outputs/wisconsin_results.csv: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 	echo Baseline created
 
-$(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json: configs/$(WISCONSIN_DATASET).config.json $(RESULTS_DIR)/$(WISCONSIN_DATASET)-baseline.sqlite
+$(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json: configs/$(WISCONSIN_DATASET).config.json $(RESULTS_DIR)/$(WISCONSIN_DATASET)-baseline.sqlite baseline.py
 	uv run baseline.py --config configs/$(WISCONSIN_DATASET).config.json --database $(RESULTS_DIR)/$(WISCONSIN_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 
 wisconsin-databases: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).sqlite)
@@ -133,7 +133,7 @@ outputs/titanic_results.csv: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 	echo Baseline created
 
-$(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json: configs/$(TITANIC_DATASET).config.json $(RESULTS_DIR)/$(TITANIC_DATASET)-baseline.sqlite
+$(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json: configs/$(TITANIC_DATASET).config.json $(RESULTS_DIR)/$(TITANIC_DATASET)-baseline.sqlite baseline.py
 	uv run baseline.py --config configs/$(TITANIC_DATASET).config.json --database $(RESULTS_DIR)/$(TITANIC_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 
 # Add these targets to depend on all models
@@ -198,7 +198,7 @@ outputs/southgermancredit_results.csv: $(RESULTS_DIR)/$(SGC_DATASET).baseline.js
 southgermancredit-baseline: $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
 	echo Baseline created
 
-$(RESULTS_DIR)/$(SGC_DATASET).baseline.json: configs/$(SGC_DATASET).config.json $(RESULTS_DIR)/$(SGC_DATASET)-baseline.sqlite
+$(RESULTS_DIR)/$(SGC_DATASET).baseline.json: configs/$(SGC_DATASET).config.json $(RESULTS_DIR)/$(SGC_DATASET)-baseline.sqlite baseline.py
 	uv run baseline.py --config configs/$(SGC_DATASET).config.json --database $(RESULTS_DIR)/$(SGC_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
 
 # Add these targets to depend on all models
