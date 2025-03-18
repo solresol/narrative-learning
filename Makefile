@@ -13,7 +13,7 @@ MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 ant
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
-.PHONY: all wisconsin titanic sgc
+.PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions
 
 all: wisconsin titanic sgc
 	echo Done
@@ -58,6 +58,12 @@ wisconsin-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)
 
 wisconsin-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(WISCONSIN_DATASET)-$(model).best-round.txt)
 	echo All Wisconsin best-round files are ready
+
+wisconsin-distributions: $(foreach model,$(MODELS),outputs/$(WISCONSIN_DATASET)-$(model).distribution.png)
+	echo All Wisconsin distribution files are ready
+
+outputs/$(WISCONSIN_DATASET)-%.distribution.png outputs/$(WISCONSIN_DATASET)-%.distribution.txt: envs/wisconsin/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(WISCONSIN_DATASET)-$*.distribution.png --fitted-distribution outputs/$(WISCONSIN_DATASET)-$*.distribution.txt
 
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.sqlite
 	. ./envs/wisconsin/$*.env && ./loop.sh
@@ -147,6 +153,12 @@ titanic-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(m
 titanic-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TITANIC_DATASET)-$(model).best-round.txt)
 	echo All Titanic best-round files are ready
 
+titanic-distributions: $(foreach model,$(MODELS),outputs/$(TITANIC_DATASET)-$(model).distribution.png)
+	echo All Titanic distribution files are ready
+
+outputs/$(TITANIC_DATASET)-%.distribution.png outputs/$(TITANIC_DATASET)-%.distribution.txt: envs/titanic/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(TITANIC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(TITANIC_DATASET)-$*.distribution.txt
+
 ######################################################################
 
 
@@ -205,6 +217,12 @@ southgermancredit-prompts: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASE
 
 southgermancredit-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(SGC_DATASET)-$(model).best-round.txt)
 	echo All SouthGermanCredit best-round files are ready
+
+southgermancredit-distributions: $(foreach model,$(MODELS),outputs/$(SGC_DATASET)-$(model).distribution.png)
+	echo All SouthGermanCredit distribution files are ready
+
+outputs/$(SGC_DATASET)-%.distribution.png outputs/$(SGC_DATASET)-%.distribution.txt: envs/southgermancredit/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(SGC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(SGC_DATASET)-$*.distribution.txt
 
 ######################################################################
 
