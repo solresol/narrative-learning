@@ -31,7 +31,7 @@ def prepare_data(df):
     # Select features
     features = ['Task', 'Sampler', 'Rounds', 'Prompt Word Count', 
                 'Reasoning Word Count', 'Cumulative Reasoning Words',
-                'Herdan Coefficient', 'Zipf Coefficient', 'Model Size']
+                'Herdan Coefficient', 'Zipf Coefficient', 'Model Size', 'Patience']
     
     # Drop rows with NaN in any of the feature columns
     df = df.dropna(subset=features)
@@ -55,7 +55,7 @@ def train_models(X, y):
     categorical_features = ['Task']  # Only Task is categorical now
     numeric_features = ['Sampler', 'Rounds', 'Prompt Word Count', 'Reasoning Word Count', 
                          'Cumulative Reasoning Words', 'Herdan Coefficient', 
-                         'Zipf Coefficient', 'Model Size']
+                         'Zipf Coefficient', 'Model Size', 'Patience']
     
     preprocessor = ColumnTransformer(
         transformers=[
@@ -177,6 +177,7 @@ def main():
     
     # Load and prepare data
     df = load_data(args.csv_files)
+    print(df.columns)
     X, y = prepare_data(df)
     
     print(f"Loaded data from {', '.join(args.csv_files)}")
