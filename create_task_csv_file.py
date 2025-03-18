@@ -73,12 +73,6 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
 
     # Extract model name (simplify if needed)
     model_name = settings.model
-    if model_name.startswith('gpt-4o'):
-        model_name = 'openai'
-    elif 'claude' in model_name:
-        model_name = 'anthropic'
-    elif ':' in model_name:
-        model_name = model_name.split(':')[0]
 
     # Get the count of data points
     data_point_count = config.get_data_point_count()
