@@ -147,19 +147,28 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, output_path):
     lr_lower_bound, _ = proportion_confint(count=lr_correct, nobs=n_test, alpha=0.05, method='beta')
     dt_lower_bound, _ = proportion_confint(count=dt_correct, nobs=n_test, alpha=0.05, method='beta')
     dummy_lower_bound, _ = proportion_confint(count=dummy_correct, nobs=n_test, alpha=0.05, method='beta')
+    
+    # Calculate negative log10 of error rates
+    import math
+    lr_neg_log_error = -math.log10(1 - lr_lower_bound) if lr_lower_bound < 1 else float('inf')
+    dt_neg_log_error = -math.log10(1 - dt_lower_bound) if dt_lower_bound < 1 else float('inf')
+    dummy_neg_log_error = -math.log10(1 - dummy_lower_bound) if dummy_lower_bound < 1 else float('inf')
 
     output = {
         'logistic regression': {
             'accuracy': lr_accuracy,
-            'lower_bound': lr_lower_bound
+            'lower_bound': lr_lower_bound,
+            'neg_log_error': lr_neg_log_error
         },
         'decision trees': {
             'accuracy': dt_accuracy,
-            'lower_bound': dt_lower_bound
+            'lower_bound': dt_lower_bound,
+            'neg_log_error': dt_neg_log_error
         },
         'dummy': {
             'accuracy': dummy_accuracy,
-            'lower_bound': dummy_lower_bound
+            'lower_bound': dummy_lower_bound,
+            'neg_log_error': dummy_neg_log_error
         }
     }
 
