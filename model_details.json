@@ -98,6 +98,7 @@
     "phi4:latest": {
 	"parameters": 14,
 	"reasoning": true
+    },
     "gemini-2.0-flash": {
 	"parameters": 40,
 	"reasoning": false
