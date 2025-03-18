@@ -6,6 +6,7 @@ import csv
 import sys
 import sqlite3
 import math
+import sys
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -20,6 +21,7 @@ def parse_args():
     parser.add_argument('--output', required=True, help='Output path for CSV file')
     parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
     parser.add_argument('--baseline', help='Path to baseline JSON file with additional columns')
+    parser.add_argument("--progress-bar", action="store_true")
     return parser.parse_args()
 
 def count_words(text: str) -> int:
@@ -34,12 +36,11 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Validate settings
     is_valid, error_message = settings.validate()
     if not is_valid:
-        print(f"Skipping {env_file_path} - {error_message}")
+        sys.stderr.write(f"Skipping {env_file_path} - {error_message}\n")
         return None
 
     # Connect to database
     conn = sqlite3.connect(f"file:{settings.database}?mode=ro", uri=True)
-    print("Connecting to", settings.database)
     config = datasetconfig.DatasetConfig(conn, settings.config)
 
     # Get the latest split ID
@@ -112,20 +113,17 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
 def write_csv(data: List[Dict], output_path: str):
     """Write data to CSV file."""
     if not data:
-        print("No data to write to CSV")
+        sys.stderr.write(f"No data to write to {output_path}\n")
         return
 
     # Get fieldnames from first data item
     fieldnames = list(data[0].keys())
 
-    try:
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(data)
-        print(f"CSV file written to {output_path}")
-    except Exception as e:
-        print(f"Error writing CSV: {e}")
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -139,7 +137,6 @@ if __name__ == "__main__":
     if args.baseline and os.path.exists(args.baseline):
         with open(args.baseline, 'r', encoding='utf-8') as f:
             baseline_data = json.load(f)
-            print(f"Loaded baseline data from {args.baseline}")
 
     # Get list of env files to process
     env_files = [os.path.join(args.env_dir, f) for f in os.listdir(args.env_dir)
@@ -147,8 +144,13 @@ if __name__ == "__main__":
 
     # Process each env file
     results = []
-    for env_file in env_files:
-        print(f"Processing {env_file}...")
+    iterator = env_files
+    if args.progress_bar:
+        import tqdm
+        iterator = tqdm.tqdm(env_files)
+    for env_file in iterator:
+        if args.progress_bar:
+            iterator.set_description(env_file)
         model_data = get_model_data(env_file, args.task, model_details)
         if model_data:
             # Add baseline data as additional columns
@@ -158,4 +160,3 @@ if __name__ == "__main__":
 
     # Write results to CSV
     write_csv(results, args.output)
-    print(f"Processed {len(results)} models")

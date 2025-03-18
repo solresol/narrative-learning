@@ -36,7 +36,7 @@ wisconsin: wisconsin_results.txt
 
 # Should depend on ... wisconsin-databases wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
 outputs/wisconsin_results.csv: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
-	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output outputs/wisconsin_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
+	uv run create_task_csv_file.py --task wisconsin --env-dir envs/wisconsin --output outputs/wisconsin_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json --progress
 
 wisconsin-baseline: $(RESULTS_DIR)/$(WISCONSIN_DATASET).baseline.json
 	echo Baseline created
@@ -128,7 +128,7 @@ titanic: titanic_results.txt
 # Again, should depend on titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
 # I'm not sure if this globbing will work
 outputs/titanic_results.csv: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
-	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output outputs/titanic_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
+	uv run create_task_csv_file.py --task titanic --env-dir envs/titanic --output outputs/titanic_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json  --progress
 
 titanic-baseline: $(RESULTS_DIR)/$(TITANIC_DATASET).baseline.json
 	echo Baseline created
@@ -193,7 +193,7 @@ southgermancredit: southgermancredit_results.txt
 
 # Again, should depend on southgermancredit-estimates southgermancredit-results southgermancredit-prompts southgermancredit-best southgermancredit-baseline
 outputs/southgermancredit_results.csv: $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
-	uv run create_task_csv_file.py --task southgermancredit --env-dir envs/southgermancredit --output outputs/southgermancredit_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
+	uv run create_task_csv_file.py --task southgermancredit --env-dir envs/southgermancredit --output outputs/southgermancredit_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(SGC_DATASET).baseline.json  --progress
 
 southgermancredit-baseline: $(RESULTS_DIR)/$(SGC_DATASET).baseline.json
 	echo Baseline created
