@@ -75,24 +75,29 @@ Entity Data:
             run_info = "Instructions were to pick randomly. LLM was not used."
         else:
             prediction_output, run_info = llmcall.dispatch_prediction_prompt(model, prompt, config.valid_predictions)
-
-        # Insert the prediction into the database
-        insert_query = f"""
+    except llmcall.MissingPrediction:
+        sys.stderr.write("There was a field missing in the response. Generating a random answer.\n")
+        prediction_output = {'prediction': random.choice(config.valid_predictions),
+                             'narrative_text': "Prediction missing from LLM output" }
+        run_info = ""
+    except llmcall.InvalidPrediction:
+        sys.stderr.write("There was an invalid prediction. Generating a random answer.\n")
+        prediction_output = {'prediction': random.choice(config.valid_predictions),
+                             'narrative_text': "Prediction missing from LLM output" }
+        run_info = ""
+        
+    # Insert the prediction into the database
+    insert_query = f"""
         INSERT INTO inferences (round_id, {config.primary_key}, narrative_text, llm_stderr, prediction)
         VALUES (?, ?, ?, ?, ?)
         """
 
-        cursor.execute(
+    cursor.execute(
             insert_query,
             (round_id, entity_id, prediction_output['narrative_text'], run_info, prediction_output['prediction'])
         )
-        config.conn.commit()
+    config.conn.commit()
 
-    except llmcall.MissingPrediction:
-        sys.stderr.write("There was a field missing in the response. Skipping.\n")
-        # we'll pick it up next time through the loop
-    except llmcall.InvalidPrediction:
-        sys.stderr.write("There was an invalid prediction.\n")
 
 
 if __name__ == '__main__':

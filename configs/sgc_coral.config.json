@@ -1,0 +1,30 @@
+{
+  "table_name": "coral_reefs",
+  "primary_key": "CoralReefID",
+  "target_field": "ReefHealthStatus",
+  "splits_table": "coral_reef_splits",
+  "columns": [
+    "CoralReefID",
+    "CurrentFlowQuality",
+    "ObservationDuration",
+    "ReefIntegrityScore",
+    "PredatorActivityLevel",
+    "AcousticIntensity",
+    "AlgalCoverage",
+    "CoralAgeEstimate",
+    "BleachingEventsPerYear",
+    "BiodiversityIndex",
+    "NearbyHealthyReef",
+    "ReefMonitoringDuration",
+    "PollutionLevel",
+    "ReefAverageAge",
+    "DistantStressIndicators",
+    "ReefDepthZone",
+    "PreviousStressIncidents",
+    "CoralDominantType",
+    "SurveyorExperience",
+    "RemoteSensorPresent",
+    "InvasiveSpeciesDetected",
+    "ReefHealthStatus"
+  ]
+}

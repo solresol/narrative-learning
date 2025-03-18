@@ -4,46 +4,21 @@ import sys
 import json
 import os
 import pandas as pd
-import numpy as np
 import re
-from collections import Counter
-import math
 from typing import Dict, List, Any, Optional, Tuple, Union
 
-class TargetClassingException(Exception):
-    def __init__(self, target, num_classes):
-        self.message = f"{target} has {num_classes}, but narrative learning can only cope with binary classification at the moment"
-        super().__init__(self.message)
-
-    def __str__(self):
-        return self.message
-
-class NonexistentRoundException(Exception):
-    def __init__(self, round_id, db_path=None):
-        if db_path is None:
-            self.message = f"Round {round_id} not found"
-        else:
-            self.message = f"Round {round_id} not found in the sqlite database {db_path}"
-        super().__init__(self.message)
-    def __str__(self):
-        return self.message
-
-class MissingConfigElementException(Exception):
-    """Exception raised when a required configuration element is missing.
-
-    Attributes:
-        column_name -- The name of the missing configuration element
-        config_path -- The path to the configuration file being read
-    """
-
-    def __init__(self, column_name, config_path):
-        self.column_name = column_name
-        self.config_path = config_path
-        self.message = f"Missing required configuration element: '{column_name}' in config file: '{config_path}'"
-        super().__init__(self.message)
-
-    def __str__(self):
-        return self.message
+from modules.exceptions import TargetClassingException, NonexistentRoundException, MissingConfigElementException
+from modules.database import (
+    get_database_path, get_round_prompt, get_round_reasoning, get_split_id, 
+    get_latest_split_id, get_rounds_for_split, get_processed_rounds_for_split
+)
+from modules.metrics import (
+    calculate_metric, get_matrix_label_for_prediction, format_confusion_matrix,
+    generate_metrics_data, create_metrics_dataframe
+)
+from modules.text_analysis import (
+    calculate_zipfs_law, calculate_herdans_law, count_words, get_word_counts
+)
 
 class DatasetConfig:
     """
@@ -88,26 +63,7 @@ class DatasetConfig:
         if len(self.valid_predictions) != 2:
             raise TargetClassingException(self.target_field, len(self.valid_predictions))
 
-        self.database_path = self.get_database_path()
-
-
-    def get_database_path(self):
-        """Get the file path of an SQLite database from its connection object."""
-        cursor = self.conn.cursor()
-        cursor.execute("PRAGMA database_list")
-        # The database info is returned as (seq, name, file)
-        db_info = cursor.fetchall()
-
-        # The main database is usually the one with name 'main'
-        for entry in db_info:
-            if entry[1] == 'main':
-                return entry[2]
-
-        # If we didn't find one labeled 'main', return the first file path
-        if db_info:
-            return db_info[0][2]
-
-        return None
+        self.database_path = get_database_path(self.conn)
 
     def get_entity_features(self, entity_id: str) -> str:
         """
@@ -167,7 +123,7 @@ class DatasetConfig:
         query = f"""
         SELECT {column_list}
         FROM {self.table_name}
-        WHERE {self.primary_key_field} = ?
+        WHERE {self.primary_key} = ?
         """
 
         cur = self.conn.cursor()
@@ -250,14 +206,7 @@ class DatasetConfig:
         Returns:
             Prompt text
         """
-        cur = self.conn.cursor()
-        cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (int(round_id),))
-        row = cur.fetchone()
-
-        if row is None:
-            raise NonexistentRoundException(round_id, self.database_path)
-
-        return row[0]
+        return get_round_prompt(self.conn, round_id, self.database_path)
         
     def get_round_reasoning(self, round_id: int) -> str:
         """
@@ -269,14 +218,7 @@ class DatasetConfig:
         Returns:
             Reasoning text for the prompt
         """
-        cur = self.conn.cursor()
-        cur.execute("SELECT reasoning_for_this_prompt FROM rounds WHERE round_id = ?", (int(round_id),))
-        row = cur.fetchone()
-
-        if row is None:
-            raise NonexistentRoundException(round_id, self.database_path)
-
-        return row[0] if row[0] is not None else ""
+        return get_round_reasoning(self.conn, round_id, self.database_path)
 
     def get_split_id(self, round_id: int) -> int:
         """
@@ -288,14 +230,7 @@ class DatasetConfig:
         Returns:
             Split ID
         """
-        cur = self.conn.cursor()
-        cur.execute("SELECT split_id FROM rounds WHERE round_id = ?", (round_id,))
-        row = cur.fetchone()
-
-        if row is None:
-            raise NonexistentRoundException(round_id, self.database_path)
-
-        return row[0]
+        return get_split_id(self.conn, round_id, self.database_path)
 
     def positive_label(self):
         # This ain't great. Fundamentally, we are trying to shoe-horn into a "true positive" / "false positive"
@@ -306,14 +241,9 @@ class DatasetConfig:
         return self.valid_predictions[1]
 
     def get_matrix_label_for_prediction(self, ground_truth, prediction):
-        if ground_truth == self.positive_label():
-            if ground_truth == prediction:
-                return 'TP'
-            return 'FN'
-        if ground_truth == prediction:
-            return 'TN'
-        else:
-            return 'FP'
+        return get_matrix_label_for_prediction(
+            ground_truth, prediction, self.positive_label(), self.negative_label()
+        )
 
     def get_confusion_matrix(self, round_id: int, example_count: int = 0,
                            on_holdout_data: bool = False, on_test_data: bool = False) -> Dict:
@@ -392,59 +322,7 @@ class DatasetConfig:
             Formatted string representation
         """
         prompt = self.get_round_prompt(round_id)
-
-        answer = ""
-        answer += f"Round ID: {round_id}\n"
-        answer += "Prompt used:\n\t"
-        answer += prompt.replace('\n', '\n\t')
-        answer += "\n\nConfusion Matrix:\n"
-
-        # Layout: rows are Actual values; columns are Predicted
-        answer += (f"{'':15s} {'Predicted Positive':20s} {'Predicted Negative':20s}\n")
-
-        # For actual positive
-        tp = matrix['TP']['count']
-        fn = matrix['FN']['count']
-        answer += (f"{'Actual Positive':15s} {tp:20d} {fn:20d}\n")
-
-        # For actual negative
-        fp = matrix['FP']['count']
-        tn = matrix['TN']['count']
-        answer += (f"{'Actual Negative':15s} {fp:20d} {tn:20d}\n")
-        answer += "\n"
-
-        # Calculate metrics
-        total_count = tp + fn + fp + tn
-        accuracy = (tp + tn) / total_count if total_count > 0 else 0
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-
-        # Add metrics to output
-        answer += f"Accuracy: {accuracy:.3f}\n"
-        answer += f"Precision: {precision:.3f}\n"
-        answer += f"Recall: {recall:.3f}\n"
-        answer += f"F1 Score: {f1_score:.3f}\n\n"
-
-        # Add examples if requested
-        if show_examples:
-            for cell in ['TP', 'FN', 'FP', 'TN']:
-                examples = matrix[cell]['examples']
-                if examples:
-                    cell_full = {
-                        'TP': "True Positives",
-                        'FN': "False Negatives",
-                        'FP': "False Positives",
-                        'TN': "True Negatives"
-                    }[cell]
-                    ex = examples[0]
-                    answer += (f"Examples for {cell_full}: (Correct answer: {ex['outcome']}, What the previous set of rules predicted: {ex['prediction']})\n")
-                    for ex in examples:
-                        answer += (f"  Entity Data:\n{ex['features']}\n")
-                    answer += "\n"
-
-        return answer
-
+        return format_confusion_matrix(matrix, round_id, prompt, show_examples)
 
     def calculate_metric(self, matrix: Dict, metric_name: str) -> float:
         """
@@ -460,26 +338,7 @@ class DatasetConfig:
         Raises:
             ValueError: If the metric name is unknown
         """
-        tp = matrix['TP']['count']
-        fn = matrix['FN']['count']
-        fp = matrix['FP']['count']
-        tn = matrix['TN']['count']
-
-        if metric_name == 'count':
-            return tp + fn + fp + tn
-        if metric_name == 'accuracy':
-            total = tp + fn + fp + tn
-            return (tp + tn) / total if total > 0 else 0
-        elif metric_name == 'precision':
-            return tp / (tp + fp) if (tp + fp) > 0 else 0
-        elif metric_name == 'recall':
-            return tp / (tp + fn) if (tp + fn) > 0 else 0
-        elif metric_name == 'f1':
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            return (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        else:
-            raise ValueError(f"Unknown metric: {metric_name}")
+        return calculate_metric(matrix, metric_name)
 
     def get_latest_split_id(self) -> int:
         """
@@ -491,18 +350,7 @@ class DatasetConfig:
         Raises:
             SystemExit: If no rounds are found in the database
         """
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT split_id
-            FROM rounds
-            ORDER BY round_id DESC
-            LIMIT 1
-        """)
-        row = cur.fetchone()
-        if row is None:
-            sys.exit("No rounds found in database")
-        split_id = row[0]
-        return split_id
+        return get_latest_split_id(self.conn)
 
     def get_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -514,15 +362,7 @@ class DatasetConfig:
         Returns:
             List of round IDs
         """
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT round_id
-            FROM rounds
-            WHERE split_id = ?
-            ORDER BY round_id
-        """, (split_id,))
-        rounds = [row[0] for row in cur.fetchall()]
-        return rounds
+        return get_rounds_for_split(self.conn, split_id)
 
     def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -534,15 +374,7 @@ class DatasetConfig:
         Returns:
             List of round IDs that have inferences
         """
-        cur = self.conn.cursor()
-        answer = []
-        for r in self.get_rounds_for_split(split_id):
-            cur.execute("select count(*) from inferences where round_id = ?", [r])
-            row = cur.fetchone()
-            if row[0] == 0:
-                continue
-            answer.append(r)
-        return answer
+        return get_processed_rounds_for_split(self.conn, split_id)
 
     def check_early_stopping(self, split_id: int, metric: str,
                             patience: int, on_validation: bool = True) -> bool:
@@ -591,183 +423,7 @@ class DatasetConfig:
         Returns:
             DataFrame with round_id and metric columns
         """
-        rounds = self.get_processed_rounds_for_split(split_id)
-        data = []
-
-        for round_id in rounds:
-            # Set appropriate flags based on data_type
-            on_holdout = data_type in ('validation', 'test')
-            on_test_data = data_type == 'test'
-            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_holdout, on_test_data=on_test_data)
-            score = self.calculate_metric(matrix, metric)
-            data.append({
-                'round_id': round_id,
-                'metric': score
-            })
-
-        return pd.DataFrame(data)
-
-
-    def calculate_metric(self, matrix: Dict, metric_name: str) -> float:
-        """
-        Calculate the specified metric from a confusion matrix.
-
-        Args:
-            matrix: Confusion matrix dictionary
-            metric_name: Name of the metric to calculate ('count', 'accuracy', 'precision', 'recall', 'f1')
-
-        Returns:
-            Float value of the calculated metric
-
-        Raises:
-            ValueError: If the metric name is unknown
-        """
-        tp = matrix['TP']['count']
-        fn = matrix['FN']['count']
-        fp = matrix['FP']['count']
-        tn = matrix['TN']['count']
-
-        if metric_name == 'count':
-            return tp + fn + fp + tn
-        if metric_name == 'accuracy':
-            total = tp + fn + fp + tn
-            return (tp + tn) / total if total > 0 else 0
-        elif metric_name == 'precision':
-            return tp / (tp + fp) if (tp + fp) > 0 else 0
-        elif metric_name == 'recall':
-            return tp / (tp + fn) if (tp + fn) > 0 else 0
-        elif metric_name == 'f1':
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            return (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        else:
-            raise ValueError(f"Unknown metric: {metric_name}")
-
-    def get_latest_split_id(self) -> int:
-        """
-        Get the split_id from the most recent round.
-
-        Returns:
-            Integer split ID
-
-        Raises:
-            SystemExit: If no rounds are found in the database
-        """
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT split_id
-            FROM rounds
-            ORDER BY round_id DESC
-            LIMIT 1
-        """)
-        row = cur.fetchone()
-        if row is None:
-            sys.exit("No rounds found in database")
-        split_id = row[0]
-        return split_id
-
-    def get_rounds_for_split(self, split_id: int) -> List[int]:
-        """
-        Get all round IDs for a given split_id.
-
-        Args:
-            split_id: The split ID to query
-
-        Returns:
-            List of round IDs
-        """
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT round_id
-            FROM rounds
-            WHERE split_id = ?
-            ORDER BY round_id
-        """, (split_id,))
-        rounds = [row[0] for row in cur.fetchall()]
-        return rounds
-
-    def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
-        """
-        Get all round IDs for a given split_id that have inferences.
-
-        Args:
-            split_id: The split ID to query
-
-        Returns:
-            List of round IDs that have inferences
-        """
-        cur = self.conn.cursor()
-        answer = []
-        for r in self.get_rounds_for_split(split_id):
-            cur.execute("select count(*) from inferences where round_id = ?", [r])
-            row = cur.fetchone()
-            if row[0] == 0:
-                continue
-            answer.append(r)
-        return answer
-
-    def check_early_stopping(self, split_id: int, metric: str,
-                            patience: int, on_validation: bool = True) -> bool:
-        """
-        Check if training should be stopped based on validation performance.
-
-        Args:
-            split_id: The split ID to check
-            metric: The metric to use for evaluation ('accuracy', 'precision', 'recall', 'f1')
-            patience: Number of rounds to look back for improvement
-            on_validation: Whether to use validation data
-
-        Returns:
-            True if training should stop, False otherwise
-        """
-        rounds = self.get_processed_rounds_for_split(split_id)
-        if len(rounds) < patience + 1:
-            return False
-
-        # Look at last 'patience' + 1 rounds
-        relevant_rounds = rounds[-(patience + 1):]
-        oldest_round = relevant_rounds[0]
-
-        # Calculate metric for oldest round
-        oldest_matrix = self.get_confusion_matrix(oldest_round, on_holdout_data=on_validation)
-        best_score = self.calculate_metric(oldest_matrix, metric)
-
-        # Check if any later round beat this score
-        for round_id in relevant_rounds[1:]:
-            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_validation)
-            score = self.calculate_metric(matrix, metric)
-            if score > best_score:
-                return False
-
-        return True
-
-    def generate_metrics_data(self, split_id: int, metric: str, data_type: str) -> pd.DataFrame:
-        """
-        Generate a DataFrame with metrics for all rounds in a split.
-
-        Args:
-            split_id: The split ID to analyze
-            metric: The metric to calculate ('accuracy', 'precision', 'recall', 'f1')
-            data_type: Type of data to analyze ('train', 'validation', or 'test')
-
-        Returns:
-            DataFrame with round_id and metric columns
-        """
-        rounds = self.get_processed_rounds_for_split(split_id)
-        data = []
-
-        for round_id in rounds:
-            # Set appropriate flags based on data_type
-            on_holdout = data_type in ('validation', 'test')
-            on_test_data = data_type == 'test'
-            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_holdout, on_test_data=on_test_data)
-            score = self.calculate_metric(matrix, metric)
-            data.append({
-                'round_id': round_id,
-                'metric': score
-            })
-
-        return pd.DataFrame(data)
+        return generate_metrics_data(self, split_id, metric, data_type)
 
     def get_data_point_count(self) -> int:
         """
@@ -803,8 +459,8 @@ class DatasetConfig:
         return temp_df.metric.idxmax()
 
     def get_test_metric_for_best_validation_round(self, split_id: int,
-                                                 validation_metric: str = 'accuracy',
-                                                 test_metric: Optional[str] = None) -> float:
+                                               validation_metric: str = 'accuracy',
+                                               test_metric: Optional[str] = None) -> float:
         """
         Get the test set performance of the round with the best validation performance.
 
@@ -832,7 +488,7 @@ class DatasetConfig:
         return row.metric.iloc[0]
 
     def create_metrics_dataframe(self, split_id: int, metric: str,
-                                data_types: List[str]) -> pd.DataFrame:
+                              data_types: List[str]) -> pd.DataFrame:
         """
         Create a DataFrame with metrics for all specified data types.
 
@@ -844,26 +500,15 @@ class DatasetConfig:
         Returns:
             DataFrame with columns for each data type metric
         """
-        df = pd.DataFrame({})
-
-        for data_type in data_types:
-            if data_type not in ['train', 'validation', 'test']:
-                continue
-
-            temp_df = self.generate_metrics_data(split_id, metric, data_type)
-            if not temp_df.empty:
-                temp_df.set_index('round_id', inplace=True)
-                column_name = f"{data_type} {metric}"
-                df[column_name] = temp_df['metric']
-
-        return df
+        return create_metrics_dataframe(self, split_id, metric, data_types)
         
-    def get_all_prompts_and_reasoning(self, split_id: Optional[int] = None) -> Dict[str, List[str]]:
+    def get_all_prompts_and_reasoning(self, split_id: Optional[int] = None, up_to_round: Optional[int] = None) -> Dict[str, List[str]]:
         """
         Retrieve all prompts and reasoning for all rounds in a split.
         
         Args:
             split_id: The split ID to analyze. If None, uses the most recent split.
+            up_to_round: If provided, only include rounds up to and including this round ID.
         
         Returns:
             Dictionary with 'prompts' and 'reasoning' lists containing text from all rounds
@@ -872,6 +517,11 @@ class DatasetConfig:
             split_id = self.get_latest_split_id()
             
         rounds = self.get_processed_rounds_for_split(split_id)
+        
+        # Filter rounds if up_to_round is specified
+        if up_to_round is not None:
+            rounds = [r for r in rounds if r <= up_to_round]
+            
         prompts = []
         reasoning = []
         
@@ -891,42 +541,21 @@ class DatasetConfig:
             'prompts': prompts,
             'reasoning': reasoning
         }
+        
+    def get_total_word_count(self, split_id: Optional[int] = None, up_to_round: Optional[int] = None) -> Dict[str, int]:
+        """
+        Calculate the total word count of all prompts and reasoning up to a specific round.
+        
+        Args:
+            split_id: The split ID to analyze. If None, uses the most recent split.
+            up_to_round: If provided, only include rounds up to and including this round ID.
+            
+        Returns:
+            Dictionary with total word counts for prompts, reasoning, and combined
+        """
+        corpus = self.get_all_prompts_and_reasoning(split_id, up_to_round)
+        return get_word_counts(corpus.get('prompts', []), corpus.get('reasoning', []))
 
-    def _preprocess_text(self, text: str) -> List[str]:
-        """
-        Preprocess text for linguistic analysis.
-        
-        Args:
-            text: Raw text string
-            
-        Returns:
-            List of tokens (words)
-        """
-        # Convert to lowercase and split into words
-        text = text.lower()
-        # Remove special characters and numbers
-        text = re.sub(r'[^\w\s]', ' ', text)
-        text = re.sub(r'\d+', ' ', text)
-        # Split into words and filter out empty strings
-        words = [word for word in text.split() if word]
-        return words
-    
-    def _get_word_frequencies(self, text_list: List[str]) -> Counter:
-        """
-        Calculate word frequencies from a list of texts.
-        
-        Args:
-            text_list: List of text strings
-            
-        Returns:
-            Counter object with word frequencies
-        """
-        all_words = []
-        for text in text_list:
-            all_words.extend(self._preprocess_text(text))
-        
-        return Counter(all_words)
-    
     def calculate_zipfs_law(self, split_id: Optional[int] = None) -> Dict[str, Union[float, dict]]:
         """
         Calculate Zipf's law coefficient from all prompts and reasoning combined.
@@ -940,50 +569,7 @@ class DatasetConfig:
         """
         corpus = self.get_all_prompts_and_reasoning(split_id)
         text_list = corpus.get('prompts', []) + corpus.get('reasoning', [])
-        
-        if not text_list:
-            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
-        
-        # Get word frequencies and sort by frequency (descending)
-        word_counts = self._get_word_frequencies(text_list)
-        if not word_counts:
-            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
-            
-        # Get frequency and rank
-        frequencies = []
-        ranks = []
-        
-        sorted_items = word_counts.most_common()
-        for rank, (word, count) in enumerate(sorted_items, 1):
-            frequencies.append(count)
-            ranks.append(rank)
-        
-        # Convert to numpy arrays and calculate log values
-        log_ranks = np.log(ranks)
-        log_frequencies = np.log(frequencies)
-        
-        # Linear regression to find Zipf coefficient
-        # Zipf's law: frequency ∝ 1/rank^α where α is the Zipf coefficient
-        # In log space: log(frequency) = -α * log(rank) + constant
-        slope, intercept = np.polyfit(log_ranks, log_frequencies, 1)
-        zipf_coefficient = -slope  # The slope is negative, so we negate it
-        
-        # Calculate R-squared
-        y_pred = slope * log_ranks + intercept
-        ss_total = np.sum((log_frequencies - np.mean(log_frequencies))**2)
-        ss_residual = np.sum((log_frequencies - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
-        
-        return {
-            'coefficient': zipf_coefficient,
-            'r_squared': r_squared,
-            'data': {
-                'ranks': ranks,
-                'frequencies': frequencies,
-                'slope': slope,
-                'intercept': intercept
-            }
-        }
+        return calculate_zipfs_law(text_list)
     
     def calculate_herdans_law(self, split_id: Optional[int] = None) -> Dict[str, Union[float, dict]]:
         """
@@ -998,60 +584,4 @@ class DatasetConfig:
         """
         corpus = self.get_all_prompts_and_reasoning(split_id)
         text_list = corpus.get('prompts', []) + corpus.get('reasoning', [])
-        
-        if not text_list:
-            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
-            
-        # For each text, calculate vocabulary size vs. text length
-        vocab_sizes = []
-        text_lengths = []
-        
-        cumulative_words = set()
-        cumulative_length = 0
-        
-        for text in text_list:
-            words = self._preprocess_text(text)
-            text_length = len(words)
-            
-            if text_length == 0:
-                continue
-                
-            # Update cumulative counts
-            cumulative_words.update(words)
-            cumulative_length += text_length
-            
-            # Herdan's law applies to the relationship between the size of a text
-            # and the size of its vocabulary
-            vocab_sizes.append(len(cumulative_words))
-            text_lengths.append(cumulative_length)
-        
-        if not vocab_sizes or not text_lengths:
-            return {'coefficient': 0.0, 'r_squared': 0.0, 'data': {}}
-        
-        # Convert to numpy arrays and calculate log values
-        log_text_lengths = np.log(text_lengths)
-        log_vocab_sizes = np.log(vocab_sizes)
-        
-        # Linear regression to find Herdan coefficient
-        # Herdan's law: V = K * N^β where V is vocabulary size, N is text length,
-        # K is a constant, and β is the Herdan coefficient
-        # In log space: log(V) = β * log(N) + log(K)
-        slope, intercept = np.polyfit(log_text_lengths, log_vocab_sizes, 1)
-        herdan_coefficient = slope
-        
-        # Calculate R-squared
-        y_pred = slope * log_text_lengths + intercept
-        ss_total = np.sum((log_vocab_sizes - np.mean(log_vocab_sizes))**2)
-        ss_residual = np.sum((log_vocab_sizes - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
-        
-        return {
-            'coefficient': herdan_coefficient,
-            'r_squared': r_squared,
-            'data': {
-                'text_lengths': text_lengths,
-                'vocab_sizes': vocab_sizes,
-                'slope': slope,
-                'intercept': intercept
-            }
-        }
+        return calculate_herdans_law(text_list)

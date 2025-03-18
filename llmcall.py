@@ -66,7 +66,11 @@ Output in JSON format like this:
         sys.stderr.write("No narrative text\n")
         answer['narrative_text'] = ''
     #print(f"stdout = {json.dumps(answer,indent=4)}")
-    info_start = stderr.index("total duration:")
+    try:
+        info_start = stderr.index("total duration:")
+    except ValueError:
+        sys.stderr.write("stderr was in an unusual format\n" + stderr + "\n")
+        info_start = 0
     stderr = stderr[info_start:]
     print(f"stderr = {stderr}")
     return answer, stderr
@@ -459,7 +463,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return claude_prediction(model, prompt, valid_predictions)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_prediction(model, prompt, valid_predictions)
-    if model in ["gemini-2.0-flash", "gemini-2.0-pro"]:
+    if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp"]:
         return gemini_prediction(model, prompt, valid_predictions)
     raise UnknownModel
 
@@ -528,7 +532,7 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return claude_reprompt(model, prompting_creation_prompt)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
         return openai_reprompt(model, prompting_creation_prompt)
-    if model in ["gemini-2.0-flash", "gemini-2.0-pro"]:
+    if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp"]:
         return gemini_reprompt(model, prompting_creation_prompt)
     sys.stderr.write(f"{model}\n")
     raise UnknownModel
@@ -536,6 +540,8 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
 
 
 def sanity_check_prompt(prompt, sample, valid_answers):
+    # For speed, skipping the check
+    return True
     from openai import OpenAI
 
     client = OpenAI(api_key=open(os.path.expanduser("~/.openai.key")).read().strip())

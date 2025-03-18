@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 import os
-import re
 import argparse
 import json
 import csv
 import sys
 import sqlite3
 import math
+import sys
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import datasetconfig
 from statsmodels.stats.proportion import proportion_confint
+from env_settings import EnvSettings
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create CSV file from env files')
@@ -18,39 +20,9 @@ def parse_args():
     parser.add_argument('--env-dir', required=True, help='Directory containing env files')
     parser.add_argument('--output', required=True, help='Output path for CSV file')
     parser.add_argument('--model-details', default="model_details.json", help='Path to model details file')
+    parser.add_argument('--baseline', help='Path to baseline JSON file with additional columns')
+    parser.add_argument("--progress-bar", action="store_true")
     return parser.parse_args()
-
-def extract_env_settings(env_file_path: str) -> Dict:
-    """Extract configuration settings from an env file."""
-    settings = {}
-    try:
-        with open(env_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Extract database path
-        db_match = re.search(r'NARRATIVE_LEARNING_DATABASE=([^\s]+)', content)
-        if db_match:
-            settings['database'] = db_match.group(1)
-
-        # Extract config path
-        config_match = re.search(r'NARRATIVE_LEARNING_CONFIG=([^\s]+)', content)
-        if config_match:
-            settings['config'] = config_match.group(1)
-
-        # Extract training model
-        model_match = re.search(r'NARRATIVE_LEARNING_TRAINING_MODEL=([^\s]+)', content)
-        if model_match:
-            settings['model'] = model_match.group(1)
-
-        # Extract example count (sampler)
-        example_match = re.search(r'NARRATIVE_LEARNING_EXAMPLE_COUNT=(\d+)', content)
-        if example_match:
-            settings['sampler'] = int(example_match.group(1))
-
-        return settings
-    except Exception as e:
-        print(f"Error processing env file {env_file_path}: {e}")
-        return {}
 
 def count_words(text: str) -> int:
     """Count words in a text string."""
@@ -61,53 +33,51 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     # Extract settings from env file
     settings = extract_env_settings(env_file_path)
     run_name = os.path.basename(env_file_path)[:-3]
+    settings = EnvSettings.from_file(env_file_path)
 
-    # Skip incomplete env files
-    if not all(key in settings for key in ['database', 'config', 'model']):
-        sys.exit(f"{env_file_path} is missing required settings")
-
-    # Skip if database doesn't exist
-    if not os.path.exists(settings['database']):
-        print(f"Skipping {env_file_path} - database {settings['database']} not found")
-        return None
-
-    # Skip if config doesn't exist
-    if not os.path.exists(settings['config']):
-        print(f"Skipping {env_file_path} - config {settings['config']} not found")
+    # Validate settings
+    is_valid, error_message = settings.validate()
+    if not is_valid:
+        sys.stderr.write(f"Skipping {env_file_path} - {error_message}\n")
         return None
 
     # Connect to database
-    conn = sqlite3.connect(f"file:{settings['database']}?mode=ro", uri=True)
-    print("Connecting to",settings['database'])
-    config = datasetconfig.DatasetConfig(conn, settings['config'])
+    conn = sqlite3.connect(f"file:{settings.database}?mode=ro", uri=True)
+    config = datasetconfig.DatasetConfig(conn, settings.config)
 
     # Get the latest split ID
     split_id = config.get_latest_split_id()
 
     # Get best round ID based on validation accuracy
-    best_round_id = config.get_best_round_id(split_id, 'accuracy')
+    try:
+        best_round_id = config.get_best_round_id(split_id, 'accuracy')
+    except ValueError as e:
+        sys.stderr.write(f"Could not get best round for {split_id}: {e}\n")
+        return None
 
     # Get test accuracy for the best round
     test_accuracy = config.get_test_metric_for_best_validation_round(split_id, 'accuracy')
 
     # Get the prompt and reasoning from the best round and count words
-    print(f"{config=} {split_id=} {best_round_id=} {test_accuracy=}")
     prompt = config.get_round_prompt(best_round_id)
     reasoning = config.get_round_reasoning(best_round_id)
     prompt_word_count = count_words(prompt)
     reasoning_word_count = count_words(reasoning)
+    
+    # Calculate total word count up to best round
+    total_words = config.get_total_word_count(split_id, best_round_id)
+    cumulative_reasoning_word_count = total_words['reasoning_words']
     
     # Calculate Herdan and Zipf's law coefficients
     herdan_result = config.calculate_herdans_law(split_id)
     zipf_result = config.calculate_zipfs_law(split_id)
 
     # Get model size from model details
-    model_size = model_details.get(settings['model'], {}).get('parameters', '')
-    if model_size is None:
-        sys.exit(f"Couldn't get model size for {settings['model']}")
+
+    model_size = model_details.get(settings.model, {}).get('parameters', '')
 
     # Extract model name (simplify if needed)
-    model_name = settings['model']
+    model_name = settings.model
 
     # Get the count of data points
     data_point_count = config.get_data_point_count()
@@ -118,17 +88,23 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     lower_bound, _ = proportion_confint(count=count_correct, nobs=data_point_count, 
                                        alpha=0.05, method='beta')
     
+    # Calculate negative log of the 95th percentile error rate
+    neg_log_error = -math.log(1 - lower_bound) if lower_bound < 1 else float('inf')
+    
     # Return all required data
     return {
         'Task': task,
         'Model': model_name,
         'Run Name': run_name,
-        'Sampler': settings.get('sampler', 3),
+        'Patience': settings.patience,
+        'Sampler': settings.sampler,
         'Accuracy': test_accuracy,
         'Accuracy Lower Bound': lower_bound,
+        'Neg Log Error': neg_log_error,
         'Rounds': best_round_id,
         'Prompt Word Count': prompt_word_count,
         'Reasoning Word Count': reasoning_word_count,
+        'Cumulative Reasoning Words': cumulative_reasoning_word_count,
         'Herdan Coefficient': herdan_result['coefficient'],
         'Herdan R-squared': herdan_result['r_squared'],
         'Zipf Coefficient': zipf_result['coefficient'],
@@ -141,20 +117,17 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
 def write_csv(data: List[Dict], output_path: str):
     """Write data to CSV file."""
     if not data:
-        print("No data to write to CSV")
+        sys.stderr.write(f"No data to write to {output_path}\n")
         return
 
     # Get fieldnames from first data item
     fieldnames = list(data[0].keys())
 
-    try:
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(data)
-        print(f"CSV file written to {output_path}")
-    except Exception as e:
-        print(f"Error writing CSV: {e}")
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -162,6 +135,12 @@ if __name__ == "__main__":
     # Load model details
     with open(args.model_details, 'r', encoding='utf-8') as f:
         model_details = json.load(f)
+        
+    # Load baseline data if provided
+    baseline_data = {}
+    if args.baseline and os.path.exists(args.baseline):
+        with open(args.baseline, 'r', encoding='utf-8') as f:
+            baseline_data = json.load(f)
 
     # Get list of env files to process
     env_files = [os.path.join(args.env_dir, f) for f in os.listdir(args.env_dir)
@@ -169,12 +148,19 @@ if __name__ == "__main__":
 
     # Process each env file
     results = []
-    for env_file in env_files:
-        print(f"Processing {env_file}...")
+    iterator = env_files
+    if args.progress_bar:
+        import tqdm
+        iterator = tqdm.tqdm(env_files)
+    for env_file in iterator:
+        if args.progress_bar:
+            iterator.set_description(env_file)
         model_data = get_model_data(env_file, args.task, model_details)
         if model_data:
+            # Add baseline data as additional columns
+            for key, value in baseline_data.items():
+                model_data[key] = value
             results.append(model_data)
 
     # Write results to CSV
     write_csv(results, args.output)
-    print(f"Processed {len(results)} models")

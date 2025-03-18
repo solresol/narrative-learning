@@ -20,7 +20,7 @@ def main():
     data = pd.read_csv(args.input)
     
     # Convert string columns that should be numeric
-    numeric_columns = ['Accuracy', 'Sampler', 'Rounds', 'Prompt Word Count', 'Model Size']
+    numeric_columns = ['Accuracy', 'Sampler', 'Rounds', 'Prompt Word Count', 'Model Size', 'Patience']
     for col in numeric_columns:
         if col in data.columns:
             data[col] = pd.to_numeric(data[col], errors='coerce')
