@@ -139,7 +139,13 @@ if __name__ == "__main__":
     baseline_data = {}
     if args.baseline and os.path.exists(args.baseline):
         with open(args.baseline, 'r', encoding='utf-8') as f:
-            baseline_data = json.load(f)
+            baseline_json = json.load(f)
+            # Convert to use lower bounds instead of accuracy values
+            baseline_data = {
+                'logistic regression': baseline_json['logistic regression']['lower_bound'],
+                'decision trees': baseline_json['decision trees']['lower_bound'],
+                'dummy': baseline_json['dummy']['lower_bound']
+            }
 
     # Get list of env files to process
     env_files = [os.path.join(args.env_dir, f) for f in os.listdir(args.env_dir)
