@@ -90,6 +90,7 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
     return {
         'Task': task,
         'Model': model_name,
+        'Patience': settings.patience,
         'Sampler': settings.sampler,
         'Accuracy': test_accuracy,
         'Accuracy Lower Bound': lower_bound,

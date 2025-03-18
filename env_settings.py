@@ -12,6 +12,7 @@ class EnvSettings:
     config: Optional[str] = None
     model: Optional[str] = None
     sampler: int = 3
+    patience: int = 3
     
     @classmethod
     def from_file(cls, env_file_path: str) -> 'EnvSettings':
@@ -40,6 +41,11 @@ class EnvSettings:
             example_match = re.search(r'NARRATIVE_LEARNING_EXAMPLE_COUNT=(\d+)', content)
             if example_match:
                 settings['sampler'] = int(example_match.group(1))
+
+            # Extract example count (patience)
+            example_match = re.search(r'NARRATIVE_LEARNING_PATIENCE=(\d+)', content)
+            if example_match:
+                settings['patience'] = int(example_match.group(1))                
 
             return cls(**settings)
         except Exception as e:
