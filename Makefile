@@ -15,21 +15,19 @@ RESULTS_DIR := results
 
 .PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions
 
-all: wisconsin titanic sgc
+all: wisconsin titanic southgermancredit outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png
 	echo Done
 
+outputs/model_details.tex: model_details.json make_model_size_table.py
+	uv run make_model_size_table.py --output outputs/model_details.tex
+
+
+outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/titanic_results.csv  outputs/wisconsin_results.csv resultssampleimpact.py
+	uv run resultssampleimpact.py --pivot outputs/samples-pivot-table.csv --image outputs/sample-count-impact-chart.png --stats-results outputs/impact-of-samples.txt --brief-stats outputs/impact-of-samples.tex outputs/southgermancredit_results.csv  outputs/titanic_results.csv  outputs/wisconsin_results.csv
 
 ######################################################################
 
 # Wisconsin
-
-# Define variables for reuse
-
-# Main targets
-.PHONY: all wisconsin
-
-all: wisconsin
-
 
 wisconsin: wisconsin_results.txt
 	echo All Wisconsin results are ready
@@ -81,6 +79,9 @@ $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.results.csv: $(RESULTS_DIR)/$(WISCONSIN_DA
 $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.best-round.txt
 	. ./envs/wisconsin/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
 
+
+outputs/wisconsin_by_model_size.png outputs/wisconsin_model_pvalue.tex: outputs/wisconsin_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset Wisconsin --input outputs/wisconsin_results.csv --image outputs/wisconsin_by_model_size.png --pvalue outputs/wisconsin_model_pvalue.tex
 
 # How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
@@ -159,6 +160,11 @@ titanic-distributions: $(foreach model,$(MODELS),outputs/$(TITANIC_DATASET)-$(mo
 outputs/$(TITANIC_DATASET)-%.distribution.png outputs/$(TITANIC_DATASET)-%.distribution.txt: envs/titanic/%.env
 	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(TITANIC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(TITANIC_DATASET)-$*.distribution.txt
 
+outputs/titanic_by_model_size.png outputs/titanic_model_pvalue.tex: outputs/titanic_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset Titanic --input outputs/titanic_results.csv --image outputs/titanic_by_model_size.png --pvalue outputs/titanic_model_pvalue.tex
+
+
+
 ######################################################################
 
 
@@ -223,6 +229,11 @@ southgermancredit-distributions: $(foreach model,$(MODELS),outputs/$(SGC_DATASET
 
 outputs/$(SGC_DATASET)-%.distribution.png outputs/$(SGC_DATASET)-%.distribution.txt: envs/southgermancredit/%.env
 	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(SGC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(SGC_DATASET)-$*.distribution.txt
+
+outputs/southgermancredit_by_model_size.png outputs/southgermancredit_model_pvalue.tex: outputs/southgermancredit_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --image outputs/southgermancredit_by_model_size.png --pvalue outputs/southgermancredit_model_pvalue.tex
+
+
 
 ######################################################################
 
