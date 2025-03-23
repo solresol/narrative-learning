@@ -26,6 +26,8 @@ def draw_baselines(ax, df, xpos=12.5):
         if model in df.columns:
             # Don't need to take the mean -- they will all be the same value
             score = df[model].mean()
+            # That was an accuracy, we need to convert it to negative log mean
+            score = -math.log10(1-score)
             ax.axhline(score, linestyle='dotted', c=colours[model])
             ax.annotate(xy=(xpos,score-0.03), text=model.title(), c=colours[model])
 
@@ -60,7 +62,7 @@ def plot_log_model_size_vs_log_error(df, output_prefix, dataset_name, pvalue_fil
             f.write(f"{p_value:.3f}")
 
     # Add a trend line
-    extrapolation_x = [9,14]
+    extrapolation_x = [10,15]
     extrapolation_request = pd.DataFrame({'Log_Model_Size': extrapolation_x})
     extrapolation_y = lr.predict(extrapolation_request)
     ax.plot(extrapolation_x, extrapolation_y, linestyle="dashed", color="red", label="Trend")
@@ -158,7 +160,8 @@ def calculate_projection(df):
     return {
         'best_baseline': best_baseline_name,
         'best_baseline_score': best_baseline_score,
-        'model_size_needed': model_size_needed
+        'model_size_needed': model_size_needed,
+        'log_model_size_needed': log_model_size_needed
     }
 
 def main():
@@ -191,7 +194,7 @@ def main():
         projection = calculate_projection(df)
         if projection:
             with open(args.projection, 'w') as f:
-                json.dump(projection, f, indent=2)
+                f.write(f"$10^{projection['log_model_size_needed']:.1f}$")
             print(f"Saved projection to {args.projection}")
 
     # Create the plot

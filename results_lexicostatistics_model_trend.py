@@ -57,22 +57,25 @@ def analyze_task_correlations(task_model_data):
     
     return correlation_matrix, corr_df
 
-def analyze_model_size_vs_lexical_complexity(csv_files, output_dir=None, filter_rsquared=0.8, min_model_size=10):
+def analyze_model_size_vs_lexical_complexity(csv_files, output_image=None, latex_output=None, filter_rsquared=0.8, min_model_size=10):
     """
     Analyze relationship between model size and lexical complexity metrics.
     
     Args:
         csv_files: List of CSV file paths to analyze
-        output_dir: Directory to save outputs
+        output_image: Path to save the output image
+        latex_output: Path to save LaTeX macros
         filter_rsquared: Minimum R-squared value for Herdan coefficient to include data points
         min_model_size: Minimum model size to include in analysis
     
     Returns:
         Tuple of (results dict, filtered dataframe)
     """
-    # Create output directory if it doesn't exist
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    # Create output directory for the image file if needed
+    if output_image:
+        output_dir = os.path.dirname(output_image)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
     
     # Load and combine data from all CSV files
     dfs = []
@@ -108,24 +111,32 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_dir=None, filter_
     # Use seaborn for better aesthetics
     sns.set_style("whitegrid")
     
-    # Create a single scatter plot without grouping by task
-    plt.scatter(
-        filtered_df['Log Model Size'],
-        filtered_df['Herdan Coefficient'],
-        color='steelblue',
-        s=100,
-        alpha=0.7,
-    )
+    # Get unique models for coloring
+    models = filtered_df['Model'].unique()
+    color_palette = sns.color_palette("husl", len(models))
+    model_colors = dict(zip(models, color_palette))
     
-    # Add task labels to each point
+    # Create scatter plot with points colored by model
     for i, row in filtered_df.iterrows():
+        plt.scatter(
+            row['Log Model Size'],
+            row['Herdan Coefficient'],
+            color=model_colors[row['Model']],
+            s=100,
+            alpha=0.7,
+            label=row['Model'] if row['Model'] not in plt.gca().get_legend_handles_labels()[1] else ""
+        )
+    
+    # Add task labels to each point (single letter)
+    for i, row in filtered_df.iterrows():
+        task_label = row['Task'][0].lower()  # Just first letter (t, w, or s)
         plt.annotate(
-            row['Task'][:3],  # First 3 letters of task name
+            task_label,
             (row['Log Model Size'], row['Herdan Coefficient']),
             xytext=(5, 0),
             textcoords='offset points',
-            fontsize=8,
-            alpha=0.7
+            fontsize=10,
+            alpha=0.8
         )
     
     # Perform linear regression
@@ -176,28 +187,15 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_dir=None, filter_
         fontsize=12
     )
     
-    # Save the plot if output_dir is provided
-    if output_dir:
+    # Handle legend with unique model entries
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(), fontsize=10, title="Models")
+    
+    # Save the plot if output_image is provided
+    if output_image:
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, 'model_size_vs_herdan.png'), dpi=300)
-        
-        # Also save the statistics as text
-        stats_file = os.path.join(output_dir, 'model_size_vs_herdan_stats.txt')
-        with open(stats_file, 'w') as f:
-            f.write(f"Linear Regression Results:\n")
-            f.write(f"Slope: {slope:.6f}\n")
-            f.write(f"Intercept: {intercept:.6f}\n")
-            f.write(f"R-squared: {r_value**2:.6f}\n")
-            f.write(f"P-value: {p_value:.6f}\n")
-            f.write(f"Standard Error: {std_err:.6f}\n")
-        
-        # Save LaTeX-formatted p-value
-        latex_file = os.path.join(output_dir, 'model_size_vs_herdan_pvalue.tex')
-        with open(latex_file, 'w') as f:
-            if p_value < 0.001:
-                f.write(f"$p < 0.001$")
-            else:
-                f.write(f"$p = {p_value:.4f}$")
+        plt.savefig(output_image, dpi=300)
     
     # Perform correlation analysis between tasks
     # First, organize data by model name across tasks
@@ -211,19 +209,40 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_dir=None, filter_
             model_name = row['Model']
             task_model_data[task][model_name] = row['Herdan Coefficient']
     
+    # Calculate average correlation
+    avg_correlation = None
+    
     # Now analyze correlations between tasks
     if len(task_model_data) > 1:  # Need at least 2 tasks for correlation
         correlation_matrix, corr_df = analyze_task_correlations(task_model_data)
         
-        if output_dir:
-            # Save the correlation heatmap
-            plt.savefig(os.path.join(output_dir, 'task_correlation_heatmap.png'), dpi=300)
+        # Calculate average correlation (excluding diagonal)
+        corr_values = []
+        for i in range(len(correlation_matrix.columns)):
+            for j in range(i+1, len(correlation_matrix.columns)):
+                if not pd.isna(correlation_matrix.iloc[i, j]):
+                    corr_values.append(correlation_matrix.iloc[i, j])
+        
+        if corr_values:
+            avg_correlation = sum(corr_values) / len(corr_values)
+    
+    # Save LaTeX macros if requested
+    if latex_output:
+        with open(latex_output, 'w') as f:
+            # Herdan size trend (slope)
+            f.write(f"\\newcommand{{\\herdansizetrend}}{{{slope:.3f}}}\n")
             
-            # Save correlation matrix as CSV
-            correlation_matrix.to_csv(os.path.join(output_dir, 'task_correlations.csv'))
+            # P-value of the trend
+            if p_value < 0.001:
+                f.write("\\newcommand{\\herdansizetrendpvalue}{<0.001}\n")
+            else:
+                f.write(f"\\newcommand{{\\herdansizetrendpvalue}}{{{p_value:.3f}}}\n")
             
-            # Save the raw data used for correlation
-            corr_df.to_csv(os.path.join(output_dir, 'task_correlation_data.csv'))
+            # Average correlation
+            if avg_correlation is not None:
+                f.write(f"\\newcommand{{\\herdanaveragecorrelation}}{{{avg_correlation:.2f}}}\n")
+            else:
+                f.write("\\newcommand{\\herdanaveragecorrelation}{N/A}\n")
     
     # Return results
     results = {
@@ -241,54 +260,30 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_dir=None, filter_
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze model size vs. lexical complexity trends')
     parser.add_argument('csv_files', nargs='+', help='CSV files with model results')
-    parser.add_argument('--output-dir', default='outputs', help='Directory to save outputs')
+    parser.add_argument('--output-image', help='Path to save the output image')
+    parser.add_argument('--latex-output', help='Path to save LaTeX macros file')
     parser.add_argument('--filter-rsquared', type=float, default=0.8, 
                         help='Minimum R-squared value for Herdan coefficient to include data points')
     parser.add_argument('--min-model-size', type=float, default=10, 
                         help='Minimum model size to include (in billions)')
     parser.add_argument('--show', action='store_true', help='Show the plot')
-    parser.add_argument('--correlation-only', action='store_true', 
-                        help='Only analyze task correlations without regression analysis')
     
     args = parser.parse_args()
     
-    try:
-        results, filtered_df = analyze_model_size_vs_lexical_complexity(
+    results, filtered_df = analyze_model_size_vs_lexical_complexity(
             args.csv_files,
-            args.output_dir,
+            args.output_image,
+            args.latex_output,
             args.filter_rsquared,
             args.min_model_size
-        )
+    )
         
-        print(f"Analysis completed successfully:")
-        print(f"Slope: {results['slope']:.6f}")
-        print(f"Intercept: {results['intercept']:.6f}")
-        print(f"R-squared: {results['r_squared']:.6f}")
-        print(f"P-value: {results['p_value']:.6f}")
-        print(f"Data points: {results['data_points']}")
-        print(f"Tasks: {', '.join(results['tasks'])}")
-        
-        # If there are multiple tasks, print correlation analysis
-        if len(results['tasks']) > 1:
-            print("\nTask correlation analysis:")
-            corr_file = os.path.join(args.output_dir, 'task_correlations.csv')
-            if os.path.exists(corr_file):
-                corr_matrix = pd.read_csv(corr_file, index_col=0)
-                print(corr_matrix)
-                
-                # Calculate average correlation
-                corr_values = []
-                for i in range(len(corr_matrix.columns)):
-                    for j in range(i+1, len(corr_matrix.columns)):
-                        if not pd.isna(corr_matrix.iloc[i, j]):
-                            corr_values.append(corr_matrix.iloc[i, j])
-                
-                if corr_values:
-                    avg_corr = sum(corr_values) / len(corr_values)
-                    print(f"\nAverage inter-task correlation: {avg_corr:.4f}")
-        
-        if args.show:
-            plt.show()
-        
-    except Exception as e:
-        raise e
+    print(f"Analysis completed successfully:")
+    print(f"Slope: {results['slope']:.6f}")
+    print(f"Intercept: {results['intercept']:.6f}")
+    print(f"R-squared: {results['r_squared']:.6f}")
+    print(f"P-value: {results['p_value']:.6f}")
+    print(f"Data points: {results['data_points']}")
+    print(f"Tasks: {', '.join(results['tasks'])}")
+    
+

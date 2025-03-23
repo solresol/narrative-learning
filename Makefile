@@ -5,11 +5,10 @@ WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
 SGC_DATASET := sgc_coral
 
-#To add to models... MODELS := gemini (eventually)
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
 # More problematic models: anthropic anthropic10
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10
+MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10 gemma
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
@@ -21,8 +20,11 @@ all: wisconsin titanic southgermancredit outputs/impact-of-samples.tex outputs/m
 outputs/model_details.tex: model_details.json make_model_size_table.py
 	uv run make_model_size_table.py --output outputs/model_details.tex
 
+outputs/herdan-model-size-trend.png outputs/herdan-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_lexicostatistics_model_trend.py 
+	uv run results_lexicostatistics_model_trend.py --output outputs/herdan-model-size-trend.png --latex outputs/herdan-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
 
-outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/titanic_results.csv  outputs/wisconsin_results.csv resultssampleimpact.py
+
+outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv resultssampleimpact.py
 	uv run resultssampleimpact.py --pivot outputs/samples-pivot-table.csv --image outputs/sample-count-impact-chart.png --stats-results outputs/impact-of-samples.txt --brief-stats outputs/impact-of-samples.tex outputs/southgermancredit_results.csv  outputs/titanic_results.csv  outputs/wisconsin_results.csv
 
 ######################################################################
