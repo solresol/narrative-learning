@@ -81,7 +81,7 @@ $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(
 
 
 outputs/wisconsin_by_model_size.png outputs/wisconsin_model_pvalue.tex: outputs/wisconsin_results.csv results_chart_by_size.py
-	uv run results_chart_by_size.py --dataset Wisconsin --input outputs/wisconsin_results.csv --image outputs/wisconsin_by_model_size.png --pvalue outputs/wisconsin_model_pvalue.tex
+	uv run results_chart_by_size.py --dataset Wisconsin --input outputs/wisconsin_results.csv --image outputs/wisconsin_by_model_size.png --pvalue outputs/wisconsin_model_pvalue.tex --projection outputs/wisconsin_model_projection.tex
 
 # How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
@@ -161,7 +161,7 @@ outputs/$(TITANIC_DATASET)-%.distribution.png outputs/$(TITANIC_DATASET)-%.distr
 	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(TITANIC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(TITANIC_DATASET)-$*.distribution.txt
 
 outputs/titanic_by_model_size.png outputs/titanic_model_pvalue.tex: outputs/titanic_results.csv results_chart_by_size.py
-	uv run results_chart_by_size.py --dataset Titanic --input outputs/titanic_results.csv --image outputs/titanic_by_model_size.png --pvalue outputs/titanic_model_pvalue.tex
+	uv run results_chart_by_size.py --dataset Titanic --input outputs/titanic_results.csv --image outputs/titanic_by_model_size.png --pvalue outputs/titanic_model_pvalue.tex --projection outputs/wisconsin_model_projection.tex
 
 
 
@@ -231,7 +231,7 @@ outputs/$(SGC_DATASET)-%.distribution.png outputs/$(SGC_DATASET)-%.distribution.
 	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(SGC_DATASET)-$*.distribution.png --fitted-distribution outputs/$(SGC_DATASET)-$*.distribution.txt
 
 outputs/southgermancredit_by_model_size.png outputs/southgermancredit_model_pvalue.tex: outputs/southgermancredit_results.csv results_chart_by_size.py
-	uv run results_chart_by_size.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --image outputs/southgermancredit_by_model_size.png --pvalue outputs/southgermancredit_model_pvalue.tex
+	uv run results_chart_by_size.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --image outputs/southgermancredit_by_model_size.png --pvalue outputs/southgermancredit_model_pvalue.tex --projection outputs/wisconsin_model_projection.tex
 
 
 
