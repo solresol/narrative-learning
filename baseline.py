@@ -124,7 +124,7 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, output_path):
     from statsmodels.stats.proportion import proportion_confint
 
     # Train logistic regression model
-    lr_model = LogisticRegressionCV()
+    lr_model = LogisticRegressionCV(max_iter=10000)
     lr_model.fit(X_train, y_train)
     lr_accuracy = lr_model.score(X_test, y_test)
 
