@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--pivot', required=True, help='Output path for pivot table CSV')
     parser.add_argument('--image', required=True, help='Output path for scatter plot image')
     parser.add_argument('--stats-results', required=True, help='Output path for statistical test results')
+    parser.add_argument('--brief-stats', required=True, help="LaTeX-format output file to give the p-value of the test")
     return parser.parse_args()
 
 def load_and_combine_data(csv_files: List[str]) -> pd.DataFrame:
@@ -90,11 +91,6 @@ def create_scatter_plot(pivot_df: pd.DataFrame, output_path: str) -> None:
     # Add grid
     plt.grid(alpha=0.3)
     
-    # Add a note about points above the line being better with sampler=10
-    plt.figtext(0.5, 0.01, 
-                "Points above the line: Sampler=10 performs better\nPoints below the line: Sampler=3 performs better", 
-                ha="center", fontsize=10, bbox={"facecolor":"white", "alpha":0.5, "pad":5})
-    
     # Save the figure
     plt.tight_layout()
     plt.savefig(output_path)
@@ -142,6 +138,9 @@ def main():
     
     # Run Wilcoxon test
     statistic, p_value = run_wilcoxon_test(pivot_df)
+
+    with open(args.brief_stats, 'w') as f:
+        f.write(f"{p_value:.3f}")
     
     # Save test results to file
     alpha = 0.05
