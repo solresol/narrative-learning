@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 import os
+from chartutils import draw_baselines
 
 def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None, 
                                 slope_output=None, filter_rsquared=0.8):
@@ -70,7 +71,7 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
     # Add labels to points
     for i, row in filtered_df.iterrows():
         plt.annotate(
-            row['Run Name'][:3],  # First 3 chars of run name
+            row['Model'],  # Full model name
             (row['Herdan Coefficient'], row['Neg Log Error']),
             xytext=(5, 0),
             textcoords='offset points',
@@ -81,7 +82,7 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
     # Add regression line
     x_range = np.linspace(
         filtered_df['Herdan Coefficient'].min() - 0.05, 
-        filtered_df['Herdan Coefficient'].max() + 0.05, 
+        filtered_df['Herdan Coefficient'].max() + 0.25, 
         100
     )
     plt.plot(
@@ -92,26 +93,8 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
         label=f'Trend: y = {slope:.4f}x + {intercept:.4f}'
     )
     
-    # Add baseline lines if available
-    baseline_columns = ['logistic regression', 'decision trees', 'dummy']
-    baselines = {}
-    
-    for col in baseline_columns:
-        if col in filtered_df.columns and not filtered_df[col].isna().all():
-            # Take the first non-NaN value
-            value = filtered_df[col].dropna().iloc[0]
-            baselines[col] = value
-            
-            # Calculate the negative log of error
-            if value < 1:  # Avoid log of 0
-                neg_log_error = -np.log10(1 - value)
-                plt.axhline(
-                    y=neg_log_error,
-                    linestyle=':',
-                    color='gray',
-                    alpha=0.7,
-                    label=f'{col.title()}: {neg_log_error:.3f}'
-                )
+    # Add baseline lines
+    draw_baselines(plt.gca(), filtered_df, xpos=0.65)
     
     # Add equation and statistics
     equation_text = (
@@ -129,7 +112,7 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
     # Add labels and title
     plt.xlabel("Herdan's Law Coefficient", fontsize=14)
     plt.ylabel("Negative Log Error Rate", fontsize=14)
-    plt.title(f"{dataset_name}: Lexical Complexity vs. Error Rate", fontsize=16)
+    plt.title(f"{dataset_name}: Lexical Complexity vs. Negative Log Error Rate", fontsize=16)
     
     # Handle the legend - only show each model once
     handles, labels = plt.gca().get_legend_handles_labels()

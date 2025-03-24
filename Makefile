@@ -85,6 +85,10 @@ $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(
 outputs/wisconsin_by_model_size.png outputs/wisconsin_model_pvalue.tex: outputs/wisconsin_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset Wisconsin --input outputs/wisconsin_results.csv --image outputs/wisconsin_by_model_size.png --pvalue outputs/wisconsin_model_pvalue.tex --projection outputs/wisconsin_model_projection.tex
 
+outputs/wisconsin_error_rate_by_herdan.png outputs/wisconsin_error_rate_by_herdan_pvalue.tex  outputs/wisconsin_error_rate_by_herdan_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show  --image-output outputs/wisconsin_error_rate_by_herdan.png --pvalue-output outputs/wisconsin_error_rate_by_herdan_pvalue.tex  --slope-output outputs/wisconsin_error_rate_by_herdan_slope.tex outputs/wisconsin_results.csv
+
+
 # How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
 	uv run obfuscation_plan_generator.py --csv-file datasets/breast_cancer.csv  --obfuscation-plan obfuscations/breast_cancer --guidelines conversions/breast_cancer
@@ -165,6 +169,9 @@ outputs/$(TITANIC_DATASET)-%.distribution.png outputs/$(TITANIC_DATASET)-%.distr
 outputs/titanic_by_model_size.png outputs/titanic_model_pvalue.tex: outputs/titanic_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset Titanic --input outputs/titanic_results.csv --image outputs/titanic_by_model_size.png --pvalue outputs/titanic_model_pvalue.tex --projection outputs/titanic_model_projection.tex
 
+outputs/titanic_error_rate_by_herdan.png outputs/titanic_error_rate_by_herdan_pvalue.tex  outputs/titanic_error_rate_by_herdan_slope.tex: outputs/titanic_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show  --image-output outputs/titanic_error_rate_by_herdan.png --pvalue-output outputs/titanic_error_rate_by_herdan_pvalue.tex  --slope-output outputs/titanic_error_rate_by_herdan_slope.tex outputs/titanic_results.csv
+
 
 
 ######################################################################
@@ -235,6 +242,9 @@ outputs/$(SGC_DATASET)-%.distribution.png outputs/$(SGC_DATASET)-%.distribution.
 outputs/southgermancredit_by_model_size.png outputs/southgermancredit_model_pvalue.tex: outputs/southgermancredit_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --image outputs/southgermancredit_by_model_size.png --pvalue outputs/southgermancredit_model_pvalue.tex --projection outputs/southgermancredit_model_projection.tex
 
+
+outputs/southgermancredit_error_rate_by_herdan.png outputs/southgermancredit_error_rate_by_herdan_pvalue.tex  outputs/southgermancredit_error_rate_by_herdan_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show  --image-output outputs/southgermancredit_error_rate_by_herdan.png --pvalue-output outputs/southgermancredit_error_rate_by_herdan_pvalue.tex  --slope-output outputs/southgermancredit_error_rate_by_herdan_slope.tex outputs/southgermancredit_results.csv
 
 
 ######################################################################

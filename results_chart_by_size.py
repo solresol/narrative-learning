@@ -8,6 +8,7 @@ import math
 import json
 import sklearn.linear_model
 import statsmodels.api as sm
+from chartutils import draw_baselines
 
 def load_data(file_path):
     """Load data from a CSV file."""
@@ -15,21 +16,6 @@ def load_data(file_path):
     # Convert accuracy to numeric, handling any missing values
     df['Accuracy'] = pd.to_numeric(df['Accuracy'], errors='coerce')
     return df
-
-def draw_baselines(ax, df, xpos=12.5):
-    colours = {
-        'logistic regression': 'teal',
-        'decision trees': 'gold',
-        'dummy': 'orange'
-    }
-    for model, colour in colours.items():
-        if model in df.columns:
-            # Don't need to take the mean -- they will all be the same value
-            score = df[model].mean()
-            # That was an accuracy, we need to convert it to negative log mean
-            score = -math.log10(1-score)
-            ax.axhline(score, linestyle='dotted', c=colours[model])
-            ax.annotate(xy=(xpos,score-0.03), text=model.title(), c=colours[model])
 
 def plot_log_model_size_vs_log_error(df, output_prefix, dataset_name, pvalue_file=None):
     fig, ax = plt.subplots(figsize=(10, 6))
