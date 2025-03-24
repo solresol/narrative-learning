@@ -88,6 +88,15 @@ outputs/wisconsin_by_model_size.png outputs/wisconsin_model_pvalue.tex: outputs/
 outputs/wisconsin_error_rate_by_herdan.png outputs/wisconsin_error_rate_by_herdan_pvalue.tex  outputs/wisconsin_error_rate_by_herdan_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_herdan.py
 	uv run results_error_rate_by_herdan.py --show  --image-output outputs/wisconsin_error_rate_by_herdan.png --pvalue-output outputs/wisconsin_error_rate_by_herdan_pvalue.tex  --slope-output outputs/wisconsin_error_rate_by_herdan_slope.tex outputs/wisconsin_results.csv
 
+outputs/wisconsin_error_rate_by_prompt_wordcount.png outputs/wisconsin_error_rate_by_prompt_wordcount_pvalue.tex outputs/wisconsin_error_rate_by_prompt_wordcount_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/wisconsin_error_rate_by_prompt_wordcount.png --pvalue-output outputs/wisconsin_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/wisconsin_error_rate_by_prompt_wordcount_slope.tex outputs/wisconsin_results.csv
+
+outputs/wisconsin_error_rate_by_reasoning_wordcount.png outputs/wisconsin_error_rate_by_reasoning_wordcount_pvalue.tex outputs/wisconsin_error_rate_by_reasoning_wordcount_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/wisconsin_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/wisconsin_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/wisconsin_error_rate_by_reasoning_wordcount_slope.tex outputs/wisconsin_results.csv
+
+outputs/wisconsin_error_rate_by_cumulative_wordcount.png outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/wisconsin_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex outputs/wisconsin_results.csv
+
 
 # How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
@@ -172,6 +181,15 @@ outputs/titanic_by_model_size.png outputs/titanic_model_pvalue.tex: outputs/tita
 outputs/titanic_error_rate_by_herdan.png outputs/titanic_error_rate_by_herdan_pvalue.tex  outputs/titanic_error_rate_by_herdan_slope.tex: outputs/titanic_results.csv results_error_rate_by_herdan.py
 	uv run results_error_rate_by_herdan.py --show  --image-output outputs/titanic_error_rate_by_herdan.png --pvalue-output outputs/titanic_error_rate_by_herdan_pvalue.tex  --slope-output outputs/titanic_error_rate_by_herdan_slope.tex outputs/titanic_results.csv
 
+outputs/titanic_error_rate_by_prompt_wordcount.png outputs/titanic_error_rate_by_prompt_wordcount_pvalue.tex outputs/titanic_error_rate_by_prompt_wordcount_slope.tex: outputs/titanic_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/titanic_error_rate_by_prompt_wordcount.png --pvalue-output outputs/titanic_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/titanic_error_rate_by_prompt_wordcount_slope.tex outputs/titanic_results.csv
+
+outputs/titanic_error_rate_by_reasoning_wordcount.png outputs/titanic_error_rate_by_reasoning_wordcount_pvalue.tex outputs/titanic_error_rate_by_reasoning_wordcount_slope.tex: outputs/titanic_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/titanic_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/titanic_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/titanic_error_rate_by_reasoning_wordcount_slope.tex outputs/titanic_results.csv
+
+outputs/titanic_error_rate_by_cumulative_wordcount.png outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex: outputs/titanic_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/titanic_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex outputs/titanic_results.csv
+
 
 
 ######################################################################
@@ -245,6 +263,15 @@ outputs/southgermancredit_by_model_size.png outputs/southgermancredit_model_pval
 
 outputs/southgermancredit_error_rate_by_herdan.png outputs/southgermancredit_error_rate_by_herdan_pvalue.tex  outputs/southgermancredit_error_rate_by_herdan_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_herdan.py
 	uv run results_error_rate_by_herdan.py --show  --image-output outputs/southgermancredit_error_rate_by_herdan.png --pvalue-output outputs/southgermancredit_error_rate_by_herdan_pvalue.tex  --slope-output outputs/southgermancredit_error_rate_by_herdan_slope.tex outputs/southgermancredit_results.csv
+
+outputs/southgermancredit_error_rate_by_prompt_wordcount.png outputs/southgermancredit_error_rate_by_prompt_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_prompt_wordcount_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/southgermancredit_error_rate_by_prompt_wordcount.png --pvalue-output outputs/southgermancredit_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/southgermancredit_error_rate_by_prompt_wordcount_slope.tex outputs/southgermancredit_results.csv
+
+outputs/southgermancredit_error_rate_by_reasoning_wordcount.png outputs/southgermancredit_error_rate_by_reasoning_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_reasoning_wordcount_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/southgermancredit_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/southgermancredit_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/southgermancredit_error_rate_by_reasoning_wordcount_slope.tex outputs/southgermancredit_results.csv
+
+outputs/southgermancredit_error_rate_by_cumulative_wordcount.png outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/southgermancredit_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex outputs/southgermancredit_results.csv
 
 
 ######################################################################
