@@ -8,22 +8,21 @@ import seaborn as sns
 from scipy import stats
 import os
 
-def analyze_error_rate_by_herdan(csv_file, output_dir=None, filter_rsquared=0.8):
+def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None, 
+                                slope_output=None, filter_rsquared=0.8):
     """
     Analyze relationship between Herdan coefficient and error rate (neg log error).
     
     Args:
         csv_file: Path to CSV file with results
-        output_dir: Directory to save outputs
+        image_output: Path to save the output image
+        pvalue_output: Path to save the p-value text file
+        slope_output: Path to save the slope value text file
         filter_rsquared: Minimum R-squared value for Herdan coefficient to include data points
     
     Returns:
-        Tuple of (p_value, DataFrame with filtered data)
+        Tuple of (p_value, slope, DataFrame with filtered data)
     """
-    # Create output directory if it doesn't exist
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
     # Load data
     df = pd.read_csv(csv_file)
     
@@ -51,19 +50,27 @@ def analyze_error_rate_by_herdan(csv_file, output_dir=None, filter_rsquared=0.8)
     # Use seaborn for better aesthetics
     sns.set_style("whitegrid")
     
-    # Plot scatter
-    plt.scatter(
-        filtered_df['Herdan Coefficient'],
-        filtered_df['Neg Log Error'],
-        color='steelblue',
-        s=100,
-        alpha=0.7
-    )
+    # Get unique models for color mapping
+    unique_models = filtered_df['Model'].unique()
+    color_palette = sns.color_palette("husl", len(unique_models))
+    model_color_map = dict(zip(unique_models, color_palette))
+    
+    # Plot scatter points colored by model
+    for model in unique_models:
+        model_data = filtered_df[filtered_df['Model'] == model]
+        plt.scatter(
+            model_data['Herdan Coefficient'],
+            model_data['Neg Log Error'],
+            color=model_color_map[model],
+            s=100,
+            alpha=0.7,
+            label=model
+        )
     
     # Add labels to points
     for i, row in filtered_df.iterrows():
         plt.annotate(
-            f"{row['Model']}",
+            row['Run Name'][:3],  # First 3 chars of run name
             (row['Herdan Coefficient'], row['Neg Log Error']),
             xytext=(5, 0),
             textcoords='offset points',
@@ -123,26 +130,43 @@ def analyze_error_rate_by_herdan(csv_file, output_dir=None, filter_rsquared=0.8)
     plt.xlabel("Herdan's Law Coefficient", fontsize=14)
     plt.ylabel("Negative Log Error Rate", fontsize=14)
     plt.title(f"{dataset_name}: Lexical Complexity vs. Error Rate", fontsize=16)
-    plt.legend(fontsize=12)
+    
+    # Handle the legend - only show each model once
+    handles, labels = plt.gca().get_legend_handles_labels()
+    unique_labels = []
+    unique_handles = []
+    label_indices = {}
+    
+    for i, label in enumerate(labels):
+        if label not in label_indices:
+            label_indices[label] = i
+            unique_labels.append(label)
+            unique_handles.append(handles[i])
+    
+    plt.legend(unique_handles, unique_labels, fontsize=10, loc='best')
     plt.grid(True, alpha=0.3)
     
-    # Save the plot if output_dir is provided
-    if output_dir:
+    # Save outputs if paths are provided
+    if image_output:
         plt.tight_layout()
-        plot_file = os.path.join(output_dir, f'{dataset_name.lower()}_error_by_herdan.png')
-        plt.savefig(plot_file, dpi=300)
-        
-        # Save the p-value to a text file (nothing but the p-value, to 3 decimal places)
-        p_value_file = os.path.join(output_dir, f'{dataset_name.lower()}_herdan_pvalue.txt')
-        with open(p_value_file, 'w') as f:
+        plt.savefig(image_output, dpi=300)
+    
+    if pvalue_output:
+        with open(pvalue_output, 'w') as f:
             f.write(f"{p_value:.3f}")
     
-    return p_value, filtered_df
+    if slope_output:
+        with open(slope_output, 'w') as f:
+            f.write(f"{slope:.3f}")
+    
+    return p_value, slope, filtered_df
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze the relationship between Herdan coefficient and error rate')
     parser.add_argument('csv_file', help='CSV file with model results')
-    parser.add_argument('--output-dir', default='outputs', help='Directory to save outputs')
+    parser.add_argument('--image-output', help='Path to save the output image')
+    parser.add_argument('--pvalue-output', help='Path to save the p-value text file')
+    parser.add_argument('--slope-output', help='Path to save the slope value text file')
     parser.add_argument('--filter-rsquared', type=float, default=0.8, 
                         help='Minimum R-squared value for Herdan coefficient to include data points')
     parser.add_argument('--show', action='store_true', help='Show the plot')
@@ -150,14 +174,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     try:
-        p_value, filtered_df = analyze_error_rate_by_herdan(
+        p_value, slope, filtered_df = analyze_error_rate_by_herdan(
             args.csv_file,
-            args.output_dir,
+            args.image_output,
+            args.pvalue_output,
+            args.slope_output,
             args.filter_rsquared
         )
         
         print(f"Analysis completed successfully:")
         print(f"P-value: {p_value:.4f}")
+        print(f"Slope: {slope:.4f}")
         print(f"Data points: {len(filtered_df)}")
         
         if args.show:
