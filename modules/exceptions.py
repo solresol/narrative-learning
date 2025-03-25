@@ -35,3 +35,14 @@ class MissingConfigElementException(Exception):
 
     def __str__(self):
         return self.message
+
+
+class NoProcessedRoundsException(Exception):
+    def __init__(self, split_id, db_path=None):
+        if db_path is None:
+            self.message = f"No processed rounds found for {split_id}"
+        else:
+            self.message = f"No processed rounds found for {split_id} in the sqlite database {db_path}"            
+        super().__init__(self.message)
+    def __str__(self):
+        return self.message    

@@ -7,7 +7,7 @@ import pandas as pd
 import re
 from typing import Dict, List, Any, Optional, Tuple, Union
 
-from modules.exceptions import TargetClassingException, NonexistentRoundException, MissingConfigElementException
+from modules.exceptions import TargetClassingException, NonexistentRoundException, MissingConfigElementException, NoProcessedRoundsException
 from modules.database import (
     get_database_path, get_round_prompt, get_round_reasoning, get_split_id, 
     get_latest_split_id, get_rounds_for_split, get_processed_rounds_for_split
@@ -451,9 +451,9 @@ class DatasetConfig:
         Raises:
             ValueError: If no processed rounds are found
         """
-        temp_df = self.generate_metrics_data(split_id, metric, 'validation')
+        temp_df = self.generate_metrics_data(int(split_id), metric, 'validation')
         if temp_df.empty:
-            raise ValueError(f"No processed rounds found for split {split_id}")
+            raise NoProcessedRoundsException(split_id, self.database_path)
 
         temp_df.set_index('round_id', inplace=True)
         return temp_df.metric.idxmax()
