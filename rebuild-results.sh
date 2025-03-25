@@ -5,6 +5,7 @@ rm -f outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southger
     && git add outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southgermancredit_results.csv \
     && make outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png \
     && make outputs/herdan-model-size-trend.png \
+    && make outputs/promptwc-model-size-trend.png outputs/reasoningwc-model-size-trend.png outputs/cumulativewc-model-size-trend.png \
     && make outputs/wisconsin_error_rate_by_herdan.png outputs/southgermancredit_error_rate_by_herdan.png outputs/titanic_error_rate_by_herdan.png \
     && make outputs/wisconsin_error_rate_by_prompt_wordcount.png outputs/wisconsin_error_rate_by_reasoning_wordcount.png outputs/wisconsin_error_rate_by_cumulative_wordcount.png \
     && make outputs/titanic_error_rate_by_prompt_wordcount.png outputs/titanic_error_rate_by_reasoning_wordcount.png outputs/titanic_error_rate_by_cumulative_wordcount.png \
