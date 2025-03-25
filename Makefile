@@ -23,6 +23,15 @@ outputs/model_details.tex: model_details.json make_model_size_table.py
 outputs/herdan-model-size-trend.png outputs/herdan-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_lexicostatistics_model_trend.py 
 	uv run results_lexicostatistics_model_trend.py --output outputs/herdan-model-size-trend.png --latex outputs/herdan-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
 
+outputs/promptwc-model-size-trend.png outputs/promptwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type prompt --output outputs/promptwc-model-size-trend.png --latex outputs/promptwc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+
+outputs/reasoningwc-model-size-trend.png outputs/reasoningwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type reasoning --output outputs/reasoningwc-model-size-trend.png --latex outputs/reasoningwc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+
+outputs/cumulativewc-model-size-trend.png outputs/cumulativewc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type cumulative --output outputs/cumulativewc-model-size-trend.png --latex outputs/cumulativewc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+
 
 outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv resultssampleimpact.py
 	uv run resultssampleimpact.py --pivot outputs/samples-pivot-table.csv --image outputs/sample-count-impact-chart.png --stats-results outputs/impact-of-samples.txt --brief-stats outputs/impact-of-samples.tex outputs/southgermancredit_results.csv  outputs/titanic_results.csv  outputs/wisconsin_results.csv
