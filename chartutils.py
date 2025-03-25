@@ -29,6 +29,6 @@ def draw_baselines(ax, df, xpos=12.5):
             # Don't need to take the mean -- they will all be the same value
             score = df[model].mean()
             # Convert accuracy to negative log mean error
-            score = -math.log10(1-score)
+            #score = -math.log10(1-score)
             ax.axhline(score, linestyle='dotted', c=colours[model])
             ax.annotate(xy=(xpos, score-0.03), text=model.title(), c=colours[model])
