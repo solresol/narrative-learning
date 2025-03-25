@@ -10,6 +10,9 @@ rm -f outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southger
     && make outputs/wisconsin_error_rate_by_prompt_wordcount.png outputs/wisconsin_error_rate_by_reasoning_wordcount.png outputs/wisconsin_error_rate_by_cumulative_wordcount.png \
     && make outputs/titanic_error_rate_by_prompt_wordcount.png outputs/titanic_error_rate_by_reasoning_wordcount.png outputs/titanic_error_rate_by_cumulative_wordcount.png \
     && make outputs/southgermancredit_error_rate_by_prompt_wordcount.png outputs/southgermancredit_error_rate_by_reasoning_wordcount.png outputs/southgermancredit_error_rate_by_cumulative_wordcount.png \
+    && make outputs/wisconsin_exoplanets-openailong.distribution.png \
+    && make outputs/titanic_medical-openailong.distribution.png \
+    && make outputs/sgc_coral-openailong.distribution.png \
     && git add -f outputs/impact-of-samples.tex \
     && git add -f outputs/sample-count-impact-chart.png \
     && git add -f outputs/model_details.tex \
@@ -26,4 +29,7 @@ rm -f outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southger
     && git add -f outputs/southgermancredit_error_rate_by_prompt_wordcount.png outputs/southgermancredit_error_rate_by_prompt_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_prompt_wordcount_slope.tex \
     && git add -f outputs/southgermancredit_error_rate_by_reasoning_wordcount.png outputs/southgermancredit_error_rate_by_reasoning_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_reasoning_wordcount_slope.tex \
     && git add -f outputs/southgermancredit_error_rate_by_cumulative_wordcount.png outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex \
+    && git add -f outputs/wisconsin_exoplanets-openailong.distribution.png \
+    && git add -f outputs/titanic_medical-openailong.distribution.png \
+    && git add -f outputs/sgc_coral-openailong.distribution.png \
     && git commit -m"Latest experimental results"
