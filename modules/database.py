@@ -78,7 +78,7 @@ def get_split_id(conn: sqlite3.Connection, round_id: int, database_path: Optiona
         Split ID
     """
     cur = conn.cursor()
-    cur.execute("SELECT split_id FROM rounds WHERE round_id = ?", (round_id,))
+    cur.execute("SELECT split_id FROM rounds WHERE round_id = ?", (int(round_id),))
     row = cur.fetchone()
 
     if row is None:
