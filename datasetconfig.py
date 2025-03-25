@@ -423,7 +423,7 @@ class DatasetConfig:
         Returns:
             DataFrame with round_id and metric columns
         """
-        return generate_metrics_data(self, split_id, metric, data_type)
+        return generate_metrics_data(self, int(split_id), metric, data_type)
 
     def get_data_point_count(self) -> int:
         """
