@@ -477,6 +477,7 @@ dependencies = [
     { name = "openai" },
     { name = "pandas" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "seaborn" },
     { name = "statsmodels" },
 ]
@@ -490,6 +491,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.63.2" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
+    { name = "scipy", specifier = ">=1.15.2" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "statsmodels", specifier = ">=0.14.4" },
 ]
