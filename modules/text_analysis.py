@@ -44,7 +44,8 @@ def calculate_zipfs_law(text_list: List[str]) -> Dict[str, Union[float, dict]]:
     Calculate Zipf's law coefficient from a list of texts.
     Zipf's law states that the frequency of a word is inversely proportional to its rank.
     
-    This implementation samples 1000 words with replacement 5 times and averages the results
+    This implementation uses a fixed seed for random sampling to ensure deterministic results
+    while still sampling 1000 words with replacement 5 times and averaging the results
     to handle documents of different lengths.
     
     Args:
@@ -70,14 +71,17 @@ def calculate_zipfs_law(text_list: List[str]) -> Dict[str, Union[float, dict]]:
     zipf_coefficients = []
     r_squared_values = []
     
+    # Set fixed seed for reproducibility
+    rng = np.random.RandomState(42)
+    
     # Run multiple times and average the results
-    for _ in range(num_runs):
+    for run in range(num_runs):
         # Sample words with replacement
         if len(all_words) == 0:
             continue
             
-        # Sample with replacement
-        sampled_words = np.random.choice(all_words, size=sample_size, replace=True)
+        # Sample with replacement using seeded RNG
+        sampled_words = rng.choice(all_words, size=sample_size, replace=True)
         
         # Count word frequencies in the sample
         word_counts = Counter(sampled_words)
@@ -134,7 +138,8 @@ def calculate_herdans_law(text_list: List[str]) -> Dict[str, Union[float, dict]]
     Calculate Herdan's law (Heaps' law) coefficient from a list of texts.
     Herdan's law describes the relationship between vocabulary size and text length.
     
-    This implementation samples 1000 words with replacement 5 times and averages the results
+    This implementation uses a fixed seed for random sampling to ensure deterministic results
+    while still sampling 1000 words with replacement 5 times and averaging the results
     to handle documents of different lengths.
     
     Args:
@@ -160,13 +165,16 @@ def calculate_herdans_law(text_list: List[str]) -> Dict[str, Union[float, dict]]
     herdan_coefficients = []
     r_squared_values = []
     
+    # Set fixed seed for reproducibility
+    rng = np.random.RandomState(42)
+    
     # Run multiple times and average the results
-    for _ in range(num_runs):
+    for run in range(num_runs):
         if len(all_words) == 0:
             continue
         
-        # Sample with replacement
-        sampled_words = list(np.random.choice(all_words, size=sample_size, replace=True))
+        # Sample with replacement using seeded RNG
+        sampled_words = list(rng.choice(all_words, size=sample_size, replace=True))
         
         # Calculate vocabulary growth as we read through the sample
         vocab_sizes = []
