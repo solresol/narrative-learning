@@ -54,6 +54,7 @@ class DatasetConfig:
         self.target_field = self.config["target_field"]
         self.splits_table = self.config["splits_table"]
         self.columns = self.config["columns"]
+        self.database_path = get_database_path(self.conn)
 
         cursor = conn.cursor()
         cursor.execute(f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}")
@@ -63,7 +64,6 @@ class DatasetConfig:
         if len(self.valid_predictions) != 2:
             raise TargetClassingException(self.target_field, len(self.valid_predictions))
 
-        self.database_path = get_database_path(self.conn)
 
     def get_entity_features(self, entity_id: str) -> str:
         """
