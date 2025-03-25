@@ -180,7 +180,9 @@ def main():
         projection = calculate_projection(df)
         if projection:
             with open(args.projection, 'w') as f:
-                f.write(f"$10^{projection['log_model_size_needed']:.1f}$")
+                f.write("$10^{")
+                f.write(f"{projection['log_model_size_needed']:.1f}")
+                f.write("}$")
             print(f"Saved projection to {args.projection}")
 
     # Create the plot
