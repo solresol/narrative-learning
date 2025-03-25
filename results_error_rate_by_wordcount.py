@@ -137,7 +137,10 @@ def analyze_error_rate_by_wordcount(csv_file, x_column='Prompt Word Count', imag
     
     if pvalue_output:
         with open(pvalue_output, 'w') as f:
-            f.write(f"{p_value:.3f}")
+            if p_value < 0.1:
+                f.write(f"{p_value:.4f}")
+            else:
+                f.write(f"{p_value:.3f}")
     
     if slope_output:
         with open(slope_output, 'w') as f:
