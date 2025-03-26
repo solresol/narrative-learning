@@ -1,0 +1,32 @@
+Top 5 Ensemble Combinations (selected based on validation accuracy):
+
+1. Ensemble of: titanic_medical-anthropic3710, titanic_medical-geminipro10, titanic_medical-openai45p10
+   Validation Accuracy: 0.8000 (95% CI: 0.7082-0.8733)
+   Test Accuracy: 0.6813 (95% CI: 0.5753-0.7751)
+   Test correct predictions: 62/91
+   Test Confusion Matrix: TP=45, FP=21, TN=17, FN=8
+
+2. Ensemble of: titanic_medical-anthropic37, titanic_medical-geminipro10, titanic_medical-openai45p10
+   Validation Accuracy: 0.7900 (95% CI: 0.6971-0.8651)
+   Test Accuracy: 0.6813 (95% CI: 0.5753-0.7751)
+   Test correct predictions: 62/91
+   Test Confusion Matrix: TP=44, FP=20, TN=18, FN=9
+
+3. Ensemble of: titanic_medical-anthropic3710, titanic_medical-openai10o1, titanic_medical-openai45p10
+   Validation Accuracy: 0.7900 (95% CI: 0.6971-0.8651)
+   Test Accuracy: 0.7802 (95% CI: 0.6812-0.8603)
+   Test correct predictions: 71/91
+   Test Confusion Matrix: TP=46, FP=13, TN=25, FN=7
+
+4. Ensemble of: titanic_medical-geminipro10, titanic_medical-openai45, titanic_medical-openai45p10
+   Validation Accuracy: 0.7900 (95% CI: 0.6971-0.8651)
+   Test Accuracy: 0.6703 (95% CI: 0.5639-0.7653)
+   Test correct predictions: 61/91
+   Test Confusion Matrix: TP=41, FP=18, TN=20, FN=12
+
+5. Ensemble of: titanic_medical-openai45p10, titanic_medical-openaio1, titanic_medical-phi
+   Validation Accuracy: 0.7900 (95% CI: 0.6971-0.8651)
+   Test Accuracy: 0.6813 (95% CI: 0.5753-0.7751)
+   Test correct predictions: 62/91
+   Test Confusion Matrix: TP=37, FP=13, TN=25, FN=16
+
