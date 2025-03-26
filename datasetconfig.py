@@ -57,7 +57,11 @@ class DatasetConfig:
         self.database_path = get_database_path(self.conn)
 
         cursor = conn.cursor()
-        cursor.execute(f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}")
+        try:
+            cursor.execute(f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}")
+        except sqlite3.OperationalError as e:
+            sys.stderr.write(f"Problem with {self.database_path}: ")
+            raise e
         self.valid_predictions = []
         for row in cursor:
             self.valid_predictions.append(row[0])
