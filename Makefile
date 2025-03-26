@@ -12,10 +12,13 @@ MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 ant
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
-.PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions
+.PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions ensembles
 
-all: wisconsin titanic southgermancredit outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png
+all: wisconsin titanic southgermancredit ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png
 	echo Done
+
+ensembles: outputs/titanic_ensemble.csv outputs/wisconsin_ensemble.csv outputs/southgermancredit_ensemble.csv
+	echo All ensemble results are ready
 
 outputs/model_details.tex: model_details.json make_model_size_table.py
 	uv run make_model_size_table.py --output outputs/model_details.tex
@@ -40,7 +43,7 @@ outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/t
 
 # Wisconsin
 
-wisconsin: wisconsin_results.csv
+wisconsin: outputs/wisconsin_results.csv
 	echo All Wisconsin results are ready
 
 # Should depend on ... wisconsin-databases wisconsin-estimates wisconsin-results wisconsin-prompts wisconsin-best wisconsin-baseline
@@ -106,6 +109,9 @@ outputs/wisconsin_error_rate_by_reasoning_wordcount.png outputs/wisconsin_error_
 outputs/wisconsin_error_rate_by_cumulative_wordcount.png outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/wisconsin_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex outputs/wisconsin_results.csv
 
+outputs/wisconsin_ensemble.csv outputs/wisconsin_ensemble_summary.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-*.sqlite configs/$(WISCONSIN_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(WISCONSIN_DATASET).config.json --progress-bar --summary outputs/wisconsin_ensemble_summary.txt --output outputs/wisconsin_ensemble.csv $(RESULTS_DIR)/$(WISCONSIN_DATASET)-*.sqlite
+
 
 # How we created the dataset
 obfuscations/breast_cancer: conversions/breast_cancer obfuscation_plan_generator.py datasets/breast_cancer.csv
@@ -147,7 +153,7 @@ $(RESULTS_DIR)/$(TITANIC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(TITANIC_DATASE
 $(RESULTS_DIR)/$(TITANIC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-%.best-round.txt
 	. ./envs/titanic/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
 
-titanic: titanic_results.txt
+titanic: outputs/titanic_results.csv
 	echo All Titanic results are ready
 
 # Again, should depend on titanic-estimates titanic-results titanic-prompts titanic-best titanic-baseline
@@ -199,6 +205,9 @@ outputs/titanic_error_rate_by_reasoning_wordcount.png outputs/titanic_error_rate
 outputs/titanic_error_rate_by_cumulative_wordcount.png outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex: outputs/titanic_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/titanic_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex outputs/titanic_results.csv
 
+outputs/titanic_ensemble.csv outputs/titanic_ensemble_summary.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-*.sqlite configs/$(TITANIC_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(TITANIC_DATASET).config.json --progress-bar --summary outputs/titanic_ensemble_summary.txt --output outputs/titanic_ensemble.csv $(RESULTS_DIR)/$(TITANIC_DATASET)-*.sqlite
+
 
 
 ######################################################################
@@ -230,7 +239,7 @@ $(RESULTS_DIR)/$(SGC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(SGC_DATASET)-%.bes
 $(RESULTS_DIR)/$(SGC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt
 	. ./envs/southgermancredit/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
 
-southgermancredit: southgermancredit_results.txt
+southgermancredit: outputs/southgermancredit_results.csv
 	echo All SouthGermanCredit results are ready
 
 # Again, should depend on southgermancredit-estimates southgermancredit-results southgermancredit-prompts southgermancredit-best southgermancredit-baseline
@@ -281,6 +290,9 @@ outputs/southgermancredit_error_rate_by_reasoning_wordcount.png outputs/southger
 
 outputs/southgermancredit_error_rate_by_cumulative_wordcount.png outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/southgermancredit_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex outputs/southgermancredit_results.csv
+
+outputs/southgermancredit_ensemble.csv outputs/southgermancredit_ensemble_summary.txt: $(RESULTS_DIR)/$(SGC_DATASET)-*.sqlite configs/$(SGC_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(SGC_DATASET).config.json --progress-bar --summary outputs/southgermancredit_ensemble_summary.txt --output outputs/southgermancredit_ensemble.csv $(RESULTS_DIR)/$(SGC_DATASET)-*.sqlite
 
 
 ######################################################################
