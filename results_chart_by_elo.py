@@ -40,10 +40,14 @@ def get_model_elo(model_name, elo_df, translations=None):
         
     Raises:
         ValueError: If the model is not found in ELO data
+        ValueError with special message "SKIP_MODEL": If the model is in translations but has a null value
     """
     # Check if we have a translation for this model
     if translations and model_name in translations:
         elo_name = translations[model_name]
+        # If the translation is None or null, skip this model
+        if elo_name is None:
+            raise ValueError("SKIP_MODEL")
         print(f"Translating '{model_name}' to '{elo_name}' for ELO lookup")
     else:
         elo_name = model_name
@@ -254,12 +258,25 @@ if __name__ == "__main__":
     
     # Convert model names and add ELO scores
     df['ELO'] = None
+    rows_to_drop = []
+    
     for idx, row in df.iterrows():
         try:
             df.at[idx, 'ELO'] = get_model_elo(row['Model'], elo_df, translations)
         except ValueError as e:
-            print(f"Error: {e}")
-            sys.exit(1)
+            if str(e) == "SKIP_MODEL":
+                # Mark for removal - model has null translation
+                print(f"Skipping model '{row['Model']}' as specified in translation file")
+                rows_to_drop.append(idx)
+            else:
+                # Regular error finding the model
+                print(f"Error: {e}")
+                sys.exit(1)
+    
+    # Remove rows with null translations
+    if rows_to_drop:
+        print(f"Removing {len(rows_to_drop)} models with null translations from analysis")
+        df = df.drop(rows_to_drop).reset_index(drop=True)
     
     # Print summary of the data
     print(f"Loaded {len(df)} rows from {args.input}")
