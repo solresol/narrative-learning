@@ -1,32 +1,32 @@
 Top 5 Ensemble Combinations (selected based on validation accuracy):
 
-1. Ensemble of: wisconsin_exoplanets-openai, wisconsin_exoplanets-openai10, wisconsin_exoplanets-openai45
-   Validation Accuracy: 0.9600 (95% CI: 0.8629-0.9951)
-   Test Accuracy: 0.8421 (95% CI: 0.7213-0.9252)
-   Test correct predictions: 48/57
-   Test Confusion Matrix: TP=21, FP=1, TN=27, FN=8
+1. Ensemble of: wisconsin_exoplanets-anthropic37, wisconsin_exoplanets-gemini25, wisconsin_exoplanets-gemini2510
+   Validation Accuracy: 0.9841 (95% CI: 0.9147-0.9996)
+   Test Accuracy: 0.8939 (95% CI: 0.7936-0.9563)
+   Test correct predictions: 59/66
+   Test Confusion Matrix: TP=28, FP=3, TN=31, FN=4
 
-2. Ensemble of: wisconsin_exoplanets-openai, wisconsin_exoplanets-openai10, wisconsin_exoplanets-openailong
-   Validation Accuracy: 0.9600 (95% CI: 0.8629-0.9951)
-   Test Accuracy: 0.8421 (95% CI: 0.7213-0.9252)
-   Test correct predictions: 48/57
-   Test Confusion Matrix: TP=21, FP=1, TN=27, FN=8
+2. Ensemble of: wisconsin_exoplanets-gemini2510, wisconsin_exoplanets-openai, wisconsin_exoplanets-openai4510
+   Validation Accuracy: 0.9841 (95% CI: 0.9147-0.9996)
+   Test Accuracy: 0.8636 (95% CI: 0.7569-0.9357)
+   Test correct predictions: 57/66
+   Test Confusion Matrix: TP=26, FP=3, TN=31, FN=6
 
-3. Ensemble of: wisconsin_exoplanets-openai, wisconsin_exoplanets-openai10o1, wisconsin_exoplanets-openai45
-   Validation Accuracy: 0.9600 (95% CI: 0.8629-0.9951)
-   Test Accuracy: 0.8246 (95% CI: 0.7009-0.9125)
-   Test correct predictions: 47/57
-   Test Confusion Matrix: TP=21, FP=2, TN=26, FN=8
+3. Ensemble of: wisconsin_exoplanets-anthropic37, wisconsin_exoplanets-gemini, wisconsin_exoplanets-gemini25
+   Validation Accuracy: 0.9683 (95% CI: 0.8900-0.9961)
+   Test Accuracy: 0.8939 (95% CI: 0.7936-0.9563)
+   Test correct predictions: 59/66
+   Test Confusion Matrix: TP=30, FP=5, TN=29, FN=2
 
-4. Ensemble of: wisconsin_exoplanets-openai, wisconsin_exoplanets-openai10o1, wisconsin_exoplanets-openailong
-   Validation Accuracy: 0.9600 (95% CI: 0.8629-0.9951)
-   Test Accuracy: 0.8421 (95% CI: 0.7213-0.9252)
-   Test correct predictions: 48/57
-   Test Confusion Matrix: TP=21, FP=1, TN=27, FN=8
+4. Ensemble of: wisconsin_exoplanets-anthropic37, wisconsin_exoplanets-gemini25, wisconsin_exoplanets-openaio1
+   Validation Accuracy: 0.9683 (95% CI: 0.8900-0.9961)
+   Test Accuracy: 0.8939 (95% CI: 0.7936-0.9563)
+   Test correct predictions: 59/66
+   Test Confusion Matrix: TP=28, FP=3, TN=31, FN=4
 
-5. Ensemble of: wisconsin_exoplanets-openai, wisconsin_exoplanets-openai45, wisconsin_exoplanets-openailong
-   Validation Accuracy: 0.9600 (95% CI: 0.8629-0.9951)
-   Test Accuracy: 0.8421 (95% CI: 0.7213-0.9252)
-   Test correct predictions: 48/57
-   Test Confusion Matrix: TP=21, FP=1, TN=27, FN=8
+5. Ensemble of: wisconsin_exoplanets-anthropic37, wisconsin_exoplanets-gemini2510, wisconsin_exoplanets-openai4510
+   Validation Accuracy: 0.9683 (95% CI: 0.8900-0.9961)
+   Test Accuracy: 0.8636 (95% CI: 0.7569-0.9357)
+   Test correct predictions: 57/66
+   Test Confusion Matrix: TP=26, FP=3, TN=31, FN=6
 

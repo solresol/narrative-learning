@@ -1,32 +1,32 @@
 Top 5 Ensemble Combinations (selected based on validation accuracy):
 
-1. Ensemble of: sgc_coral-anthropic3710, sgc_coral-openai10, sgc_coral-openailong
+1. Ensemble of: sgc_coral-anthropic3710, sgc_coral-gemini2510, sgc_coral-gemma
+   Validation Accuracy: 0.7115 (95% CI: 0.6145-0.7962)
+   Test Accuracy: 0.6283 (95% CI: 0.5324-0.7174)
+   Test correct predictions: 71/113
+   Test Confusion Matrix: TP=58, FP=12, TN=13, FN=30
+
+2. Ensemble of: sgc_coral-anthropic3710, sgc_coral-gemini2510, sgc_coral-openailong
+   Validation Accuracy: 0.7115 (95% CI: 0.6145-0.7962)
+   Test Accuracy: 0.5929 (95% CI: 0.4965-0.6844)
+   Test correct predictions: 67/113
+   Test Confusion Matrix: TP=52, FP=10, TN=15, FN=36
+
+3. Ensemble of: sgc_coral-anthropic37, sgc_coral-anthropic3710, sgc_coral-gemini2510
+   Validation Accuracy: 0.7019 (95% CI: 0.6043-0.7877)
+   Test Accuracy: 0.5664 (95% CI: 0.4699-0.6593)
+   Test correct predictions: 64/113
+   Test Confusion Matrix: TP=46, FP=7, TN=18, FN=42
+
+4. Ensemble of: sgc_coral-anthropic3710, sgc_coral-openai10, sgc_coral-openailong
    Validation Accuracy: 0.7019 (95% CI: 0.6043-0.7877)
    Test Accuracy: 0.5752 (95% CI: 0.4787-0.6677)
    Test correct predictions: 65/113
    Test Confusion Matrix: TP=47, FP=7, TN=18, FN=41
 
-2. Ensemble of: sgc_coral-geminipro10, sgc_coral-openai10, sgc_coral-openailong
+5. Ensemble of: sgc_coral-geminipro10, sgc_coral-openai10, sgc_coral-openailong
    Validation Accuracy: 0.7019 (95% CI: 0.6043-0.7877)
    Test Accuracy: 0.4867 (95% CI: 0.3916-0.5826)
    Test correct predictions: 55/113
    Test Confusion Matrix: TP=39, FP=9, TN=16, FN=49
-
-3. Ensemble of: sgc_coral-anthropic3710, sgc_coral-geminipro, sgc_coral-openailong
-   Validation Accuracy: 0.6923 (95% CI: 0.5942-0.7791)
-   Test Accuracy: 0.5575 (95% CI: 0.4611-0.6509)
-   Test correct predictions: 63/113
-   Test Confusion Matrix: TP=46, FP=8, TN=17, FN=42
-
-4. Ensemble of: sgc_coral-anthropic3710, sgc_coral-openai45, sgc_coral-openailong
-   Validation Accuracy: 0.6923 (95% CI: 0.5942-0.7791)
-   Test Accuracy: 0.6372 (95% CI: 0.5414-0.7255)
-   Test correct predictions: 72/113
-   Test Confusion Matrix: TP=54, FP=7, TN=18, FN=34
-
-5. Ensemble of: sgc_coral-anthropic3710, sgc_coral-geminipro10, sgc_coral-openailong
-   Validation Accuracy: 0.6827 (95% CI: 0.5842-0.7705)
-   Test Accuracy: 0.5752 (95% CI: 0.4787-0.6677)
-   Test correct predictions: 65/113
-   Test Confusion Matrix: TP=48, FP=8, TN=17, FN=40
 
