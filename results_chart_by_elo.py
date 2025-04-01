@@ -27,17 +27,36 @@ def load_elo_data(file_path):
     elo_df['Model'] = elo_df['Model'].str.lower()
     return elo_df
 
-def get_model_elo(model_name, elo_df):
-    """Get the ELO rating for a model."""
+def get_model_elo(model_name, elo_df, translations=None):
+    """Get the ELO rating for a model.
+    
+    Args:
+        model_name: The model name from results data
+        elo_df: DataFrame with ELO ratings
+        translations: Optional dictionary mapping result model names to ELO model names
+    
+    Returns:
+        The ELO rating for the model
+        
+    Raises:
+        ValueError: If the model is not found in ELO data
+    """
+    # Check if we have a translation for this model
+    if translations and model_name in translations:
+        elo_name = translations[model_name]
+        print(f"Translating '{model_name}' to '{elo_name}' for ELO lookup")
+    else:
+        elo_name = model_name
+    
     # Normalize model name
-    normalized_name = model_name.lower()
+    normalized_name = elo_name.lower()
     
     # Check if model is in ELO data
     matching_row = elo_df[elo_df['Model'] == normalized_name]
     
     if matching_row.empty:
         # Model not found in ELO data
-        raise ValueError(f"Model '{model_name}' not found in ELO data")
+        raise ValueError(f"Model '{model_name}' (looking for '{normalized_name}' in ELO data) not found")
     
     # Return the ELO score
     return matching_row['Arena Score'].iloc[0]
@@ -197,6 +216,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", required=True, help="Dataset name for the plot title")
     parser.add_argument('--input', required=True, help='Path to the input results CSV file')
     parser.add_argument('--elo', required=True, help='Path to the ELO ratings CSV file')
+    parser.add_argument('--elo-translation', help='Path to JSON file with model name translations')
     parser.add_argument('--output', required=True, help='Output image file path')
     parser.add_argument('--pvalue', help='File to save the p-value to')
     parser.add_argument('--projection', help='File to save ELO projection to')
@@ -218,6 +238,17 @@ if __name__ == "__main__":
         print(f"Error loading ELO data: {e}")
         sys.exit(1)
     
+    # Load model name translations if provided
+    translations = None
+    if args.elo_translation:
+        try:
+            with open(args.elo_translation, 'r') as f:
+                translations = json.load(f)
+            print(f"Loaded {len(translations)} model name translations")
+        except Exception as e:
+            print(f"Error loading translations file: {e}")
+            sys.exit(1)
+    
     # Add ELO ratings to the dataframe
     df['Display_Name'] = df.apply(name_model, axis=1)
     
@@ -225,7 +256,7 @@ if __name__ == "__main__":
     df['ELO'] = None
     for idx, row in df.iterrows():
         try:
-            df.at[idx, 'ELO'] = get_model_elo(row['Model'], elo_df)
+            df.at[idx, 'ELO'] = get_model_elo(row['Model'], elo_df, translations)
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
