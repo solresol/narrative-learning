@@ -69,39 +69,55 @@ def plot_elo_vs_log_error(df, output_prefix, dataset_name, pvalue_file=None):
     """Create a plot of ELO rating vs log error rate."""
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    # Clean the data, ensuring we have numeric values
+    df_clean = df.dropna(subset=['ELO', 'Neg Log Error']).copy()
+    df_clean['ELO'] = pd.to_numeric(df_clean['ELO'])
+    df_clean['Neg Log Error'] = pd.to_numeric(df_clean['Neg Log Error'])
+    
+    if df_clean.empty:
+        print("No valid data points after cleaning. Cannot create plot.")
+        return None
+
     # Create a scatter plot with different colors for each model
     sns.scatterplot(x='ELO', y='Neg Log Error',
                    hue='Display_Name',
-                   data=df,
+                   data=df_clean,
                    ax=ax)
-
-    df = df.dropna(subset=['ELO', 'Neg Log Error'])
     
     # Fit linear regression
     lr = LinearRegression()
-    lr.fit(df[['ELO']], df['Neg Log Error'])
+    lr.fit(df_clean[['ELO']], df_clean['Neg Log Error'])
     
     # Add statsmodels for detailed statistics
-    X = sm.add_constant(df[['ELO']])
-    model = sm.OLS(df['Neg Log Error'], X).fit()
-    print(model.summary())
+    try:
+        X = sm.add_constant(df_clean[['ELO']])
+        model = sm.OLS(df_clean['Neg Log Error'], X).fit()
+        print(model.summary())
+        
+        # Access specific statistics
+        slope = model.params['ELO']
+        intercept = model.params['const']
+        p_value = model.pvalues['ELO']
+        r_squared = model.rsquared
+    except Exception as e:
+        print(f"Warning: Could not fit statsmodels OLS model: {e}")
+        # Fall back to sklearn's LinearRegression results
+        slope = lr.coef_[0]
+        intercept = lr.intercept_
+        p_value = float('nan')  # We don't have p-value from sklearn
+        r_squared = lr.score(df_clean[['ELO']], df_clean['Neg Log Error'])
     
-    # Access specific statistics
-    slope = model.params['ELO']
-    intercept = model.params['const']
-    p_value = model.pvalues['ELO']
-    r_squared = model.rsquared
-    print(f"Slope: {slope:.4f}, p-value: {p_value:.4f}")
+    print(f"Slope: {slope:.4f}, p-value: {p_value if not np.isnan(p_value) else 'unknown'}")
     print(f"Intercept: {intercept:.4f}")
     print(f"R-squared: {r_squared:.4f}")
     
     # Save p-value to file if requested
-    if pvalue_file:
+    if pvalue_file and not np.isnan(p_value):
         with open(pvalue_file, 'w') as f:
             f.write(f"{p_value:.3f}")
 
     # Add a trend line
-    x_range = np.linspace(df['ELO'].min() - 50, df['ELO'].max() + 50, 100)
+    x_range = np.linspace(df_clean['ELO'].min() - 50, df_clean['ELO'].max() + 50, 100)
     ax.plot(x_range, intercept + slope * x_range, linestyle="dashed", color="red", label="Trend")
 
     # Add title and labels
@@ -111,7 +127,7 @@ def plot_elo_vs_log_error(df, output_prefix, dataset_name, pvalue_file=None):
     ax.grid(True, linestyle='--', alpha=0.7)
     
     # Draw baseline lines
-    draw_baselines(ax, df)
+    draw_baselines(ax, df_clean)
 
     # Add secondary axis with accuracy percentage
     ax2 = ax.twinx()
@@ -160,9 +176,18 @@ def calculate_projection(df, elo_threshold=None):
     Returns:
         Dictionary with projection results
     """
+    # Clean the data, ensuring we have numeric values
+    df_clean = df.dropna(subset=['ELO', 'Neg Log Error']).copy()
+    df_clean['ELO'] = pd.to_numeric(df_clean['ELO'])
+    df_clean['Neg Log Error'] = pd.to_numeric(df_clean['Neg Log Error'])
+    
+    if df_clean.empty:
+        print("No valid data points after cleaning. Cannot calculate projection.")
+        return None
+    
     # Find the best baseline accuracy
     baseline_cols = ['logistic regression', 'decision trees', 'dummy']
-    baseline_scores = {col: df[col].mean() for col in baseline_cols if col in df.columns}
+    baseline_scores = {col: df_clean[col].mean() for col in baseline_cols if col in df_clean.columns}
     
     if not baseline_scores:
         print("No baseline columns found in the dataset")
@@ -177,11 +202,6 @@ def calculate_projection(df, elo_threshold=None):
     print(f"Best baseline neg log error: {neg_log_best_baseline_error:.4f}")
     
     # Use the linear regression model to estimate ELO needed
-    df_clean = df.dropna(subset=['ELO', 'Neg Log Error'])
-    if df_clean.empty:
-        print("No valid ELO data for projection")
-        return None
-        
     lr = LinearRegression()
     lr.fit(df_clean[['ELO']], df_clean['Neg Log Error'])
     
