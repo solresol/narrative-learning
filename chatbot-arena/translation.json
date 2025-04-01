@@ -1,0 +1,10 @@
+{
+    "gemini-2.0-flash": "Gemini-2.0-Flash-001",
+    "gpt-4o": "ChatGPT-4o-latest (2025-01-29)",
+    "gpt-4o-mini": "GPT-4o-mini-2024-07-18",
+    "gemini-2.0-pro-exp": "Gemini-2.0-Pro-Exp-02-05",
+    "claude-3-7-sonnet-20250219": "Claude 3.7 Sonnet",
+    "deepseek-r1:70b": "DeepSeek-LLM-67B-Chat",
+    "llama3.3:latest": "Llama-3.3-70B-Instruct",
+    "gemma2:27b": "Gemma-2-27B-it"
+}
