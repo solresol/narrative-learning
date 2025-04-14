@@ -14,7 +14,7 @@ RESULTS_DIR := results
 
 .PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions ensembles
 
-all: wisconsin titanic southgermancredit ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png
+all: wisconsin titanic southgermancredit ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png outputs/titanic_by_elo.png outputs/wisconsin_by_elo.png outputs/southgermancredit_by_elo.png
 	echo Done
 
 ensembles: outputs/titanic_ensemble.csv outputs/wisconsin_ensemble.csv outputs/southgermancredit_ensemble.csv
@@ -96,6 +96,9 @@ $(RESULTS_DIR)/$(WISCONSIN_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(
 
 outputs/wisconsin_by_model_size.png outputs/wisconsin_model_pvalue.tex: outputs/wisconsin_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset Wisconsin --input outputs/wisconsin_results.csv --image outputs/wisconsin_by_model_size.png --pvalue outputs/wisconsin_model_pvalue.tex --projection outputs/wisconsin_model_projection.tex
+
+outputs/wisconsin_by_elo.png outputs/wisconsin_elo_pvalue.tex: outputs/wisconsin_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset Wisconsin --input outputs/wisconsin_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/wisconsin_by_elo.png --pvalue outputs/wisconsin_elo_pvalue.tex
 
 outputs/wisconsin_error_rate_by_herdan.png outputs/wisconsin_error_rate_by_herdan_pvalue.tex  outputs/wisconsin_error_rate_by_herdan_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_herdan.py
 	uv run results_error_rate_by_herdan.py --show  --image-output outputs/wisconsin_error_rate_by_herdan.png --pvalue-output outputs/wisconsin_error_rate_by_herdan_pvalue.tex  --slope-output outputs/wisconsin_error_rate_by_herdan_slope.tex outputs/wisconsin_results.csv
@@ -193,6 +196,9 @@ outputs/$(TITANIC_DATASET)-%.distribution.png outputs/$(TITANIC_DATASET)-%.distr
 outputs/titanic_by_model_size.png outputs/titanic_model_pvalue.tex: outputs/titanic_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset Titanic --input outputs/titanic_results.csv --image outputs/titanic_by_model_size.png --pvalue outputs/titanic_model_pvalue.tex --projection outputs/titanic_model_projection.tex
 
+outputs/titanic_by_elo.png outputs/titanic_elo_pvalue.tex: outputs/titanic_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset Titanic --input outputs/titanic_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/titanic_by_elo.png --pvalue outputs/titanic_elo_pvalue.tex
+
 outputs/titanic_error_rate_by_herdan.png outputs/titanic_error_rate_by_herdan_pvalue.tex  outputs/titanic_error_rate_by_herdan_slope.tex: outputs/titanic_results.csv results_error_rate_by_herdan.py
 	uv run results_error_rate_by_herdan.py --show  --image-output outputs/titanic_error_rate_by_herdan.png --pvalue-output outputs/titanic_error_rate_by_herdan_pvalue.tex  --slope-output outputs/titanic_error_rate_by_herdan_slope.tex outputs/titanic_results.csv
 
@@ -277,6 +283,9 @@ outputs/$(SGC_DATASET)-%.distribution.png outputs/$(SGC_DATASET)-%.distribution.
 
 outputs/southgermancredit_by_model_size.png outputs/southgermancredit_model_pvalue.tex: outputs/southgermancredit_results.csv results_chart_by_size.py
 	uv run results_chart_by_size.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --image outputs/southgermancredit_by_model_size.png --pvalue outputs/southgermancredit_model_pvalue.tex --projection outputs/southgermancredit_model_projection.tex
+
+outputs/southgermancredit_by_elo.png outputs/southgermancredit_elo_pvalue.tex: outputs/southgermancredit_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset "South German Credit" --input outputs/southgermancredit_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/southgermancredit_by_elo.png --pvalue outputs/southgermancredit_elo_pvalue.tex
 
 
 outputs/southgermancredit_error_rate_by_herdan.png outputs/southgermancredit_error_rate_by_herdan_pvalue.tex  outputs/southgermancredit_error_rate_by_herdan_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_herdan.py

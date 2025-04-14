@@ -59,7 +59,7 @@ def get_matrix_label_for_prediction(ground_truth, prediction, positive_label, ne
     else:
         return 'FP'
 
-def format_confusion_matrix(matrix: Dict, round_id: int, prompt: str, show_examples: bool = True) -> str:
+def format_confusion_matrix(matrix: Dict, round_id: int, prompt: str, negative_label : str, positive_label : str, show_examples: bool = True) -> str:
     """
     Format a confusion matrix as a printable string.
 
@@ -78,18 +78,20 @@ def format_confusion_matrix(matrix: Dict, round_id: int, prompt: str, show_examp
     answer += prompt.replace('\n', '\n\t')
     answer += "\n\nConfusion Matrix:\n"
 
+    predicted_positive_label = f'Predicted {positive_label}'
+    predicted_negative_label = f'Predicted {negative_label}'
     # Layout: rows are Actual values; columns are Predicted
-    answer += (f"{'':15s} {'Predicted Positive':20s} {'Predicted Negative':20s}\n")
+    answer += (f"{'':15s} {predicted_positive_label:20s} {predicted_negative_label:20s}\n")
 
     # For actual positive
     tp = matrix['TP']['count']
     fn = matrix['FN']['count']
-    answer += (f"{'Actual Positive':15s} {tp:20d} {fn:20d}\n")
+    answer += (f"{'Actual {positive_label}':15s} {tp:20d} {fn:20d}\n")
 
     # For actual negative
     fp = matrix['FP']['count']
     tn = matrix['TN']['count']
-    answer += (f"{'Actual Negative':15s} {fp:20d} {tn:20d}\n")
+    answer += (f"{'Actual {negative_label}':15s} {fp:20d} {tn:20d}\n")
     answer += "\n"
 
     # Calculate metrics
@@ -111,10 +113,10 @@ def format_confusion_matrix(matrix: Dict, round_id: int, prompt: str, show_examp
             examples = matrix[cell]['examples']
             if examples:
                 cell_full = {
-                    'TP': "True Positives",
-                    'FN': "False Negatives",
-                    'FP': "False Positives",
-                    'TN': "True Negatives"
+                    'TP': f"Correctly predicted {positive_label}",
+                    'FN': f"Falsely predicted {negative_label} when it should have been {positive_label}",
+                    'FP': f"Falsely predicted {positive_label} when it should have been {negative_label}",
+                    'TN': f"Correctly predicted {negative_label}"
                 }[cell]
                 ex = examples[0]
                 answer += (f"Examples for {cell_full}: (Correct answer: {ex['outcome']}, What the previous set of rules predicted: {ex['prediction']})\n")

@@ -326,7 +326,10 @@ class DatasetConfig:
             Formatted string representation
         """
         prompt = self.get_round_prompt(round_id)
-        return format_confusion_matrix(matrix, round_id, prompt, show_examples)
+        return format_confusion_matrix(matrix, round_id, prompt,
+                                       self.negative_label(),
+                                       self.positive_label(),
+                                       show_examples)
 
     def calculate_metric(self, matrix: Dict, metric_name: str) -> float:
         """

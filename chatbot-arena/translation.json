@@ -11,5 +11,6 @@
     "qwq:32b": "QwQ-32B",
     "claude-3-5-haiku-20241022": "Claude 3.5 Haiku (20241022)",
     "o1": "o1-2024-12-17",
-    "phi4:latest": "Phi-4"
+    "phi4:latest": "Phi-4",
+    "gemma3:27b": null
 }

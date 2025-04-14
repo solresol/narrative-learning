@@ -107,7 +107,7 @@ def plot_elo_vs_log_error(df, output_prefix, dataset_name, pvalue_file=None):
         p_value = float('nan')  # We don't have p-value from sklearn
         r_squared = lr.score(df_clean[['ELO']], df_clean['Neg Log Error'])
     
-    print(f"Slope: {slope:.4f}, p-value: {p_value if not np.isnan(p_value) else 'unknown'}")
+    print(f"Slope: {slope:.8f}, p-value: {p_value if not np.isnan(p_value) else 'unknown'}")
     print(f"Intercept: {intercept:.4f}")
     print(f"R-squared: {r_squared:.4f}")
     
@@ -213,7 +213,21 @@ def calculate_projection(df, elo_threshold=None):
     # elo = (neg_log_error - intercept) / slope
     elo_needed = (neg_log_best_baseline_error - intercept) / slope
     
-    print(f"ELO needed to beat best baseline: {elo_needed:.1f}")
+    print(f"ELO needed to beat best baseline: {elo_needed:.2f}")
+    
+    # Calculate how many points of ELO are needed for 1 percentage point of accuracy
+    error_for_one_percent = 1 - 0.99  # 1% error
+    neg_log_error_for_one_percent = -math.log10(error_for_one_percent)
+    error_for_zero_percent = 1 - 1.0  # 0% error (perfect accuracy)
+    neg_log_error_for_zero_percent = float('inf')  # This is effectively infinity
+    
+    # How much ELO needed to change accuracy by 1% from baseline
+    current_error = 1 - best_baseline_score
+    improved_error = current_error * 0.99  # 1% relative improvement
+    neg_log_improved_error = -math.log10(improved_error)
+    elo_for_one_percent_improvement = (neg_log_improved_error - intercept) / slope - (neg_log_best_baseline_error - intercept) / slope
+    
+    print(f"ELO needed for 1% accuracy improvement: {elo_for_one_percent_improvement:.2f}")
     
     # If a specific ELO threshold is provided, calculate the expected performance
     threshold_projection = None
