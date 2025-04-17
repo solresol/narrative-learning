@@ -8,6 +8,8 @@ SGC_DATASET := sgc_coral
 
 # Fake datasets
 ESPIONAGE_DATASET := espionage
+TIMETRAVEL_INSURANCE_DATASET := timetravel_insurance
+POTIONS_DATASET := potions
 
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
 # More problematic models: anthropic anthropic10
@@ -310,7 +312,19 @@ outputs/southgermancredit_ensemble.csv outputs/southgermancredit_ensemble_summar
 
 ######################################################################
 
+# Espionage dataset -- 0% noise
 $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql configs/$(ESPIONAGE_DATASET).config.json:
 	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "SecretHandshakeQuality" --feature1-mean 70 --feature1-stddev 10 --feature2-name "AccentThickness" --feature2-mean 30 --feature2-stddev 8 --target-column-name "AgentStatus" --primary-key-name "AgentID" --table-name "espionage_agents"  --splits-table-name "espionage_splits" --random-seed 42  --class-deciding-expression "SecretHandshakeQuality - AccentThickness > 35" --false-class-name "Loyal"  --true-class-name "DoubleAgent" --noise 0.0 --holdout 0.2 --validation 0.5 --output-db-file $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite --config-file  configs/$(ESPIONAGE_DATASET).config.json --use-uuid
 	sqlite3 $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql
 	rm -f $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite
+
+# Time travel insurance- 20% noise
+$(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sql configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json:
+	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "TimelineDeviation" --feature1-mean 12 --feature1-stddev 3  --feature2-name "ParadoxCount"  --feature2-mean 5  --feature2-stddev 2  --target-column-name "PolicyClaim"  --primary-key-name "IncidentID"  --table-name "time_travel_incidents"  --splits-table-name "time_travel_splits"  --random-seed 42  --class-deciding-expression "TimelineDeviation + 2 * ParadoxCount > 20"  --false-class-name "Denied"  --true-class-name "Approved" --noise 0.10  --holdout 0.2  --validation 0.5   --output-db-file $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sqlite  --config-file configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json --use-uuid
+	sqlite3 $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sql
+	rm -f $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite
+
+$(TEMPLATES_DIR)/$(POTIONS_DATASET).sql config/$(POTIONS_DATASET).config.json:
+	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "FizzIntensity"  --feature1-mean 40  --feature1-stddev 12  --feature2-name "ColourShift"  --feature2-mean 15  --feature2-stddev 5  --target-column-name "PotionEffectiveness"  --primary-key-name "PotionBatchID"  --table-name "magic_potions"  --splits-table-name "potion_splits"  --random-seed 42   --class-deciding-expression "3 * FizzIntensity + ColourShift > 140"  --false-class-name "Ineffective"  --true-class-name "Effective"  --noise 0.20  --holdout 0.2  --validation 0.5  --output-db-file $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite  --config-file config/$(POTIONS_DATASET).config.json --use-uuid
+	sqlite3 $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql .dump > $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql
+	rm -f $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite

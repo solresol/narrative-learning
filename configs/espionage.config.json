@@ -1,0 +1,12 @@
+{
+  "table_name": "espionage_agents",
+  "primary_key": "AgentID",
+  "target_field": "AgentStatus",
+  "splits_table": "espionage_splits",
+  "columns": [
+    "AgentID",
+    "SecretHandshakeQuality",
+    "AccentThickness",
+    "AgentStatus"
+  ]
+}
