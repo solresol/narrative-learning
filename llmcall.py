@@ -461,7 +461,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]:
         return claude_prediction(model, prompt, valid_predictions)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'o3', 'gpt-4.1', 'gpt-4.5-preview']:
         return openai_prediction(model, prompt, valid_predictions)
     if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp", "gemini-2.5-pro-exp-03-25"]:
         return gemini_prediction(model, prompt, valid_predictions)
@@ -530,7 +530,7 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]:
         return claude_reprompt(model, prompting_creation_prompt)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'gpt-4.5-preview']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1',  'o3', 'gpt-4.1', 'gpt-4.5-preview']:
         return openai_reprompt(model, prompting_creation_prompt)
     if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp", "gemini-2.5-pro-exp-03-25"]:
         return gemini_reprompt(model, prompting_creation_prompt)
