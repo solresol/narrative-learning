@@ -42,26 +42,11 @@ Hopefully, you should be able to say `make` and it should build everything.
 
 - Document the usage a bit better, including all the programs we have
 
-- Add Google Gemini as an option
-
 - Check to see if it's the overseer model or the underling model that has the most effect on the result
-
-- Create some baseline predictor results
-
-
-- Try claude sonnet 3.7
-
-- Try o1 pro and gpt4.5
 
 - Prompt complexity over time
 
-- Prompts without any context
 
-- Confirm that I can delete `initialise_titanic.py` and can get the same answers out of `initialise_database.py`
-
-- `dbtemplates/*.sqlite` seems really dangerous. Maybe we should keep it in `.sql` form; I'm not sure
-  how this will make it less likely to destroy a database of results, but at least it is less likely 
-  to end up with double the number of entities (as it often does).
 
 ## Ex to-do
 
