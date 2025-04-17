@@ -1,9 +1,13 @@
 .PRECIOUS: %.sqlite
 .SECONDARY: %.sqlite
 
+# Real datasets, mutated
 WISCONSIN_DATASET := wisconsin_exoplanets
 TITANIC_DATASET := titanic_medical
 SGC_DATASET := sgc_coral
+
+# Fake datasets
+ESPIONAGE_DATASET := espionage
 
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
 # More problematic models: anthropic anthropic10
@@ -243,7 +247,7 @@ $(RESULTS_DIR)/$(SGC_DATASET)-%.results.csv: $(RESULTS_DIR)/$(SGC_DATASET)-%.bes
 	. ./envs/southgermancredit/$*.env && uv run report-script.py --train --validation --test --csv $@
 
 $(RESULTS_DIR)/$(SGC_DATASET)-%.decoded-best-prompt.txt: $(RESULTS_DIR)/$(SGC_DATASET)-%.best-round.txt
-	. ./envs/southgermancredit/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/breast_cancer --verbose --output $@
+	. ./envs/southgermancredit/$*.env && uv run decode.py --round-id $(shell cat $<) --encoding-instructions conversions/southgermancredit --verbose --output $@
 
 southgermancredit: outputs/southgermancredit_results.csv
 	echo All SouthGermanCredit results are ready
@@ -306,3 +310,7 @@ outputs/southgermancredit_ensemble.csv outputs/southgermancredit_ensemble_summar
 
 ######################################################################
 
+$(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql configs/$(ESPIONAGE_DATASET).config.json:
+	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "SecretHandshakeQuality" --feature1-mean 70 --feature1-stddev 10 --feature2-name "AccentThickness" --feature2-mean 30 --feature2-stddev 8 --target-column-name "AgentStatus" --primary-key-name "AgentID" --table-name "espionage_agents"  --splits-table-name "espionage_splits" --random-seed 42  --class-deciding-expression "SecretHandshakeQuality - AccentThickness > 35" --false-class-name "Loyal"  --true-class-name "DoubleAgent" --noise 0.0 --holdout 0.2 --validation 0.5 --output-db-file $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite --config-file  configs/$(ESPIONAGE_DATASET).config.json --use-uuid
+	sqlite3 $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql
+	rm -f $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite
