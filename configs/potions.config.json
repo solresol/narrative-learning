@@ -1,0 +1,12 @@
+{
+  "table_name": "magic_potions",
+  "primary_key": "PotionBatchID",
+  "target_field": "PotionEffectiveness",
+  "splits_table": "potion_splits",
+  "columns": [
+    "PotionBatchID",
+    "FizzIntensity",
+    "ColourShift",
+    "PotionEffectiveness"
+  ]
+}

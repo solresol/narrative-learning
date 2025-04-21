@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#t!/usr/bin/env python
 
 import argparse
 import json
@@ -48,6 +48,29 @@ def create_tables(conn, args):
     
     # Insert default split
     cursor.execute("INSERT INTO splits (split_id, name) VALUES (0, 'default')")
+
+    cursor.execute(f'''
+      CREATE TABLE inferences (
+          round_id integer references rounds(round_id),
+          creation_time datetime default current_timestamp,
+          {args.primary_key_name} text references {args.table_name}({args.primary_key_name}),
+          narrative_text text,
+          llm_stderr text,
+          prediction text,
+          primary key (round_id, {args.primary_key_name})
+        );''')
+
+    cursor.execute('''
+      CREATE TABLE rounds (
+         round_id integer primary key autoincrement,
+         round_start datetime default current_timestamp,
+         split_id integer references splits(split_id),
+         prompt text,
+         reasoning_for_this_prompt text,
+         stderr_from_prompt_creation text
+      );''')
+
+    cursor.execute("INSERT INTO rounds (prompt, split_id) VALUES (?, 0)", [args.prompt])
     
     conn.commit()
 
@@ -226,7 +249,7 @@ def parse_arguments():
                         help='Proportion of the data to mark as held out (never to be used in training)')
     parser.add_argument('--validation', type=float, default=0.5,
                         help='Proportion of the holdout data to use for validation')
-    
+    parser.add_argument("--prompt", default="Choose randomly", help="Prompt to insert into the rounds table (default: 'Choose randomly').") 
     return parser.parse_args()
 
 

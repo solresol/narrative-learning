@@ -86,12 +86,14 @@ def format_confusion_matrix(matrix: Dict, round_id: int, prompt: str, negative_l
     # For actual positive
     tp = matrix['TP']['count']
     fn = matrix['FN']['count']
-    answer += (f"{'Actual {positive_label}':15s} {tp:20d} {fn:20d}\n")
+    actual_positive_label = f'Actual {positive_label}'
+    answer += (f"{actual_positive_label:15s} {tp:20d} {fn:20d}\n")
 
     # For actual negative
     fp = matrix['FP']['count']
     tn = matrix['TN']['count']
-    answer += (f"{'Actual {negative_label}':15s} {fp:20d} {tn:20d}\n")
+    actual_negative_label = f'Actual {negative_label}'
+    answer += (f"{actual_negative_label:15s} {fp:20d} {tn:20d}\n")
     answer += "\n"
 
     # Calculate metrics

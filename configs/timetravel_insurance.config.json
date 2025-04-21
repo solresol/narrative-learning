@@ -1,0 +1,12 @@
+{
+  "table_name": "time_travel_incidents",
+  "primary_key": "IncidentID",
+  "target_field": "PolicyClaim",
+  "splits_table": "time_travel_splits",
+  "columns": [
+    "IncidentID",
+    "TimelineDeviation",
+    "ParadoxCount",
+    "PolicyClaim"
+  ]
+}

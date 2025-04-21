@@ -107,4 +107,9 @@
 	"parameters": 1500,
 	"reasoning": false
     }
+    "gemini-2.5-pro-exp": {
+	"parameters": 1500,
+	"reasoning": false
+    }
+    
 }

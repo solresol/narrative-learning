@@ -14,36 +14,36 @@ POTIONS_DATASET := potions
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
 # More problematic models: anthropic anthropic10
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10 gemma gemini25 openaio3 openao310 openai41 openai4110
+MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10 gemini25 openaio3 openaio310 openai41 openai4110
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
-.PHONY: all wisconsin titanic sgc wisconsin-distributions titanic-distributions southgermancredit-distributions ensembles
+.PHONY: all wisconsin titanic sgc espionage timetravel_insurance potions wisconsin-distributions titanic-distributions southgermancredit-distributions espionage-distributions timetravel_insurance-distributions potions-distributions ensembles
 
-all: wisconsin titanic southgermancredit ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png outputs/titanic_by_elo.png outputs/wisconsin_by_elo.png outputs/southgermancredit_by_elo.png
+all: wisconsin titanic southgermancredit espionage timetravel_insurance potions ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png outputs/espionage_by_model_size.png outputs/timetravel_insurance_by_model_size.png outputs/potions_by_model_size.png outputs/titanic_by_elo.png outputs/wisconsin_by_elo.png outputs/southgermancredit_by_elo.png outputs/espionage_by_elo.png outputs/timetravel_insurance_by_elo.png outputs/potions_by_elo.png
 	echo Done
 
-ensembles: outputs/titanic_ensemble.csv outputs/wisconsin_ensemble.csv outputs/southgermancredit_ensemble.csv
+ensembles: outputs/titanic_ensemble.csv outputs/wisconsin_ensemble.csv outputs/southgermancredit_ensemble.csv outputs/espionage_ensemble.csv outputs/timetravel_insurance_ensemble.csv outputs/potions_ensemble.csv
 	echo All ensemble results are ready
 
 outputs/model_details.tex: model_details.json make_model_size_table.py
 	uv run make_model_size_table.py --output outputs/model_details.tex
 
-outputs/herdan-model-size-trend.png outputs/herdan-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_lexicostatistics_model_trend.py 
-	uv run results_lexicostatistics_model_trend.py --output outputs/herdan-model-size-trend.png --latex outputs/herdan-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+outputs/herdan-model-size-trend.png outputs/herdan-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv results_lexicostatistics_model_trend.py 
+	uv run results_lexicostatistics_model_trend.py --output outputs/herdan-model-size-trend.png --latex outputs/herdan-model-size-definitions.tex outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv
 
-outputs/promptwc-model-size-trend.png outputs/promptwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
-	uv run results_wordcount_model_trend.py --wordcount-type prompt --output outputs/promptwc-model-size-trend.png --latex outputs/promptwc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+outputs/promptwc-model-size-trend.png outputs/promptwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type prompt --output outputs/promptwc-model-size-trend.png --latex outputs/promptwc-model-size-definitions.tex outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv
 
-outputs/reasoningwc-model-size-trend.png outputs/reasoningwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
-	uv run results_wordcount_model_trend.py --wordcount-type reasoning --output outputs/reasoningwc-model-size-trend.png --latex outputs/reasoningwc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+outputs/reasoningwc-model-size-trend.png outputs/reasoningwc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type reasoning --output outputs/reasoningwc-model-size-trend.png --latex outputs/reasoningwc-model-size-definitions.tex outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv
 
-outputs/cumulativewc-model-size-trend.png outputs/cumulativewc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv results_wordcount_model_trend.py 
-	uv run results_wordcount_model_trend.py --wordcount-type cumulative --output outputs/cumulativewc-model-size-trend.png --latex outputs/cumulativewc-model-size-definitions.tex   outputs/wisconsin_results.csv   outputs/titanic_results.csv   outputs/southgermancredit_results.csv
+outputs/cumulativewc-model-size-trend.png outputs/cumulativewc-model-size-definitions.tex:  outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv results_wordcount_model_trend.py 
+	uv run results_wordcount_model_trend.py --wordcount-type cumulative --output outputs/cumulativewc-model-size-trend.png --latex outputs/cumulativewc-model-size-definitions.tex outputs/wisconsin_results.csv outputs/titanic_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv
 
 
-outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png:   outputs/titanic_results.csv  outputs/wisconsin_results.csv outputs/southgermancredit_results.csv resultssampleimpact.py
-	uv run resultssampleimpact.py --pivot outputs/samples-pivot-table.csv --image outputs/sample-count-impact-chart.png --stats-results outputs/impact-of-samples.txt --brief-stats outputs/impact-of-samples.tex outputs/southgermancredit_results.csv  outputs/titanic_results.csv  outputs/wisconsin_results.csv
+outputs/impact-of-samples.tex outputs/sample-count-impact-chart.png: outputs/titanic_results.csv outputs/wisconsin_results.csv outputs/southgermancredit_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv resultssampleimpact.py
+	uv run resultssampleimpact.py --pivot outputs/samples-pivot-table.csv --image outputs/sample-count-impact-chart.png --stats-results outputs/impact-of-samples.txt --brief-stats outputs/impact-of-samples.tex outputs/southgermancredit_results.csv outputs/titanic_results.csv outputs/wisconsin_results.csv outputs/espionage_results.csv outputs/timetravel_insurance_results.csv outputs/potions_results.csv
 
 ######################################################################
 
@@ -318,13 +318,213 @@ $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql configs/$(ESPIONAGE_DATASET).config.js
 	sqlite3 $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql
 	rm -f $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite
 
-# Time travel insurance- 20% noise
+$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.sqlite
+	. ./envs/espionage/$*.env && ./loop.sh
+
+$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sql
+	sqlite3 $@ < $<
+
+$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.best-round.txt
+	. ./envs/espionage/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.results.csv: $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-%.best-round.txt
+	. ./envs/espionage/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/espionage/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+espionage: outputs/espionage_results.csv
+	echo All Espionage results are ready
+
+outputs/espionage_results.csv: $(RESULTS_DIR)/$(ESPIONAGE_DATASET).baseline.json
+	uv run create_task_csv_file.py --task espionage --env-dir envs/espionage --output outputs/espionage_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(ESPIONAGE_DATASET).baseline.json --progress
+
+espionage-baseline: $(RESULTS_DIR)/$(ESPIONAGE_DATASET).baseline.json
+	echo Baseline created
+
+$(RESULTS_DIR)/$(ESPIONAGE_DATASET).baseline.json: configs/$(ESPIONAGE_DATASET).config.json $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-baseline.sqlite baseline.py
+	uv run baseline.py --config configs/$(ESPIONAGE_DATASET).config.json --database $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(ESPIONAGE_DATASET).baseline.json
+
+# Add these targets to depend on all models
+espionage-databases: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-$(model).sqlite)
+	@echo All Espionage databases are initialised
+
+espionage-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-$(model).estimate.txt)
+	echo All Espionage estimates are ready
+
+espionage-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-$(model).results.csv)
+	echo All Espionage results are ready
+
+espionage-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(ESPIONAGE_DATASET)-$(model).best-round.txt)
+	echo All Espionage best-round files are ready
+
+espionage-distributions: $(foreach model,$(MODELS),outputs/$(ESPIONAGE_DATASET)-$(model).distribution.png)
+	echo All Espionage distribution files are ready
+
+outputs/$(ESPIONAGE_DATASET)-%.distribution.png outputs/$(ESPIONAGE_DATASET)-%.distribution.txt: envs/espionage/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(ESPIONAGE_DATASET)-$*.distribution.png --fitted-distribution outputs/$(ESPIONAGE_DATASET)-$*.distribution.txt
+
+outputs/espionage_by_model_size.png outputs/espionage_model_pvalue.tex: outputs/espionage_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset Espionage --input outputs/espionage_results.csv --image outputs/espionage_by_model_size.png --pvalue outputs/espionage_model_pvalue.tex --projection outputs/espionage_model_projection.tex
+
+outputs/espionage_by_elo.png outputs/espionage_elo_pvalue.tex: outputs/espionage_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset Espionage --input outputs/espionage_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/espionage_by_elo.png --pvalue outputs/espionage_elo_pvalue.tex
+
+outputs/espionage_error_rate_by_herdan.png outputs/espionage_error_rate_by_herdan_pvalue.tex outputs/espionage_error_rate_by_herdan_slope.tex: outputs/espionage_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show --image-output outputs/espionage_error_rate_by_herdan.png --pvalue-output outputs/espionage_error_rate_by_herdan_pvalue.tex --slope-output outputs/espionage_error_rate_by_herdan_slope.tex outputs/espionage_results.csv
+
+outputs/espionage_error_rate_by_prompt_wordcount.png outputs/espionage_error_rate_by_prompt_wordcount_pvalue.tex outputs/espionage_error_rate_by_prompt_wordcount_slope.tex: outputs/espionage_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/espionage_error_rate_by_prompt_wordcount.png --pvalue-output outputs/espionage_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/espionage_error_rate_by_prompt_wordcount_slope.tex outputs/espionage_results.csv
+
+outputs/espionage_error_rate_by_reasoning_wordcount.png outputs/espionage_error_rate_by_reasoning_wordcount_pvalue.tex outputs/espionage_error_rate_by_reasoning_wordcount_slope.tex: outputs/espionage_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/espionage_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/espionage_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/espionage_error_rate_by_reasoning_wordcount_slope.tex outputs/espionage_results.csv
+
+outputs/espionage_error_rate_by_cumulative_wordcount.png outputs/espionage_error_rate_by_cumulative_wordcount_pvalue.tex outputs/espionage_error_rate_by_cumulative_wordcount_slope.tex: outputs/espionage_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/espionage_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/espionage_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/espionage_error_rate_by_cumulative_wordcount_slope.tex outputs/espionage_results.csv
+
+outputs/espionage_ensemble.csv outputs/espionage_ensemble_summary.txt: $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-*.sqlite configs/$(ESPIONAGE_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(ESPIONAGE_DATASET).config.json --progress-bar --summary outputs/espionage_ensemble_summary.txt --output outputs/espionage_ensemble.csv $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-*.sqlite
+
+######################################################################
+
+# Time travel insurance- 10% noise
 $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sql configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json:
 	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "TimelineDeviation" --feature1-mean 12 --feature1-stddev 3  --feature2-name "ParadoxCount"  --feature2-mean 5  --feature2-stddev 2  --target-column-name "PolicyClaim"  --primary-key-name "IncidentID"  --table-name "time_travel_incidents"  --splits-table-name "time_travel_splits"  --random-seed 42  --class-deciding-expression "TimelineDeviation + 2 * ParadoxCount > 20"  --false-class-name "Denied"  --true-class-name "Approved" --noise 0.10  --holdout 0.2  --validation 0.5   --output-db-file $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sqlite  --config-file configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json --use-uuid
 	sqlite3 $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sql
-	rm -f $(TEMPLATES_DIR)/$(ESPIONAGE_DATASET).sqlite
+	rm -f $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sqlite
 
-$(TEMPLATES_DIR)/$(POTIONS_DATASET).sql config/$(POTIONS_DATASET).config.json:
-	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "FizzIntensity"  --feature1-mean 40  --feature1-stddev 12  --feature2-name "ColourShift"  --feature2-mean 15  --feature2-stddev 5  --target-column-name "PotionEffectiveness"  --primary-key-name "PotionBatchID"  --table-name "magic_potions"  --splits-table-name "potion_splits"  --random-seed 42   --class-deciding-expression "3 * FizzIntensity + ColourShift > 140"  --false-class-name "Ineffective"  --true-class-name "Effective"  --noise 0.20  --holdout 0.2  --validation 0.5  --output-db-file $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite  --config-file config/$(POTIONS_DATASET).config.json --use-uuid
-	sqlite3 $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql .dump > $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql
+$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.sqlite
+	. ./envs/timetravel_insurance/$*.env && ./loop.sh
+
+$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).sql
+	sqlite3 $@ < $<
+
+$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.best-round.txt
+	. ./envs/timetravel_insurance/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.results.csv: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-%.best-round.txt
+	. ./envs/timetravel_insurance/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/timetravel_insurance/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+timetravel_insurance: outputs/timetravel_insurance_results.csv
+	echo All Time Travel Insurance results are ready
+
+outputs/timetravel_insurance_results.csv: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).baseline.json
+	uv run create_task_csv_file.py --task timetravel_insurance --env-dir envs/timetravel_insurance --output outputs/timetravel_insurance_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).baseline.json --progress
+
+timetravel_insurance-baseline: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).baseline.json
+	echo Baseline created
+
+$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).baseline.json: configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-baseline.sqlite baseline.py
+	uv run baseline.py --config configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json --database $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET).baseline.json
+
+# Add these targets to depend on all models
+timetravel_insurance-databases: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-$(model).sqlite)
+	@echo All Time Travel Insurance databases are initialised
+
+timetravel_insurance-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-$(model).estimate.txt)
+	echo All Time Travel Insurance estimates are ready
+
+timetravel_insurance-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-$(model).results.csv)
+	echo All Time Travel Insurance results are ready
+
+timetravel_insurance-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-$(model).best-round.txt)
+	echo All Time Travel Insurance best-round files are ready
+
+timetravel_insurance-distributions: $(foreach model,$(MODELS),outputs/$(TIMETRAVEL_INSURANCE_DATASET)-$(model).distribution.png)
+	echo All Time Travel Insurance distribution files are ready
+
+outputs/$(TIMETRAVEL_INSURANCE_DATASET)-%.distribution.png outputs/$(TIMETRAVEL_INSURANCE_DATASET)-%.distribution.txt: envs/timetravel_insurance/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(TIMETRAVEL_INSURANCE_DATASET)-$*.distribution.png --fitted-distribution outputs/$(TIMETRAVEL_INSURANCE_DATASET)-$*.distribution.txt
+
+outputs/timetravel_insurance_by_model_size.png outputs/timetravel_insurance_model_pvalue.tex: outputs/timetravel_insurance_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset "Time Travel Insurance" --input outputs/timetravel_insurance_results.csv --image outputs/timetravel_insurance_by_model_size.png --pvalue outputs/timetravel_insurance_model_pvalue.tex --projection outputs/timetravel_insurance_model_projection.tex
+
+outputs/timetravel_insurance_by_elo.png outputs/timetravel_insurance_elo_pvalue.tex: outputs/timetravel_insurance_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset "Time Travel Insurance" --input outputs/timetravel_insurance_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/timetravel_insurance_by_elo.png --pvalue outputs/timetravel_insurance_elo_pvalue.tex
+
+outputs/timetravel_insurance_error_rate_by_herdan.png outputs/timetravel_insurance_error_rate_by_herdan_pvalue.tex outputs/timetravel_insurance_error_rate_by_herdan_slope.tex: outputs/timetravel_insurance_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show --image-output outputs/timetravel_insurance_error_rate_by_herdan.png --pvalue-output outputs/timetravel_insurance_error_rate_by_herdan_pvalue.tex --slope-output outputs/timetravel_insurance_error_rate_by_herdan_slope.tex outputs/timetravel_insurance_results.csv
+
+outputs/timetravel_insurance_error_rate_by_prompt_wordcount.png outputs/timetravel_insurance_error_rate_by_prompt_wordcount_pvalue.tex outputs/timetravel_insurance_error_rate_by_prompt_wordcount_slope.tex: outputs/timetravel_insurance_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/timetravel_insurance_error_rate_by_prompt_wordcount.png --pvalue-output outputs/timetravel_insurance_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/timetravel_insurance_error_rate_by_prompt_wordcount_slope.tex outputs/timetravel_insurance_results.csv
+
+outputs/timetravel_insurance_error_rate_by_reasoning_wordcount.png outputs/timetravel_insurance_error_rate_by_reasoning_wordcount_pvalue.tex outputs/timetravel_insurance_error_rate_by_reasoning_wordcount_slope.tex: outputs/timetravel_insurance_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/timetravel_insurance_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/timetravel_insurance_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/timetravel_insurance_error_rate_by_reasoning_wordcount_slope.tex outputs/timetravel_insurance_results.csv
+
+outputs/timetravel_insurance_error_rate_by_cumulative_wordcount.png outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_pvalue.tex outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_slope.tex: outputs/timetravel_insurance_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_slope.tex outputs/timetravel_insurance_results.csv
+
+outputs/timetravel_insurance_ensemble.csv outputs/timetravel_insurance_ensemble_summary.txt: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-*.sqlite configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json --progress-bar --summary outputs/timetravel_insurance_ensemble_summary.txt --output outputs/timetravel_insurance_ensemble.csv $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-*.sqlite
+
+######################################################################
+
+# Potions dataset -- 20% noise
+$(TEMPLATES_DIR)/$(POTIONS_DATASET).sql configs/$(POTIONS_DATASET).config.json:
+	uv run ./random_classification_data_generator.py --number-of-data-points 200 --feature1-name "FizzIntensity"  --feature1-mean 40  --feature1-stddev 12  --feature2-name "ColourShift"  --feature2-mean 15  --feature2-stddev 5  --target-column-name "PotionEffectiveness"  --primary-key-name "PotionBatchID"  --table-name "magic_potions"  --splits-table-name "potion_splits"  --random-seed 42   --class-deciding-expression "3 * FizzIntensity + ColourShift > 140"  --false-class-name "Ineffective"  --true-class-name "Effective"  --noise 0.20  --holdout 0.2  --validation 0.5  --output-db-file $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite  --config-file configs/$(POTIONS_DATASET).config.json --use-uuid
+	sqlite3 $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite .dump > $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql
 	rm -f $(TEMPLATES_DIR)/$(POTIONS_DATASET).sqlite
+
+$(RESULTS_DIR)/$(POTIONS_DATASET)-%.best-round.txt: $(RESULTS_DIR)/$(POTIONS_DATASET)-%.sqlite
+	. ./envs/potions/$*.env && ./loop.sh
+
+$(RESULTS_DIR)/$(POTIONS_DATASET)-%.sqlite: $(TEMPLATES_DIR)/$(POTIONS_DATASET).sql
+	sqlite3 $@ < $<
+
+$(RESULTS_DIR)/$(POTIONS_DATASET)-%.estimate.txt: $(RESULTS_DIR)/$(POTIONS_DATASET)-%.best-round.txt
+	. ./envs/potions/$*.env && uv run report-script.py --estimate accuracy > $@
+
+$(RESULTS_DIR)/$(POTIONS_DATASET)-%.results.csv: $(RESULTS_DIR)/$(POTIONS_DATASET)-%.best-round.txt
+	. ./envs/potions/$*.env && uv run report-script.py --train --validation --test --show
+	. ./envs/potions/$*.env && uv run report-script.py --train --validation --test --csv $@
+
+potions: outputs/potions_results.csv
+	echo All Potions results are ready
+
+outputs/potions_results.csv: $(RESULTS_DIR)/$(POTIONS_DATASET).baseline.json
+	uv run create_task_csv_file.py --task potions --env-dir envs/potions --output outputs/potions_results.csv --model-details model_details.json --baseline $(RESULTS_DIR)/$(POTIONS_DATASET).baseline.json --progress
+
+potions-baseline: $(RESULTS_DIR)/$(POTIONS_DATASET).baseline.json
+	echo Baseline created
+
+$(RESULTS_DIR)/$(POTIONS_DATASET).baseline.json: configs/$(POTIONS_DATASET).config.json $(RESULTS_DIR)/$(POTIONS_DATASET)-baseline.sqlite baseline.py
+	uv run baseline.py --config configs/$(POTIONS_DATASET).config.json --database $(RESULTS_DIR)/$(POTIONS_DATASET)-baseline.sqlite --output $(RESULTS_DIR)/$(POTIONS_DATASET).baseline.json
+
+# Add these targets to depend on all models
+potions-databases: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(POTIONS_DATASET)-$(model).sqlite)
+	@echo All Potions databases are initialised
+
+potions-estimates: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(POTIONS_DATASET)-$(model).estimate.txt)
+	echo All Potions estimates are ready
+
+potions-results: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(POTIONS_DATASET)-$(model).results.csv)
+	echo All Potions results are ready
+
+potions-best: $(foreach model,$(MODELS),$(RESULTS_DIR)/$(POTIONS_DATASET)-$(model).best-round.txt)
+	echo All Potions best-round files are ready
+
+potions-distributions: $(foreach model,$(MODELS),outputs/$(POTIONS_DATASET)-$(model).distribution.png)
+	echo All Potions distribution files are ready
+
+outputs/$(POTIONS_DATASET)-%.distribution.png outputs/$(POTIONS_DATASET)-%.distribution.txt: envs/potions/%.env
+	uv run resultdistribution.py --env-file $< --distribution-image outputs/$(POTIONS_DATASET)-$*.distribution.png --fitted-distribution outputs/$(POTIONS_DATASET)-$*.distribution.txt
+
+outputs/potions_by_model_size.png outputs/potions_model_pvalue.tex: outputs/potions_results.csv results_chart_by_size.py
+	uv run results_chart_by_size.py --dataset "Potions" --input outputs/potions_results.csv --image outputs/potions_by_model_size.png --pvalue outputs/potions_model_pvalue.tex --projection outputs/potions_model_projection.tex
+
+outputs/potions_by_elo.png outputs/potions_elo_pvalue.tex: outputs/potions_results.csv results_chart_by_elo.py chatbot-arena/elo.csv chatbot-arena/translation.json
+	uv run results_chart_by_elo.py --dataset "Potions" --input outputs/potions_results.csv --elo chatbot-arena/elo.csv --elo-translation chatbot-arena/translation.json --output outputs/potions_by_elo.png --pvalue outputs/potions_elo_pvalue.tex
+
+outputs/potions_error_rate_by_herdan.png outputs/potions_error_rate_by_herdan_pvalue.tex outputs/potions_error_rate_by_herdan_slope.tex: outputs/potions_results.csv results_error_rate_by_herdan.py
+	uv run results_error_rate_by_herdan.py --show --image-output outputs/potions_error_rate_by_herdan.png --pvalue-output outputs/potions_error_rate_by_herdan_pvalue.tex --slope-output outputs/potions_error_rate_by_herdan_slope.tex outputs/potions_results.csv
+
+outputs/potions_error_rate_by_prompt_wordcount.png outputs/potions_error_rate_by_prompt_wordcount_pvalue.tex outputs/potions_error_rate_by_prompt_wordcount_slope.tex: outputs/potions_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type prompt --show --image-output outputs/potions_error_rate_by_prompt_wordcount.png --pvalue-output outputs/potions_error_rate_by_prompt_wordcount_pvalue.tex --slope-output outputs/potions_error_rate_by_prompt_wordcount_slope.tex outputs/potions_results.csv
+
+outputs/potions_error_rate_by_reasoning_wordcount.png outputs/potions_error_rate_by_reasoning_wordcount_pvalue.tex outputs/potions_error_rate_by_reasoning_wordcount_slope.tex: outputs/potions_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type reasoning --show --image-output outputs/potions_error_rate_by_reasoning_wordcount.png --pvalue-output outputs/potions_error_rate_by_reasoning_wordcount_pvalue.tex --slope-output outputs/potions_error_rate_by_reasoning_wordcount_slope.tex outputs/potions_results.csv
+
+outputs/potions_error_rate_by_cumulative_wordcount.png outputs/potions_error_rate_by_cumulative_wordcount_pvalue.tex outputs/potions_error_rate_by_cumulative_wordcount_slope.tex: outputs/potions_results.csv results_error_rate_by_wordcount.py
+	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/potions_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/potions_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/potions_error_rate_by_cumulative_wordcount_slope.tex outputs/potions_results.csv
+
+outputs/potions_ensemble.csv outputs/potions_ensemble_summary.txt: $(RESULTS_DIR)/$(POTIONS_DATASET)-*.sqlite configs/$(POTIONS_DATASET).config.json results_ensembling.py
+	uv run results_ensembling.py --config configs/$(POTIONS_DATASET).config.json --progress-bar --summary outputs/potions_ensemble_summary.txt --output outputs/potions_ensemble.csv $(RESULTS_DIR)/$(POTIONS_DATASET)-*.sqlite
