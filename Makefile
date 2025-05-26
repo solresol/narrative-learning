@@ -14,7 +14,7 @@ POTIONS_DATASET := potions
 # Models not to add (they generally don't work)... phi falcon falcon10 gemma llamaphi deepseek qwq llama
 # More problematic models: anthropic anthropic10
 # It turns out that anthropic and anthropic10 were using haiku for training, and sonnet for inference! No wonder it was so expensive and lackluster
-MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10 gemini25 openaio3 openaio310 openai41 openai4110
+MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 anthropic37 anthropic3710 gemini geminipro gemini10 geminipro10 anthropic anthropic10 gemini25 openaio3 openaio310 openai41 openai4110 opus40 opus4010 sonnet40 sonnet4010
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
