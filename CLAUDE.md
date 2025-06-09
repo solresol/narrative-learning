@@ -30,6 +30,10 @@ The project evaluates various LLMs including:
 - `results_error_rate_by_wordcount.py`: Analyze error rates relative to prompt complexity
 - `results_error_rate_by_herdan.py`: Analyze error rates relative to lexical complexity
 - `results_ensembling.py`: Create ensemble models from multiple base models
+  - Now supports directory-based model loading with `--env-dir`
+  - Integrates with `release-dates.csv` to track model release dates
+  - Can output best ensemble for each distinct model release date
+  - Example: `python results_ensembling.py --env-dir envs/titanic --output outputs/titanic_ensemble.csv`
 - `resultssampleimpact.py`: Measure the impact of sample count on model performance
 
 ## Code Style
@@ -43,12 +47,13 @@ The project evaluates various LLMs including:
 - `configs/`: Configuration JSON files for datasets
 - `datasets/`: CSV data files
 - `dbtemplates/`: SQL templates for database initialization
-- `envs/`: Environment files for different models
+- `envs/`: Environment files for different models (structure: envs/{dataset}/{model}.env)
 - `modules/`: Core functionality modules
 - `results/`: Output files and SQLite databases
 - `outputs/`: Generated charts, tables, and CSV results
 - `obfuscations/`: Dataset obfuscation plans
 - `conversions/`: Dataset conversion/encoding guidelines
+- `release-dates.csv`: Model release dates for chronological ensembling
 
 ## Key Scripts
 - `initialise_database.py`: Set up task databases
