@@ -53,3 +53,33 @@ Hopefully, you should be able to say `make` and it should build everything.
 - _Try phi4-mini as an evaluator_ -- it didn't work well, and gave nonsense results. Pity, it was 
   fast and cheap to run
 
+
+### PostgreSQL utilities
+
+The environment files under `envs/` can be imported into PostgreSQL using the
+SQL statements in `investigations_data.sql`. The accompanying schema is defined
+in `investigations_schema.sql` and creates three tables:
+
+* `datasets` – `dataset` primary key and `config_file` path for each dataset
+* `models` – training and inference model names with optional `example_count`
+  and `patience` values
+* `investigations` – links a dataset and model, records the `sqlite_database`,
+  `round_tracking_file`, optional `dump_file` and the current `round_number`
+
+Load the schema and initial data with:
+
+```bash
+psql "$POSTGRES_DSN" -f investigations_schema.sql
+psql "$POSTGRES_DSN" -f investigations_data.sql
+```
+
+Run the training loop with:
+
+```bash
+uv run investigate.py <investigation-id>
+```
+
+`investigate.py` reads the settings for the given investigation ID from
+PostgreSQL and updates the `round_number` field after each successful round.
+The initial value should be loaded from the `round_tracking_file` referenced in
+the `investigations` table (no loader script exists yet).
