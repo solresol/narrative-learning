@@ -38,6 +38,34 @@ This approach offers several potential advantages:
 
 Hopefully, you should be able to say `make` and it should build everything.
 
+In practice, I'm not sure it all works. I tend to do this:
+
+`make potions-databases potions-baseline potions-best outputs/potions_results.csv`
+
+(for each of `titanic`, `southgermancredit`, `wisconsin`, `timetravel` and `espionage`)
+
+Then copy everything from `outputs/*_results.csv`
+
+Then, run the ensemble analysis:
+
+```bash
+# Generate ensemble results for each dataset using the env directory structure
+python results_ensembling.py --env-dir envs/titanic --output outputs/titanic_ensemble.csv --summary outputs/titanic_ensemble_summary.txt
+python results_ensembling.py --env-dir envs/wisconsin --output outputs/wisconsin_ensemble.csv --summary outputs/wisconsin_ensemble_summary.txt
+python results_ensembling.py --env-dir envs/southgermancredit --output outputs/southgermancredit_ensemble.csv --summary outputs/southgermancredit_ensemble_summary.txt
+python results_ensembling.py --env-dir envs/potions --output outputs/potions_ensemble.csv --summary outputs/potions_ensemble_summary.txt
+python results_ensembling.py --env-dir envs/timetravel_insurance --output outputs/timetravel_insurance_ensemble.csv --summary outputs/timetravel_insurance_ensemble_summary.txt
+python results_ensembling.py --env-dir envs/espionage --output outputs/espionage_ensemble.csv --summary outputs/espionage_ensemble_summary.txt
+```
+
+The ensemble script will automatically organize results by model release dates from the `release-dates.csv` file.
+
+Copy these into the `papers/narrative-learning` directory.
+
+
+
+
+
 ## To-do
 
 - Document the usage a bit better, including all the programs we have
