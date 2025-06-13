@@ -22,7 +22,7 @@ INSERT INTO models(model,training_model,inference_model,example_count,patience) 
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai10o1','o1','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai41','gpt-4.1','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai4110','gpt-4.1','gpt-4o-mini',10,3) ON CONFLICT DO NOTHING;
-INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai35','gpt-3.5','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
+INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai35','gpt-3.5-turbo','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai45','gpt-4.5-preview','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openai4510','gpt-4.5-preview','gpt-4o-mini',10,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('openailong','gpt-4o-mini','gpt-4o-mini',3,3) ON CONFLICT DO NOTHING;
