@@ -6,11 +6,14 @@ import pandas as pd
 import os
 import itertools
 import datasetconfig
-from typing import List, Dict, Tuple
+import glob
+import re
+from typing import List, Dict, Tuple, Optional
 import sys
+from datetime import datetime
 from statsmodels.stats.proportion import proportion_confint
 
-def get_predictions_for_round(config, round_id, validation=False):
+def get_predictions_for_round(config, round_id, validation=False, use_decodex=True):
     """Get predictions and ground truth for a specific round.
     
     Args:
@@ -23,13 +26,14 @@ def get_predictions_for_round(config, round_id, validation=False):
     
     # Get the split ID for this round
     split_id = config.get_split_id(round_id)
+    decodex_column = "decodex" if use_decodex else config.primary_key
     
     # Query to get predictions for the specified round_id
     # When validation=True, get validation set data (validation=1)
     # When validation=False, get test set data (holdout=1, validation=0)
     if validation:
         query = f"""
-            SELECT m.decodex, m.{config.target_field}, i.prediction
+            SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
             FROM inferences i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
@@ -39,7 +43,7 @@ def get_predictions_for_round(config, round_id, validation=False):
         """
     else:
         query = f"""
-            SELECT m.decodex, m.{config.target_field}, i.prediction
+            SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
             FROM inferences i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
@@ -120,26 +124,39 @@ def calculate_metrics(predictions_df, ensemble_name="ensemble"):
     }
 
 
-def process_database_combinations(config_path, db_paths, k=3, verbose=False, progress_bar=False):
+def process_database_combinations(config_path, db_paths, model_names, k=3, verbose=False, progress_bar=False, use_decodex=True):
     """Process all combinations of k databases and evaluate ensemble performance.
     
     Uses validation data to determine the best combinations, then scores them on test data.
+    
+    Args:
+        config_path: Path to the configuration file
+        db_paths: List of database paths
+        model_names: List of model names corresponding to db_paths
+        k: Number of models to include in each ensemble
+        verbose: Whether to print detailed progress
+        progress_bar: Whether to show a progress bar
+        use_decodex: Whether to use the decodex column for matching predictions
     """
     validation_results = []
     test_results = []
     
-    # Generate all combinations of k databases
-    db_combinations = list(itertools.combinations(db_paths, k))
+    # Generate all combinations of indices
+    indices = list(range(len(db_paths)))
+    index_combinations = list(itertools.combinations(indices, k))
     
     if verbose:
-        print(f"Processing {len(db_combinations)} combinations of {k} databases...")
+        print(f"Processing {len(index_combinations)} combinations of {k} databases...")
 
-    iterator = db_combinations
+    iterator = index_combinations
     if progress_bar:
         import tqdm
-        iterator = tqdm.tqdm(db_combinations)
+        iterator = tqdm.tqdm(index_combinations)
 
-    for combo in iterator:
+    for combo_indices in iterator:
+        combo = [db_paths[i] for i in combo_indices]
+        combo_models = [model_names[i] for i in combo_indices]
+        
         if verbose:
             print(f"\nEvaluating combination: {[db for db in combo]}")
         
@@ -147,7 +164,7 @@ def process_database_combinations(config_path, db_paths, k=3, verbose=False, pro
         test_predictions_list = []
         models_info = []
 
-        for db_path in combo:
+        for i, db_path in enumerate(combo):
             # Connect to the database
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             
@@ -159,13 +176,15 @@ def process_database_combinations(config_path, db_paths, k=3, verbose=False, pro
             best_round_id = config.get_best_round_id(split_id)
             
             # Get model name from database path
-            model_name = os.path.basename(db_path)[:-7]
+            model_name = os.path.basename(db_path)[:-7] 
+            # Get the model name from the provided list
+            model_name_from_env = combo_models[i]
             
             # Get validation predictions for determining best combinations
-            val_predictions_df = get_predictions_for_round(config, best_round_id, validation=True)
+            val_predictions_df = get_predictions_for_round(config, best_round_id, validation=True, use_decodex=use_decodex)
             
             # Get test predictions for final evaluation
-            test_predictions_df = get_predictions_for_round(config, best_round_id, validation=False)
+            test_predictions_df = get_predictions_for_round(config, best_round_id, validation=False, use_decodex=use_decodex)
 
             if verbose:
                 print(f"{db_path=} val:{val_predictions_df.shape=} test:{test_predictions_df.shape=}")
@@ -176,6 +195,7 @@ def process_database_combinations(config_path, db_paths, k=3, verbose=False, pro
                 models_info.append({
                     'db_path': db_path,
                     'model_name': model_name,
+                    'model_name_from_env': model_name_from_env,
                     'best_round_id': best_round_id
                 })
                 
@@ -203,6 +223,7 @@ def process_database_combinations(config_path, db_paths, k=3, verbose=False, pro
         # Add to validation results
         val_result = {
             'models': [model['model_name'] for model in models_info],
+            'model_names': [model['model_name_from_env'] for model in models_info],
             'model_rounds': [model['best_round_id'] for model in models_info],
             'accuracy': val_metrics['accuracy'],
             'lower_bound': val_metrics['lower_bound'],
@@ -223,6 +244,7 @@ def process_database_combinations(config_path, db_paths, k=3, verbose=False, pro
         # Add to test results (with same index as validation results for later matching)
         test_result = {
             'models': [model['model_name'] for model in models_info],
+            'model_names': [model['model_name_from_env'] for model in models_info],
             'model_rounds': [model['best_round_id'] for model in models_info],
             'accuracy': test_metrics['accuracy'],
             'lower_bound': test_metrics['lower_bound'],
@@ -248,6 +270,85 @@ def find_best_combinations(results, top_n=5):
     
     # Return top N
     return sorted_results[:top_n]
+
+
+def parse_env_file(env_file_path):
+    """Parse environment file to extract database path and model name.
+    
+    Args:
+        env_file_path: Path to the .env file
+        
+    Returns:
+        Tuple of (database_path, config_path, model_name)
+    """
+    database_path = None
+    config_path = None
+    model_name = None
+    
+    with open(env_file_path, 'r') as f:
+        for line in f:
+            if line.startswith('export NARRATIVE_LEARNING_DATABASE='):
+                database_path = line.strip().split('=', 1)[1].strip()
+            elif line.startswith('export NARRATIVE_LEARNING_CONFIG='):
+                config_path = line.strip().split('=', 1)[1].strip()
+            elif line.startswith('export NARRATIVE_LEARNING_TRAINING_MODEL='):
+                model_name = line.strip().split('=', 1)[1].strip()
+    
+    return database_path, config_path, model_name
+
+
+def get_model_release_date(model_name, release_dates_df):
+    """Get the release date for a model.
+    
+    Args:
+        model_name: The name of the model
+        release_dates_df: DataFrame containing release dates
+        
+    Returns:
+        Release date as a datetime object or None if not found
+    """
+    if model_name not in release_dates_df['Model Name'].values:
+        return None
+    
+    date_str = release_dates_df.loc[release_dates_df['Model Name'] == model_name, 'Release Date'].iloc[0]
+    return datetime.strptime(date_str, '%d %b %Y')
+
+
+def find_best_combinations_by_date(results, release_dates_df):
+    """Find the best combination for each distinct release date.
+    
+    Args:
+        results: List of ensemble results
+        release_dates_df: DataFrame containing model release dates
+        
+    Returns:
+        Dictionary mapping release dates to the best ensemble for that date
+    """
+    # Add release date to each result
+    for result in results:
+        # Find the max release date among the models in this ensemble
+        max_date = None
+        for model in result['model_names']:
+            date = get_model_release_date(model, release_dates_df)
+            if date is None:
+                continue
+            if max_date is None or date > max_date:
+                max_date = date
+        result['release_date'] = max_date
+    
+    # Filter out results with no valid release date
+    valid_results = [r for r in results if r['release_date'] is not None]
+    
+    # Group by date and find best for each date
+    best_by_date = {}
+    for result in valid_results:
+        date_str = result['release_date'].strftime('%Y-%m-%d')
+        # For matched_results, the key is 'val_accuracy' instead of 'accuracy'
+        accuracy_key = 'val_accuracy' if 'val_accuracy' in result else 'accuracy'
+        if date_str not in best_by_date or result[accuracy_key] > best_by_date[date_str][accuracy_key]:
+            best_by_date[date_str] = result
+    
+    return best_by_date
 
 
 def format_results_summary(results_list, top_n=5):
@@ -301,6 +402,62 @@ def export_results_to_csv(results, output_path):
     return df
 
 
+def format_validation_test_results_by_date(validation_results, test_results, release_dates_df):
+    """Format the validation and test results sorted by release date.
+    
+    Finds the best ensemble for each distinct release date.
+    
+    Args:
+        validation_results: List of validation results
+        test_results: List of test results (matched to validation_results)
+        release_dates_df: DataFrame containing model release dates
+    """
+    # Match validation and test results by index
+    matched_results = []
+    for i in range(len(validation_results)):
+        result = {
+            'models': validation_results[i]['models'],
+            'model_names': validation_results[i]['model_names'],
+            'model_rounds': validation_results[i]['model_rounds'],
+            'val_accuracy': validation_results[i]['accuracy'],
+            'val_lower_bound': validation_results[i]['lower_bound'],
+            'val_upper_bound': validation_results[i]['upper_bound'],
+            'test_accuracy': test_results[i]['accuracy'],
+            'test_lower_bound': test_results[i]['lower_bound'],
+            'test_upper_bound': test_results[i]['upper_bound'],
+            'test_total': test_results[i]['total'],
+            'test_correct': test_results[i]['correct'],
+            'test_confusion_matrix': test_results[i]['confusion_matrix']
+        }
+        matched_results.append(result)
+    
+    # Get best combinations by date
+    best_by_date = find_best_combinations_by_date(matched_results, release_dates_df)
+    
+    # Sort by date (most recent first)
+    sorted_dates = sorted(best_by_date.keys(), reverse=True)
+    
+    summary = f"Best Ensemble Combinations by Release Date:\n\n"
+    
+    for i, date_str in enumerate(sorted_dates):
+        result = best_by_date[date_str]
+        
+        summary += f"{i+1}. Release Date: {date_str}\n"
+        summary += f"   Ensemble of: {', '.join(result['models'])}\n"
+        summary += f"   Model Names: {', '.join(result['model_names'])}\n"
+        summary += f"   Validation Accuracy: {result['val_accuracy']:.4f} (95% CI: {result['val_lower_bound']:.4f}-{result['val_upper_bound']:.4f})\n"
+        summary += f"   Test Accuracy: {result['test_accuracy']:.4f} (95% CI: {result['test_lower_bound']:.4f}-{result['test_upper_bound']:.4f})\n"
+        summary += f"   Test correct predictions: {result['test_correct']}/{result['test_total']}\n"
+        
+        if all(key in result['test_confusion_matrix'] for key in ['TP', 'FP', 'TN', 'FN']):
+            cm = result['test_confusion_matrix']
+            summary += f"   Test Confusion Matrix: TP={cm['TP']}, FP={cm['FP']}, TN={cm['TN']}, FN={cm['FN']}\n"
+        
+        summary += "\n"
+    
+    return summary
+
+
 def format_validation_test_results_summary(validation_results, test_results, top_n=5):
     """Format the validation and test results into a readable summary.
     
@@ -322,6 +479,8 @@ def format_validation_test_results_summary(validation_results, test_results, top
         test_result = test_results[idx]
         
         summary += f"{i+1}. Ensemble of: {', '.join(val_result['models'])}\n"
+        if 'model_names' in val_result:
+            summary += f"   Model Names: {', '.join(val_result['model_names'])}\n"
         summary += f"   Validation Accuracy: {val_result['accuracy']:.4f} (95% CI: {val_result['lower_bound']:.4f}-{val_result['upper_bound']:.4f})\n"
         summary += f"   Test Accuracy: {test_result['accuracy']:.4f} (95% CI: {test_result['lower_bound']:.4f}-{test_result['upper_bound']:.4f})\n"
         summary += f"   Test correct predictions: {test_result['correct']}/{test_result['total']}\n"
@@ -335,10 +494,16 @@ def format_validation_test_results_summary(validation_results, test_results, top
     return summary
 
 
-def export_validation_test_results_to_csv(validation_results, test_results, output_path):
+def export_validation_test_results_to_csv(validation_results, test_results, output_path, release_dates_df=None):
     """Export the validation and test results to a CSV file.
     
     Includes both validation and test metrics for each combination.
+    
+    Args:
+        validation_results: List of validation results
+        test_results: List of test results (matched to validation_results)
+        output_path: Path to save the CSV file
+        release_dates_df: Optional DataFrame containing model release dates
     """
     # Create a flattened list for DataFrame
     flat_results = []
@@ -361,6 +526,24 @@ def export_validation_test_results_to_csv(validation_results, test_results, outp
             'test_correct': test_result['correct'],
         }
         
+        # Include model names if available
+        if 'model_names' in val_result:
+            flat_result['model_names'] = ','.join(val_result['model_names'])
+        
+        # Add release date if release_dates_df is provided
+        if release_dates_df is not None and 'model_names' in val_result:
+            # Find the max release date among the models in this ensemble
+            max_date = None
+            for model in val_result['model_names']:
+                date = get_model_release_date(model, release_dates_df)
+                if date is None:
+                    continue
+                if max_date is None or date > max_date:
+                    max_date = date
+            
+            if max_date is not None:
+                flat_result['release_date'] = max_date.strftime('%Y-%m-%d')
+        
         # Add confusion matrix values if available
         val_cm = val_result['confusion_matrix']
         test_cm = test_result['confusion_matrix']
@@ -374,7 +557,78 @@ def export_validation_test_results_to_csv(validation_results, test_results, outp
     
     # Create DataFrame and export
     df = pd.DataFrame(flat_results)
-    df.sort_values('validation_accuracy', ascending=False, inplace=True)
+    
+    # Sort by release date (if available) and then by validation accuracy
+    if release_dates_df is not None and 'release_date' in df.columns and not df['release_date'].isna().all():
+        df.sort_values(['release_date', 'validation_accuracy'], ascending=[False, False], inplace=True)
+    else:
+        df.sort_values('validation_accuracy', ascending=False, inplace=True)
+    
+    df.to_csv(output_path, index=False)
+    
+    return df
+
+
+def export_best_by_date_to_csv(validation_results, test_results, output_path, release_dates_df):
+    """Export the best ensemble for each distinct release date to a CSV file.
+    
+    Args:
+        validation_results: List of validation results
+        test_results: List of test results (matched to validation_results)
+        output_path: Path to save the CSV file
+        release_dates_df: DataFrame containing model release dates
+    """
+    # Match validation and test results by index
+    matched_results = []
+    for i in range(len(validation_results)):
+        result = {
+            'models': validation_results[i]['models'],
+            'model_names': validation_results[i]['model_names'],
+            'model_rounds': validation_results[i]['model_rounds'],
+            'val_accuracy': validation_results[i]['accuracy'],
+            'val_lower_bound': validation_results[i]['lower_bound'],
+            'val_upper_bound': validation_results[i]['upper_bound'],
+            'test_accuracy': test_results[i]['accuracy'],
+            'test_lower_bound': test_results[i]['lower_bound'],
+            'test_upper_bound': test_results[i]['upper_bound'],
+            'test_total': test_results[i]['total'],
+            'test_correct': test_results[i]['correct'],
+            'test_confusion_matrix': test_results[i]['confusion_matrix']
+        }
+        matched_results.append(result)
+    
+    # Get best combinations by date
+    best_by_date = find_best_combinations_by_date(matched_results, release_dates_df)
+    
+    # Create a list for DataFrame
+    flat_results = []
+    for date_str, result in best_by_date.items():
+        flat_result = {
+            'release_date': date_str,
+            'models': ','.join(result['models']),
+            'model_names': ','.join(result['model_names']),
+            'model_rounds': ','.join(map(str, result['model_rounds'])),
+            'validation_accuracy': result['val_accuracy'],
+            'validation_lower_bound': result['val_lower_bound'],
+            'validation_upper_bound': result['val_upper_bound'],
+            'test_accuracy': result['test_accuracy'],
+            'test_lower_bound': result['test_lower_bound'],
+            'test_upper_bound': result['test_upper_bound'],
+            'test_total': result['test_total'],
+            'test_correct': result['test_correct'],
+        }
+        
+        # Add confusion matrix values if available
+        cm = result['test_confusion_matrix']
+        for key in ['TP', 'FP', 'TN', 'FN']:
+            if key in cm:
+                flat_result[f'test_{key}'] = cm[key]
+        
+        flat_results.append(flat_result)
+    
+    # Create DataFrame and export
+    df = pd.DataFrame(flat_results)
+    df.sort_values('release_date', ascending=False, inplace=True)
     df.to_csv(output_path, index=False)
     
     return df
@@ -382,35 +636,152 @@ def export_validation_test_results_to_csv(validation_results, test_results, outp
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate ensemble performance using majority voting")
-    parser.add_argument("--config", required=True, help="Path to the configuration file")
+    parser.add_argument("--config", help="Path to the configuration file (optional if env files are consistent)")
+    parser.add_argument("--env-dir", help="Directory containing .env files to analyze")
     parser.add_argument("--output", help="Output CSV file path for detailed results")
     parser.add_argument("--summary", help="Output text file path for summary")
     parser.add_argument("--k", type=int, default=3, help="Number of models to ensemble (default: 3)")
     parser.add_argument("--verbose", action="store_true", help="Print detailed progress")
-    parser.add_argument("--progress-bar", action="store_true", help="Show progress bar")    
-    parser.add_argument("database", nargs="+", help="SQLite database files to analyze")
+    parser.add_argument("--progress-bar", action="store_true", help="Show progress bar")
+    parser.add_argument("--no-decodex", action="store_false", dest="use_decodex", help="Normally we use the decodex column, but for synthetic data there is no decodex")
+    parser.add_argument("--release-dates", default="release-dates.csv", help="Path to CSV file containing model release dates")
+    parser.add_argument("database", nargs="*", help="SQLite database files to analyze (if not using --env-dir)")
     
     args = parser.parse_args()
     
-    if len(args.database) < args.k:
-        print(f"Error: At least {args.k} databases are required for {args.k}-ensemble")
+    # Check if we're using env directory or database list
+    if args.env_dir and args.database:
+        print("Error: Cannot specify both --env-dir and database list")
+        sys.exit(1)
+    
+    if not args.env_dir and not args.database:
+        print("Error: Must specify either --env-dir or a list of database files")
+        sys.exit(1)
+    
+    # If using env directory, parse env files to get database paths and model names
+    if args.env_dir:
+        # Find all .env files in the directory
+        env_files = glob.glob(os.path.join(args.env_dir, "*.env"))
+        
+        if not env_files:
+            print(f"Error: No .env files found in {args.env_dir}")
+            sys.exit(1)
+        
+        # Parse each env file
+        db_paths = []
+        config_paths = []
+        model_names = []
+        
+        for env_file in env_files:
+            db_path, config_path, model_name = parse_env_file(env_file)
+            
+            if not db_path:
+                print(f"Warning: No database path found in {env_file}")
+                continue
+                
+            # Check if the database exists
+            if not os.path.exists(db_path):
+                print(f"Warning: Database {db_path} from {env_file} does not exist")
+                continue
+                
+            # Skip if config_path is not defined and args.config is not provided
+            if not config_path and not args.config:
+                print(f"Warning: No config path found in {env_file} and --config not provided")
+                continue
+                
+            db_paths.append(db_path)
+            config_paths.append(config_path or args.config)
+            model_names.append(model_name)
+        
+        # Filter database paths to remove baselines
+        filtered_paths = []
+        filtered_configs = []
+        filtered_models = []
+        
+        for i, path in enumerate(db_paths):
+            if 'baseline' not in path:
+                filtered_paths.append(path)
+                filtered_configs.append(config_paths[i])
+                filtered_models.append(model_names[i])
+        
+        # Use the first config path if all are the same
+        config_path = filtered_configs[0] if filtered_configs and len(set(filtered_configs)) == 1 else args.config
+        
+        if not config_path:
+            print("Error: No config path found in env files and --config not provided")
+            sys.exit(1)
+            
+        if args.verbose:
+            print(f"Using config path: {config_path}")
+            print(f"Found {len(filtered_paths)} valid databases")
+            print(f"Found {len(filtered_models)} valid models")
+            
+        db_paths = filtered_paths
+        model_names = filtered_models
+    else:
+        # Using the database list provided
+        if not args.config:
+            print("Error: --config is required when specifying database files directly")
+            sys.exit(1)
+            
+        # Filter database paths to remove baselines
+        db_paths = [x for x in args.database if 'baseline' not in x]
+        # Extract model names from database paths (just for compatibility)
+        model_names = [os.path.basename(db_path)[:-7] for db_path in db_paths]
+        config_path = args.config
+    
+    # Load release dates if provided
+    release_dates_df = None
+    if args.release_dates:
+        try:
+            release_dates_df = pd.read_csv(args.release_dates)
+            if args.verbose:
+                print(f"Loaded {len(release_dates_df)} release dates from {args.release_dates}")
+        except Exception as e:
+            print(f"Warning: Failed to load release dates from {args.release_dates}: {e}")
+    
+    # Filter models not in release dates if possible
+    if args.env_dir and release_dates_df is not None:
+        valid_paths = []
+        valid_models = []
+        
+        for i, model_name in enumerate(model_names):
+            if not model_name or model_name in release_dates_df['Model Name'].values:
+                valid_paths.append(db_paths[i])
+                valid_models.append(model_name)
+            else:
+                if args.verbose:
+                    print(f"Skipping model {model_name} - not found in release dates")
+        
+        db_paths = valid_paths
+        model_names = valid_models
+    
+    if len(db_paths) < args.k:
+        print(f"Error: At least {args.k} databases are required for {args.k}-ensemble, but only {len(db_paths)} valid databases found")
         sys.exit(1)
     
     # Process all combinations
     validation_results, test_results = process_database_combinations(
-        args.config, 
-        [x for x in args.database if 'baseline' not in x], 
+        config_path, 
+        db_paths,
+        model_names,
         args.k, 
         args.verbose, 
-        args.progress_bar
+        args.progress_bar,
+        args.use_decodex
     )
     
     if not validation_results or not test_results:
         print("No valid ensemble combinations found.")
         sys.exit(1)
     
-    # Create summary based on validation results, reporting test performance
-    summary = format_validation_test_results_summary(validation_results, test_results)
+    # Create summaries
+    if release_dates_df is not None:
+        # Create summary based on release dates
+        summary = format_validation_test_results_by_date(validation_results, test_results, release_dates_df)
+    else:
+        # Create traditional summary
+        summary = format_validation_test_results_summary(validation_results, test_results)
     
     # Print or save summary
     if args.summary:
@@ -422,5 +793,10 @@ if __name__ == '__main__':
     
     # Export detailed results if requested
     if args.output:
-        export_validation_test_results_to_csv(validation_results, test_results, args.output)
+        if release_dates_df is not None:
+            # Export best by date
+            export_best_by_date_to_csv(validation_results, test_results, args.output, release_dates_df)
+        else:
+            # Export traditional results
+            export_validation_test_results_to_csv(validation_results, test_results, args.output)
         print(f"Detailed results saved to {args.output}")
