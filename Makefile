@@ -18,13 +18,17 @@ MODELS := openai openai10 openai10o1 openai45 openai4510 openailong openaio1 ant
 TEMPLATES_DIR := dbtemplates
 RESULTS_DIR := results
 
-.PHONY: all wisconsin titanic sgc espionage timetravel_insurance potions wisconsin-distributions titanic-distributions southgermancredit-distributions espionage-distributions timetravel_insurance-distributions potions-distributions ensembles
+.PHONY: all wisconsin titanic sgc espionage timetravel_insurance potions wisconsin-distributions titanic-distributions southgermancredit-distributions espionage-distributions timetravel_insurance-distributions potions-distributions ensembles ensembles5
 
 all: wisconsin titanic southgermancredit espionage timetravel_insurance potions ensembles outputs/impact-of-samples.tex outputs/model_details.tex outputs/titanic_by_model_size.png outputs/wisconsin_by_model_size.png outputs/southgermancredit_by_model_size.png outputs/espionage_by_model_size.png outputs/timetravel_insurance_by_model_size.png outputs/potions_by_model_size.png outputs/titanic_by_elo.png outputs/wisconsin_by_elo.png outputs/southgermancredit_by_elo.png outputs/espionage_by_elo.png outputs/timetravel_insurance_by_elo.png outputs/potions_by_elo.png
 	echo Done
 
 ensembles: outputs/titanic_ensemble.csv outputs/wisconsin_ensemble.csv outputs/southgermancredit_ensemble.csv outputs/espionage_ensemble.csv outputs/timetravel_insurance_ensemble.csv outputs/potions_ensemble.csv
-	echo All ensemble results are ready
+	@echo "All ensemble results are ready"
+	@echo "Ensembles now use model release dates from release-dates.csv to track temporal progress"
+
+ensembles5: outputs/titanic_ensemble5.csv outputs/wisconsin_ensemble5.csv outputs/southgermancredit_ensemble5.csv outputs/espionage_ensemble5.csv outputs/timetravel_insurance_ensemble5.csv outputs/potions_ensemble5.csv
+	@echo "All k=5 ensemble results are ready"
 
 outputs/model_details.tex: model_details.json make_model_size_table.py
 	uv run make_model_size_table.py --output outputs/model_details.tex
@@ -118,8 +122,11 @@ outputs/wisconsin_error_rate_by_reasoning_wordcount.png outputs/wisconsin_error_
 outputs/wisconsin_error_rate_by_cumulative_wordcount.png outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex: outputs/wisconsin_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/wisconsin_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/wisconsin_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/wisconsin_error_rate_by_cumulative_wordcount_slope.tex outputs/wisconsin_results.csv
 
-outputs/wisconsin_ensemble.csv outputs/wisconsin_ensemble_summary.txt: $(RESULTS_DIR)/$(WISCONSIN_DATASET)-*.sqlite configs/$(WISCONSIN_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(WISCONSIN_DATASET).config.json --progress-bar --summary outputs/wisconsin_ensemble_summary.txt --output outputs/wisconsin_ensemble.csv $(RESULTS_DIR)/$(WISCONSIN_DATASET)-*.sqlite
+outputs/wisconsin_ensemble.csv outputs/wisconsin_ensemble_summary.txt: configs/$(WISCONSIN_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/wisconsin --progress-bar --summary outputs/wisconsin_ensemble_summary.txt --output outputs/wisconsin_ensemble.csv
+
+outputs/wisconsin_ensemble5.csv outputs/wisconsin_ensemble5_summary.txt: configs/$(WISCONSIN_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/wisconsin --progress-bar --summary outputs/wisconsin_ensemble5_summary.txt --output outputs/wisconsin_ensemble5.csv --k 5
 
 
 # How we created the dataset
@@ -217,8 +224,11 @@ outputs/titanic_error_rate_by_reasoning_wordcount.png outputs/titanic_error_rate
 outputs/titanic_error_rate_by_cumulative_wordcount.png outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex: outputs/titanic_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/titanic_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/titanic_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/titanic_error_rate_by_cumulative_wordcount_slope.tex outputs/titanic_results.csv
 
-outputs/titanic_ensemble.csv outputs/titanic_ensemble_summary.txt: $(RESULTS_DIR)/$(TITANIC_DATASET)-*.sqlite configs/$(TITANIC_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(TITANIC_DATASET).config.json --progress-bar --summary outputs/titanic_ensemble_summary.txt --output outputs/titanic_ensemble.csv $(RESULTS_DIR)/$(TITANIC_DATASET)-*.sqlite
+outputs/titanic_ensemble.csv outputs/titanic_ensemble_summary.txt: configs/$(TITANIC_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/titanic --progress-bar --summary outputs/titanic_ensemble_summary.txt --output outputs/titanic_ensemble.csv
+
+outputs/titanic_ensemble5.csv outputs/titanic_ensemble5_summary.txt: configs/$(TITANIC_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/titanic --progress-bar --summary outputs/titanic_ensemble5_summary.txt --output outputs/titanic_ensemble5.csv --k 5
 
 
 
@@ -306,8 +316,11 @@ outputs/southgermancredit_error_rate_by_reasoning_wordcount.png outputs/southger
 outputs/southgermancredit_error_rate_by_cumulative_wordcount.png outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex: outputs/southgermancredit_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/southgermancredit_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/southgermancredit_error_rate_by_cumulative_wordcount_slope.tex outputs/southgermancredit_results.csv
 
-outputs/southgermancredit_ensemble.csv outputs/southgermancredit_ensemble_summary.txt: $(RESULTS_DIR)/$(SGC_DATASET)-*.sqlite configs/$(SGC_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(SGC_DATASET).config.json --progress-bar --summary outputs/southgermancredit_ensemble_summary.txt --output outputs/southgermancredit_ensemble.csv $(RESULTS_DIR)/$(SGC_DATASET)-*.sqlite
+outputs/southgermancredit_ensemble.csv outputs/southgermancredit_ensemble_summary.txt: configs/$(SGC_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/southgermancredit --progress-bar --summary outputs/southgermancredit_ensemble_summary.txt --output outputs/southgermancredit_ensemble.csv
+
+outputs/southgermancredit_ensemble5.csv outputs/southgermancredit_ensemble5_summary.txt: configs/$(SGC_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/southgermancredit --progress-bar --summary outputs/southgermancredit_ensemble5_summary.txt --output outputs/southgermancredit_ensemble5.csv --k 5
 
 
 ######################################################################
@@ -380,8 +393,11 @@ outputs/espionage_error_rate_by_reasoning_wordcount.png outputs/espionage_error_
 outputs/espionage_error_rate_by_cumulative_wordcount.png outputs/espionage_error_rate_by_cumulative_wordcount_pvalue.tex outputs/espionage_error_rate_by_cumulative_wordcount_slope.tex: outputs/espionage_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/espionage_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/espionage_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/espionage_error_rate_by_cumulative_wordcount_slope.tex outputs/espionage_results.csv
 
-outputs/espionage_ensemble.csv outputs/espionage_ensemble_summary.txt: $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-*.sqlite configs/$(ESPIONAGE_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(ESPIONAGE_DATASET).config.json --progress-bar --summary outputs/espionage_ensemble_summary.txt --output outputs/espionage_ensemble.csv $(RESULTS_DIR)/$(ESPIONAGE_DATASET)-*.sqlite
+outputs/espionage_ensemble.csv outputs/espionage_ensemble_summary.txt: configs/$(ESPIONAGE_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/espionage --progress-bar --summary outputs/espionage_ensemble_summary.txt --output outputs/espionage_ensemble.csv --no-decodex
+
+outputs/espionage_ensemble5.csv outputs/espionage_ensemble5_summary.txt: configs/$(ESPIONAGE_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/espionage --progress-bar --summary outputs/espionage_ensemble5_summary.txt --output outputs/espionage_ensemble5.csv --k 5 --no-decodex
 
 ######################################################################
 
@@ -453,8 +469,11 @@ outputs/timetravel_insurance_error_rate_by_reasoning_wordcount.png outputs/timet
 outputs/timetravel_insurance_error_rate_by_cumulative_wordcount.png outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_pvalue.tex outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_slope.tex: outputs/timetravel_insurance_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/timetravel_insurance_error_rate_by_cumulative_wordcount_slope.tex outputs/timetravel_insurance_results.csv
 
-outputs/timetravel_insurance_ensemble.csv outputs/timetravel_insurance_ensemble_summary.txt: $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-*.sqlite configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json --progress-bar --summary outputs/timetravel_insurance_ensemble_summary.txt --output outputs/timetravel_insurance_ensemble.csv $(RESULTS_DIR)/$(TIMETRAVEL_INSURANCE_DATASET)-*.sqlite
+outputs/timetravel_insurance_ensemble.csv outputs/timetravel_insurance_ensemble_summary.txt: configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/timetravel_insurance --progress-bar --summary outputs/timetravel_insurance_ensemble_summary.txt --output outputs/timetravel_insurance_ensemble.csv --no-decodex
+
+outputs/timetravel_insurance_ensemble5.csv outputs/timetravel_insurance_ensemble5_summary.txt: configs/$(TIMETRAVEL_INSURANCE_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/timetravel_insurance --progress-bar --summary outputs/timetravel_insurance_ensemble5_summary.txt --output outputs/timetravel_insurance_ensemble5.csv --k 5 --no-decodex
 
 ######################################################################
 
@@ -526,5 +545,8 @@ outputs/potions_error_rate_by_reasoning_wordcount.png outputs/potions_error_rate
 outputs/potions_error_rate_by_cumulative_wordcount.png outputs/potions_error_rate_by_cumulative_wordcount_pvalue.tex outputs/potions_error_rate_by_cumulative_wordcount_slope.tex: outputs/potions_results.csv results_error_rate_by_wordcount.py
 	uv run results_error_rate_by_wordcount.py --wordcount-type cumulative --show --image-output outputs/potions_error_rate_by_cumulative_wordcount.png --pvalue-output outputs/potions_error_rate_by_cumulative_wordcount_pvalue.tex --slope-output outputs/potions_error_rate_by_cumulative_wordcount_slope.tex outputs/potions_results.csv
 
-outputs/potions_ensemble.csv outputs/potions_ensemble_summary.txt: $(RESULTS_DIR)/$(POTIONS_DATASET)-*.sqlite configs/$(POTIONS_DATASET).config.json results_ensembling.py
-	uv run results_ensembling.py --config configs/$(POTIONS_DATASET).config.json --progress-bar --summary outputs/potions_ensemble_summary.txt --output outputs/potions_ensemble.csv $(RESULTS_DIR)/$(POTIONS_DATASET)-*.sqlite
+outputs/potions_ensemble.csv outputs/potions_ensemble_summary.txt: configs/$(POTIONS_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/potions --progress-bar --summary outputs/potions_ensemble_summary.txt --output outputs/potions_ensemble.csv --no-decodex
+
+outputs/potions_ensemble5.csv outputs/potions_ensemble5_summary.txt: configs/$(POTIONS_DATASET).config.json results_ensembling.py release-dates.csv
+	uv run results_ensembling.py --env-dir envs/potions --progress-bar --summary outputs/potions_ensemble5_summary.txt --output outputs/potions_ensemble5.csv --k 5 --no-decodex
