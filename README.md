@@ -85,8 +85,9 @@ Copy these into the `papers/narrative-learning` directory.
 ### PostgreSQL utilities
 
 The environment files under `envs/` can be imported into PostgreSQL using the
-SQL statements in `investigations_data.sql`. The accompanying schema is defined
-in `investigations_schema.sql` and creates three tables:
+SQL statements in `postgres-schemas/investigations_data.sql`. The accompanying
+schema is defined in `postgres-schemas/investigations_schema.sql` and creates
+three tables:
 
 * `datasets` – `dataset` primary key and `config_file` path for each dataset
 * `models` – training and inference model names with optional `example_count`
@@ -97,8 +98,8 @@ in `investigations_schema.sql` and creates three tables:
 Load the schema and initial data with:
 
 ```bash
-psql "$POSTGRES_DSN" -f investigations_schema.sql
-psql "$POSTGRES_DSN" -f investigations_data.sql
+psql "$POSTGRES_DSN" -f postgres-schemas/investigations_schema.sql
+psql "$POSTGRES_DSN" -f postgres-schemas/investigations_data.sql
 ```
 
 Run the training loop with:

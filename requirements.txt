@@ -2,3 +2,4 @@ anthropic>=0.8.1
 pandas
 matplotlib
 openai
+psycopg2-binary>=2.9.9
