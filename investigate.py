@@ -2,7 +2,8 @@
 """Run the training loop for a given investigation.
 
 The script expects an investigation ID which references a row in the
-``investigations`` table defined in ``investigations_schema.sql``. All required
+``investigations`` table defined in ``postgres-schemas/investigations_schema.sql``.
+All required
 environment variables are read from that row. Progress is written back by
 updating the ``round_number`` column.
 """

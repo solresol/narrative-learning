@@ -15,4 +15,5 @@ dependencies = [
     "scipy>=1.15.2",
     "seaborn>=0.13.2",
     "statsmodels>=0.14.4",
+    "psycopg2-binary>=2.9.9",
 ]
