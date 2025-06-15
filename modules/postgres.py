@@ -18,12 +18,11 @@ def _load_dsn_from_config(path: str) -> Optional[str]:
 
 
 def get_connection(dsn: Optional[str] = None, config_file: Optional[str] = None):
-    """Return a psycopg2 connection using env vars or a config file."""
+    """Return a psycopg2 connection using a DSN, config file or libpq defaults."""
     dsn = dsn or os.environ.get("POSTGRES_DSN")
     if not dsn:
         config_path = config_file or os.environ.get("POSTGRES_CONFIG")
         if config_path:
             dsn = _load_dsn_from_config(config_path)
-    if not dsn:
-        raise RuntimeError("PostgreSQL DSN not provided")
-    return psycopg2.connect(dsn)
+    # Fall back to libpq environment variables and defaults if no DSN is found
+    return psycopg2.connect(dsn or "")
