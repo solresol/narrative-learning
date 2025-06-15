@@ -3,9 +3,10 @@ import argparse
 import sqlite3
 import sys
 import json
-import llmcall
 import os
+import llmcall
 import datasetconfig
+from modules.postgres import get_connection, get_investigation_settings
 
 def get_prompt_for_updating_model(config, round_id, example_count, history_rounds):
     answer = """
@@ -64,7 +65,7 @@ class PromptCreationFailure(Exception):
     def __init__(self):
         pass
 
-def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose):
+def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose, investigation_id: int | None = None):
     split_id = config.get_split_id(old_round_id)
     sanity_check_sample_id = config.get_random_non_holdout_id(split_id)
     sanity_check_sample = config.get_entity_features(sanity_check_sample_id)
@@ -89,8 +90,16 @@ def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose
     if verbose:
         print(f"Quality control passed the following prompt:\n\n```\n{new_prompt}\n```")
     cur = config.conn.cursor()
-    cur.execute("insert into rounds (split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation) values (?,?,?,?) returning round_id",
-                [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info])
+    table = f"{config.dataset}_rounds" if getattr(config, 'dataset', '') else "rounds"
+    fields = "split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation"
+    placeholders = "?, ?, ?, ?"
+    params = [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info]
+    if investigation_id is not None:
+        fields += ", investigation_id"
+        placeholders += ", ?"
+        params.append(investigation_id)
+    query = f"insert into {table} ({fields}) values ({placeholders}) returning round_id"
+    config._execute(cur, query, tuple(params))
     row = cur.fetchone()
     if row is None:
         sys.exit("Failed to create a new round")
@@ -106,6 +115,9 @@ def main():
     default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
     parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--investigation-id', type=int, help='ID from investigations table')
     parser.add_argument('--round-id', type=int, required=True, help="Round ID")
     parser.add_argument('--example-count', type=int, default=default_example_count, help="Number of examples per cell")
     parser.add_argument('--show-history', type=int, default=2, help="Show confusion matrices for the previous N rounds")
@@ -116,22 +128,30 @@ def main():
     parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
-    if args.database is None:
-        sys.exit("Must specify a database via --database or NARRATIVE_LEARNING_DATABASE env")
-    if args.model is None:
-        sys.exit("Must specify a model via --model or NARRATIVE_LEARNING_TRAINING_MODEL env")
-    if args.config is None:
-        sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
+    if args.investigation_id is not None:
+        conn = get_connection(args.dsn, args.pg_config)
+        dataset, config_file = get_investigation_settings(conn, args.investigation_id)
+        config = datasetconfig.DatasetConfig(conn, config_file, dataset)
+    else:
+        if not (args.database or args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
+            sys.exit("Must specify --database or --dsn/--pg-config for PostgreSQL")
+        if args.model is None:
+            sys.exit("Must specify a model via --model or NARRATIVE_LEARNING_TRAINING_MODEL env")
+        if args.config is None:
+            sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
-    conn = sqlite3.connect(args.database)
-    config = datasetconfig.DatasetConfig(conn, args.config)
+        if args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN'):
+            conn = get_connection(args.dsn, args.pg_config)
+        else:
+            conn = sqlite3.connect(args.database)
+        config = datasetconfig.DatasetConfig(conn, args.config)
 
     prompting_creation_prompt = get_prompt_for_updating_model(config, args.round_id, args.example_count, args.show_history)
     if args.dry_run or args.verbose:
         print(prompting_creation_prompt)
     if args.dry_run:
         sys.exit(0)
-    new_round_id, details = run_reprompt(config, prompting_creation_prompt, args.round_id, args.model, args.verbose)
+    new_round_id, details = run_reprompt(config, prompting_creation_prompt, args.round_id, args.model, args.verbose, args.investigation_id)
     if args.verbose:
         print(f"REASONING: {details['reasoning']}")
         print()

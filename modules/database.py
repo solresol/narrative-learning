@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import sqlite3
 import sys
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Any, List, Optional
+
+def _execute(cur, conn, query: str, params: tuple = ()):  # type: ignore
+    """Execute a query with placeholder adaptation for PostgreSQL."""
+    if not isinstance(conn, sqlite3.Connection):
+        query = query.replace("?", "%s")
+    cur.execute(query, params)
 
 from modules.exceptions import NonexistentRoundException
 
@@ -23,7 +29,7 @@ def get_database_path(conn: sqlite3.Connection) -> Optional[str]:
 
     return None
 
-def get_round_prompt(conn: sqlite3.Connection, round_id: int, database_path: Optional[str] = None) -> str:
+def get_round_prompt(conn: Any, round_id: int, database_path: Optional[str] = None, dataset: str = "") -> str:
     """
     Retrieve the prompt text for a given round.
 
@@ -36,7 +42,8 @@ def get_round_prompt(conn: sqlite3.Connection, round_id: int, database_path: Opt
         Prompt text
     """
     cur = conn.cursor()
-    cur.execute("SELECT prompt FROM rounds WHERE round_id = ?", (int(round_id),))
+    table = f"{dataset}_rounds" if dataset else "rounds"
+    _execute(cur, conn, f"SELECT prompt FROM {table} WHERE round_id = ?", (int(round_id),))
     row = cur.fetchone()
 
     if row is None:
@@ -44,7 +51,7 @@ def get_round_prompt(conn: sqlite3.Connection, round_id: int, database_path: Opt
 
     return row[0]
     
-def get_round_reasoning(conn: sqlite3.Connection, round_id: int, database_path: Optional[str] = None) -> str:
+def get_round_reasoning(conn: Any, round_id: int, database_path: Optional[str] = None, dataset: str = "") -> str:
     """
     Retrieve the reasoning for the prompt text for a given round.
 
@@ -57,7 +64,8 @@ def get_round_reasoning(conn: sqlite3.Connection, round_id: int, database_path: 
         Reasoning text for the prompt
     """
     cur = conn.cursor()
-    cur.execute("SELECT reasoning_for_this_prompt FROM rounds WHERE round_id = ?", (int(round_id),))
+    table = f"{dataset}_rounds" if dataset else "rounds"
+    _execute(cur, conn, f"SELECT reasoning_for_this_prompt FROM {table} WHERE round_id = ?", (int(round_id),))
     row = cur.fetchone()
 
     if row is None:
@@ -65,7 +73,7 @@ def get_round_reasoning(conn: sqlite3.Connection, round_id: int, database_path: 
 
     return row[0] if row[0] is not None else ""
 
-def get_split_id(conn: sqlite3.Connection, round_id: int, database_path: Optional[str] = None) -> int:
+def get_split_id(conn: Any, round_id: int, database_path: Optional[str] = None, dataset: str = "") -> int:
     """
     Get the split ID associated with a round.
 
@@ -78,7 +86,8 @@ def get_split_id(conn: sqlite3.Connection, round_id: int, database_path: Optiona
         Split ID
     """
     cur = conn.cursor()
-    cur.execute("SELECT split_id FROM rounds WHERE round_id = ?", (int(round_id),))
+    table = f"{dataset}_rounds" if dataset else "rounds"
+    _execute(cur, conn, f"SELECT split_id FROM {table} WHERE round_id = ?", (int(round_id),))
     row = cur.fetchone()
 
     if row is None:
@@ -86,7 +95,7 @@ def get_split_id(conn: sqlite3.Connection, round_id: int, database_path: Optiona
 
     return row[0]
 
-def get_latest_split_id(conn: sqlite3.Connection) -> int:
+def get_latest_split_id(conn: Any, dataset: str = "") -> int:
     """
     Get the split_id from the most recent round.
 
@@ -100,9 +109,10 @@ def get_latest_split_id(conn: sqlite3.Connection) -> int:
         SystemExit: If no rounds are found in the database
     """
     cur = conn.cursor()
-    cur.execute("""
+    table = f"{dataset}_rounds" if dataset else "rounds"
+    _execute(cur, conn, f"""
         SELECT split_id
-        FROM rounds
+        FROM {table}
         ORDER BY round_id DESC
         LIMIT 1
     """)
@@ -112,7 +122,7 @@ def get_latest_split_id(conn: sqlite3.Connection) -> int:
     split_id = row[0]
     return split_id
 
-def get_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
+def get_rounds_for_split(conn: Any, split_id: int, dataset: str = "") -> List[int]:
     """
     Get all round IDs for a given split_id.
 
@@ -124,16 +134,17 @@ def get_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
         List of round IDs
     """
     cur = conn.cursor()
-    cur.execute("""
+    table = f"{dataset}_rounds" if dataset else "rounds"
+    _execute(cur, conn, f"""
         SELECT round_id
-        FROM rounds
+        FROM {table}
         WHERE split_id = ?
         ORDER BY round_id
     """, (split_id,))
     rounds = [row[0] for row in cur.fetchall()]
     return rounds
 
-def get_processed_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> List[int]:
+def get_processed_rounds_for_split(conn: Any, split_id: int, dataset: str = "") -> List[int]:
     """
     Get all round IDs for a given split_id that have inferences.
 
@@ -145,9 +156,10 @@ def get_processed_rounds_for_split(conn: sqlite3.Connection, split_id: int) -> L
         List of round IDs that have inferences
     """
     cur = conn.cursor()
+    inf_table = f"{dataset}_inferences" if dataset else "inferences"
     answer = []
-    for r in get_rounds_for_split(conn, split_id):
-        cur.execute("select count(*) from inferences where round_id = ?", [r])
+    for r in get_rounds_for_split(conn, split_id, dataset):
+        _execute(cur, conn, f"select count(*) from {inf_table} where round_id = ?", [r])
         row = cur.fetchone()
         if row[0] == 0:
             continue
