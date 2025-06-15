@@ -26,13 +26,22 @@ def insert_rows(cur, table: str, columns: List[str], rows: List[Tuple]) -> None:
     if not rows:
         return
     placeholders = ", ".join(["%s"] * len(columns))
-    cols = ", ".join([f'"{c}"' for c in columns])
-    cur.executemany(f'INSERT INTO {table} ({cols}) VALUES ({placeholders})', rows)
+    cols = ", ".join(columns)
+    cur.executemany(
+        f'INSERT INTO {table} ({cols}) VALUES ({placeholders})',
+        rows,
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import SQLite dataset into Postgres")
-    parser.add_argument("investigation_id", type=int, help="Investigation ID")
+    parser.add_argument(
+        "--investigation-id",
+        dest="investigation_id",
+        type=int,
+        required=True,
+        help="Investigation ID",
+    )
     parser.add_argument("sqlite_db", nargs="*", help="Path to SQLite file(s). Defaults to the path from the investigations table")
     parser.add_argument("--dsn")
     parser.add_argument("--config")
