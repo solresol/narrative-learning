@@ -11,12 +11,15 @@ Migration utilities:
 
 - `update_round_number.py` reads the round tracking file referenced by an entry
   in the `investigations` table and updates the `round_number` column.
-- `import_dataset.py` copies data from one or more legacy SQLite files into the
-  PostgreSQL schema. Tables are created from an explicit SQL schema file (see
-  `postgres-schemas/`) rather than being generated automatically. Dataset-
-  specific tables (the core data and split assignments) are checked for
-  consistency across all SQLite files. Only the `rounds` and `inferences`
-  tables receive an extra `investigation_id` column when imported.
+- `import_dataset.py` copies data from legacy SQLite files into the
+  PostgreSQL schema. The script now only needs an investigation ID and will
+  look up the dataset name, configuration file and default SQLite path from the
+  `investigations` and `datasets` tables. If no SQLite path is given it uses the
+  one recorded in the table and loads the appropriate schema from
+  `postgres-schemas/`. Dataset-specific tables (the core data and split
+  assignments) are checked for consistency across all SQLite files. Only the
+  `rounds` and `inferences` tables receive an extra `investigation_id` column
+  when imported.
 
 Run each script with either `--dsn` or `--config` to point to the PostgreSQL
 instance.
