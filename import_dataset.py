@@ -27,6 +27,20 @@ def insert_rows(cur, table: str, columns: List[str], rows: List[Tuple]) -> None:
         return
     placeholders = ", ".join(["%s"] * len(columns))
     cols = ", ".join(columns)
+
+    # Convert integer representations of booleans coming from SQLite (0/1)
+    # into Python booleans so that psycopg2 can map them to PostgreSQL
+    # boolean values correctly. Only known boolean columns are converted.
+    bool_indices = [i for i, c in enumerate(columns) if c in {"holdout", "validation"}]
+    if bool_indices:
+        converted_rows = []
+        for row in rows:
+            row_list = list(row)
+            for idx in bool_indices:
+                row_list[idx] = bool(row_list[idx])
+            converted_rows.append(tuple(row_list))
+        rows = converted_rows
+
     cur.executemany(
         f'INSERT INTO {table} ({cols}) VALUES ({placeholders})',
         rows,
