@@ -3,9 +3,10 @@
 This project originally stored all results in individual SQLite files. We are
 transitioning to PostgreSQL so multiple processes can share the same database
 and to simplify backups. New scripts rely on a shared helper in
-`modules/postgres.py` for creating a connection using either the `POSTGRES_DSN`
-environment variable or a JSON configuration file specified via
-`POSTGRES_CONFIG`.
+`modules/postgres.py` for creating a connection. It uses a DSN passed via
+argument or the `POSTGRES_DSN` environment variable and falls back to libpq's
+standard environment variables and defaults. A JSON configuration file path can
+also be provided through `POSTGRES_CONFIG`.
 
 Migration utilities:
 
