@@ -13,6 +13,7 @@ def sqlite_tables(conn: sqlite3.Connection) -> List[str]:
     cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     return [r[0] for r in cur.fetchall()]
 
+
 def fetch_all(conn: sqlite3.Connection, table: str) -> Tuple[List[str], List[Tuple]]:
     cur = conn.execute(f"SELECT * FROM {table}")
     rows = cur.fetchall()
@@ -20,9 +21,14 @@ def fetch_all(conn: sqlite3.Connection, table: str) -> Tuple[List[str], List[Tup
     return cols, rows
 
 
-
-
 def insert_rows(cur, table: str, columns: List[str], rows: List[Tuple]) -> None:
+    """Insert rows into ``table`` ignoring duplicates.
+
+    The script can be run multiple times for the same investigation, so records
+    may already exist.  Using ``ON CONFLICT DO NOTHING`` allows the import to be
+    idempotent.
+    """
+
     if not rows:
         return
     placeholders = ", ".join(["%s"] * len(columns))
@@ -42,7 +48,7 @@ def insert_rows(cur, table: str, columns: List[str], rows: List[Tuple]) -> None:
         rows = converted_rows
 
     cur.executemany(
-        f'INSERT INTO {table} ({cols}) VALUES ({placeholders})',
+        f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING",
         rows,
     )
 
@@ -56,7 +62,11 @@ def main() -> None:
         required=True,
         help="Investigation ID",
     )
-    parser.add_argument("sqlite_db", nargs="*", help="Path to SQLite file(s). Defaults to the path from the investigations table")
+    parser.add_argument(
+        "sqlite_db",
+        nargs="*",
+        help="Path to SQLite file(s). Defaults to the path from the investigations table",
+    )
     parser.add_argument("--dsn")
     parser.add_argument("--config")
     parser.add_argument("--schema", help="SQL file defining Postgres tables")
@@ -129,4 +139,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
