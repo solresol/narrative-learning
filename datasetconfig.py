@@ -5,7 +5,7 @@ import json
 import os
 import pandas as pd
 import re
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from modules.exceptions import TargetClassingException, NonexistentRoundException, MissingConfigElementException, NoProcessedRoundsException
 from modules.database import (
@@ -26,7 +26,7 @@ class DatasetConfig:
     This class provides methods for retrieving and handling obfuscated data.
     """
 
-    def __init__(self, conn: sqlite3.Connection, config_path: str):
+    def __init__(self, conn: Any, config_path: str, dataset: str = ""):
         """
         Initialize with a database connection and configuration file path.
 
@@ -35,13 +35,20 @@ class DatasetConfig:
             config_path: Path to the JSON configuration file
         """
         self.conn = conn
+        self.dataset = dataset
 
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = json.load(f)
 
         # Required configuration fields
-        required_fields = [ "table_name", "primary_key", "target_field", "splits_table", "columns" ]
+        required_fields = [
+            "table_name",
+            "primary_key",
+            "target_field",
+            "splits_table",
+            "columns",
+        ]
 
         # Verify configuration has all required fields
         for field in required_fields:
@@ -58,15 +65,21 @@ class DatasetConfig:
 
         cursor = conn.cursor()
         try:
-            cursor.execute(f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}")
+            cursor.execute(
+                f"select distinct {self.target_field} from {self.table_name} order by {self.target_field}"
+            )
         except sqlite3.OperationalError as e:
             sys.stderr.write(f"Problem with {self.database_path}: ")
             raise e
-        self.valid_predictions = []
-        for row in cursor:
-            self.valid_predictions.append(row[0])
+        self.valid_predictions = [row[0] for row in cursor]
         if len(self.valid_predictions) != 2:
             raise TargetClassingException(self.target_field, len(self.valid_predictions))
+
+    def _execute(self, cur, query: str, params: tuple = ()) -> None:
+        """Execute a query converting placeholders for PostgreSQL if needed."""
+        if not isinstance(self.conn, sqlite3.Connection):
+            query = query.replace("?", "%s")
+        cur.execute(query, params)
 
 
     def get_entity_features(self, entity_id: str) -> str:
@@ -94,7 +107,7 @@ class DatasetConfig:
         """
 
         cur = self.conn.cursor()
-        cur.execute(query, (entity_id,))
+        self._execute(cur, query, (entity_id,))
         row = cur.fetchone()
 
         if not row:
@@ -131,7 +144,7 @@ class DatasetConfig:
         """
 
         cur = self.conn.cursor()
-        cur.execute(query, (entity_id,))
+        self._execute(cur, query, (entity_id,))
         row = cur.fetchone()
 
         if not row:
@@ -166,7 +179,7 @@ class DatasetConfig:
            LIMIT 1
         """
 
-        cur.execute(query, (split_id,))
+        self._execute(cur, query, (split_id,))
         row = cur.fetchone()
 
         if row is None:
@@ -192,7 +205,7 @@ class DatasetConfig:
         WHERE {self.primary_key} = ? AND split_id = ?
         """
 
-        cur.execute(query, (entity_id, split_id))
+        self._execute(cur, query, (entity_id, split_id))
         row = cur.fetchone()
 
         if row is None:
@@ -210,7 +223,7 @@ class DatasetConfig:
         Returns:
             Prompt text
         """
-        return get_round_prompt(self.conn, round_id, self.database_path)
+        return get_round_prompt(self.conn, round_id, self.database_path, self.dataset)
         
     def get_round_reasoning(self, round_id: int) -> str:
         """
@@ -222,7 +235,7 @@ class DatasetConfig:
         Returns:
             Reasoning text for the prompt
         """
-        return get_round_reasoning(self.conn, round_id, self.database_path)
+        return get_round_reasoning(self.conn, round_id, self.database_path, self.dataset)
 
     def get_split_id(self, round_id: int) -> int:
         """
@@ -234,7 +247,7 @@ class DatasetConfig:
         Returns:
             Split ID
         """
-        return get_split_id(self.conn, round_id, self.database_path)
+        return get_split_id(self.conn, round_id, self.database_path, self.dataset)
 
     def positive_label(self):
         # This ain't great. Fundamentally, we are trying to shoe-horn into a "true positive" / "false positive"
@@ -266,17 +279,18 @@ class DatasetConfig:
         cur = self.conn.cursor()
         split_id = self.get_split_id(round_id)
 
+        inf_table = f"{self.dataset}_inferences" if self.dataset else "inferences"
         query = f"""
             SELECT m.{self.target_field}, i.prediction, i.{self.primary_key},
                    i.narrative_text, s.holdout, s.validation
-              FROM inferences i
+              FROM {inf_table} i
               JOIN {self.table_name} m ON i.{self.primary_key} = m.{self.primary_key}
               JOIN {self.splits_table} s ON (s.{self.primary_key} = i.{self.primary_key})
              WHERE i.round_id = ? AND s.split_id = ?
              ORDER BY RANDOM()
         """
 
-        cur.execute(query, (round_id, split_id))
+        self._execute(cur, query, (round_id, split_id))
         rows = cur.fetchall()
 
         # Initialize confusion matrix cells
@@ -357,7 +371,7 @@ class DatasetConfig:
         Raises:
             SystemExit: If no rounds are found in the database
         """
-        return get_latest_split_id(self.conn)
+        return get_latest_split_id(self.conn, self.dataset)
 
     def get_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -369,7 +383,7 @@ class DatasetConfig:
         Returns:
             List of round IDs
         """
-        return get_rounds_for_split(self.conn, split_id)
+        return get_rounds_for_split(self.conn, split_id, self.dataset)
 
     def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -381,7 +395,7 @@ class DatasetConfig:
         Returns:
             List of round IDs that have inferences
         """
-        return get_processed_rounds_for_split(self.conn, split_id)
+        return get_processed_rounds_for_split(self.conn, split_id, self.dataset)
 
     def check_early_stopping(self, split_id: int, metric: str,
                             patience: int, on_validation: bool = True) -> bool:
@@ -440,7 +454,7 @@ class DatasetConfig:
             Integer count of data points in the table
         """
         cur = self.conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {self.table_name}")
+        self._execute(cur, f"SELECT COUNT(*) FROM {self.table_name}")
         row = cur.fetchone()
         return row[0] if row else 0
 

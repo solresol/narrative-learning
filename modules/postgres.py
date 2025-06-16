@@ -2,7 +2,7 @@
 """Utility helpers for PostgreSQL connections."""
 import json
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import psycopg2
 
@@ -26,3 +26,21 @@ def get_connection(dsn: Optional[str] = None, config_file: Optional[str] = None)
             dsn = _load_dsn_from_config(config_path)
     # Fall back to libpq environment variables and defaults if no DSN is found
     return psycopg2.connect(dsn or "")
+
+
+def get_investigation_settings(conn, investigation_id: int) -> Tuple[str, str]:
+    """Return ``(dataset, config_file)`` for an investigation ID."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT i.dataset, d.config_file
+          FROM investigations i
+          JOIN datasets d ON i.dataset = d.dataset
+         WHERE i.id = %s
+        """,
+        (investigation_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        raise SystemExit(f"investigation {investigation_id} not found")
+    return row[0], row[1]
