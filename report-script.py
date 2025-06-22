@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List, Optional
 import os
+from modules.postgres import get_connection, get_investigation_settings
 
 def main():
     default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
@@ -14,6 +15,9 @@ def main():
     parser = argparse.ArgumentParser(description="Report on classification metrics across rounds")
     parser.add_argument('--database', default=default_database,
                        help="Path to the SQLite database file")
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--investigation-id', type=int, help='ID from investigations table')
     parser.add_argument('--split-id', type=int, help="Split ID to analyze")
     parser.add_argument('--metric', default='accuracy',
                        choices=['accuracy', 'precision', 'recall', 'f1', 'count'],
@@ -37,13 +41,21 @@ def main():
     parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
-    if not args.database:
-        sys.exit("Must specify a database file")
-    if args.config is None:
-        sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
+    if args.investigation_id is not None:
+        conn = get_connection(args.dsn, args.pg_config)
+        dataset, config_file = get_investigation_settings(conn, args.investigation_id)
+        config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
+    else:
+        if not (args.database or args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
+            sys.exit("Must specify --database or --dsn/--pg-config for PostgreSQL")
+        if args.config is None:
+            sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
-    conn = sqlite3.connect(f'file:{args.database}?mode=ro', uri=True)
-    config = datasetconfig.DatasetConfig(conn, args.config)
+        if args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN'):
+            conn = get_connection(args.dsn, args.pg_config)
+        else:
+            conn = sqlite3.connect(f'file:{args.database}?mode=ro', uri=True)
+        config = datasetconfig.DatasetConfig(conn, args.config)
 
     # If split_id not provided, use the most recent
     split_id = args.split_id if args.split_id is not None else config.get_latest_split_id()

@@ -95,7 +95,7 @@ def get_split_id(conn: Any, round_id: int, database_path: Optional[str] = None, 
 
     return row[0]
 
-def get_latest_split_id(conn: Any, dataset: str = "") -> int:
+def get_latest_split_id(conn: Any, dataset: str = "", investigation_id: int | None = None) -> int:
     """
     Get the split_id from the most recent round.
 
@@ -110,19 +110,20 @@ def get_latest_split_id(conn: Any, dataset: str = "") -> int:
     """
     cur = conn.cursor()
     table = f"{dataset}_rounds" if dataset else "rounds"
-    _execute(cur, conn, f"""
-        SELECT split_id
-        FROM {table}
-        ORDER BY round_id DESC
-        LIMIT 1
-    """)
+    query = f"SELECT split_id FROM {table}"
+    params: list[Any] = []
+    if investigation_id is not None:
+        query += " WHERE investigation_id = ?"
+        params.append(investigation_id)
+    query += " ORDER BY round_id DESC LIMIT 1"
+    _execute(cur, conn, query, tuple(params))
     row = cur.fetchone()
     if row is None:
         sys.exit("No rounds found in database")
     split_id = row[0]
     return split_id
 
-def get_rounds_for_split(conn: Any, split_id: int, dataset: str = "") -> List[int]:
+def get_rounds_for_split(conn: Any, split_id: int, dataset: str = "", investigation_id: int | None = None) -> List[int]:
     """
     Get all round IDs for a given split_id.
 
@@ -135,16 +136,17 @@ def get_rounds_for_split(conn: Any, split_id: int, dataset: str = "") -> List[in
     """
     cur = conn.cursor()
     table = f"{dataset}_rounds" if dataset else "rounds"
-    _execute(cur, conn, f"""
-        SELECT round_id
-        FROM {table}
-        WHERE split_id = ?
-        ORDER BY round_id
-    """, (split_id,))
+    query = f"SELECT round_id FROM {table} WHERE split_id = ?"
+    params: list[Any] = [split_id]
+    if investigation_id is not None:
+        query += " AND investigation_id = ?"
+        params.append(investigation_id)
+    query += " ORDER BY round_id"
+    _execute(cur, conn, query, tuple(params))
     rounds = [row[0] for row in cur.fetchall()]
     return rounds
 
-def get_processed_rounds_for_split(conn: Any, split_id: int, dataset: str = "") -> List[int]:
+def get_processed_rounds_for_split(conn: Any, split_id: int, dataset: str = "", investigation_id: int | None = None) -> List[int]:
     """
     Get all round IDs for a given split_id that have inferences.
 
@@ -158,8 +160,13 @@ def get_processed_rounds_for_split(conn: Any, split_id: int, dataset: str = "") 
     cur = conn.cursor()
     inf_table = f"{dataset}_inferences" if dataset else "inferences"
     answer = []
-    for r in get_rounds_for_split(conn, split_id, dataset):
-        _execute(cur, conn, f"select count(*) from {inf_table} where round_id = ?", [r])
+    for r in get_rounds_for_split(conn, split_id, dataset, investigation_id):
+        query = f"select count(*) from {inf_table} where round_id = ?"
+        params: list[Any] = [r]
+        if investigation_id is not None:
+            query += " and investigation_id = ?"
+            params.append(investigation_id)
+        _execute(cur, conn, query, tuple(params))
         row = cur.fetchone()
         if row[0] == 0:
             continue
