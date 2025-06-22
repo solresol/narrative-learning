@@ -1,10 +1,32 @@
 #!/usr/bin/env python3
-"""List investigation IDs with no inference data."""
+"""List investigation IDs with no inference data.
+
+Optional flags allow skipping ollama-powered models or outputting SQL to
+create a temporary view for use with other scripts.
+"""
+
 import argparse
 import os
 import sqlite3
 
+from typing import Iterable
+
 from modules.postgres import get_connection
+
+# Training model names that rely on ollama for inference.
+OLLAMA_TRAINING_MODELS: list[str] = [
+    "phi4:latest",
+    "llama3.3:latest",
+    "falcon3:1b",
+    "falcon3:10b",
+    "gemma2:27b",
+    "gemma2:2b",
+    "phi4-mini",
+    "deepseek-r1:70b",
+    "qwq:32b",
+    "gemma3:27b",
+    "cogito:70b",
+]
 
 
 def has_inferences(db_path: str) -> bool:
@@ -22,24 +44,55 @@ def has_inferences(db_path: str) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Find investigations without inferences")
+    parser = argparse.ArgumentParser(
+        description="Find investigations without inferences"
+    )
     parser.add_argument("--dsn", help="PostgreSQL connection string")
     parser.add_argument("--config", help="Path to PostgreSQL config JSON")
+    parser.add_argument(
+        "--skip-ollama",
+        action="store_true",
+        help="Exclude investigations that use ollama-backed models",
+    )
+    parser.add_argument(
+        "--print-view",
+        action="store_true",
+        help="Output SQL for a temporary view instead of plain IDs",
+    )
     args = parser.parse_args()
 
     conn = get_connection(args.dsn, args.config)
     cur = conn.cursor()
-    cur.execute("SELECT id, sqlite_database FROM investigations ORDER BY id")
-    missing = []
-    for inv_id, db_path in cur.fetchall():
+    cur.execute(
+        """
+        SELECT i.id, i.sqlite_database, m.training_model
+          FROM investigations i
+          JOIN models m ON i.model = m.model
+         ORDER BY i.id
+        """
+    )
+    missing: list[tuple[int, str]] = []
+    for inv_id, db_path, training_model in cur.fetchall():
+        if args.skip_ollama and training_model in OLLAMA_TRAINING_MODELS:
+            continue
         if not has_inferences(db_path):
-            missing.append(inv_id)
+            missing.append((inv_id, training_model))
 
     conn.close()
 
-    if missing:
+    ids: Iterable[int] = [inv_id for inv_id, _ in missing]
+
+    if args.print_view:
+        if ids:
+            print("CREATE TEMP VIEW empty_investigations(id) AS VALUES")
+            print(",\n".join(f"    ({i})" for i in ids) + ";")
+        else:
+            print("CREATE TEMP VIEW empty_investigations(id) AS VALUES (NULL) WHERE FALSE;")
+        return
+
+    if ids:
         print("Investigations with no inferences:")
-        for inv_id in missing:
+        for inv_id in ids:
             print(inv_id)
     else:
         print("All investigations have inference data.")
