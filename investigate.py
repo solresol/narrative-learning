@@ -31,15 +31,20 @@ def capture_cmd(cmd: list[str]) -> tuple[int, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the training loop")
-    parser.add_argument("investigation_id", type=int, help="ID from investigations table")
-    parser.add_argument("--dsn", help="PostgreSQL connection string")
+    parser.add_argument(
+        "investigation_id", type=int, help="ID from investigations table"
+    )
+    parser.add_argument(
+        "--dsn",
+        help="PostgreSQL connection string (defaults to libpq environment variables)",
+    )
     args = parser.parse_args()
 
     dsn = args.dsn or os.environ.get("POSTGRES_DSN")
-    if not dsn:
-        raise SystemExit("POSTGRES_DSN is not defined")
 
-    conn = psycopg2.connect(dsn)
+    # Passing an empty string uses libpq's standard environment variables and
+    # defaults for the connection parameters.
+    conn = psycopg2.connect(dsn or "")
     conn.autocommit = True
     cur = conn.cursor()
 
@@ -109,22 +114,38 @@ def main() -> None:
         if ret != 0:
             break
 
-        if run_cmd(["uv", "run", "process_round.py", "--round", str(round_no), "--loop", "--progress-bar"]) != 0:
-            sys.exit(1)
-
-        with tempfile.NamedTemporaryFile() as tmp:
-            if run_cmd(
+        if (
+            run_cmd(
                 [
                     "uv",
                     "run",
-                    "train.py",
-                    "--round-id",
+                    "process_round.py",
+                    "--round",
                     str(round_no),
-                    "--round-tracking-file",
-                    tmp.name,
-                    "--verbose",
+                    "--loop",
+                    "--progress-bar",
                 ]
-            ) != 0:
+            )
+            != 0
+        ):
+            sys.exit(1)
+
+        with tempfile.NamedTemporaryFile() as tmp:
+            if (
+                run_cmd(
+                    [
+                        "uv",
+                        "run",
+                        "train.py",
+                        "--round-id",
+                        str(round_no),
+                        "--round-tracking-file",
+                        tmp.name,
+                        "--verbose",
+                    ]
+                )
+                != 0
+            ):
                 sys.exit(1)
             tmp.seek(0)
             content = tmp.read().decode().strip()
@@ -137,7 +158,7 @@ def main() -> None:
 
     ret, best = capture_cmd(["uv", "run", "report-script.py", "--best"])
     if ret == 0 and best:
-        outfile = sqlite_db[:- len(".sqlite")] + ".best-round.txt"
+        outfile = sqlite_db[: -len(".sqlite")] + ".best-round.txt"
         with open(outfile, "w") as f:
             f.write(best + "\n")
 
@@ -151,4 +172,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
