@@ -11,23 +11,37 @@ def _execute(cur, conn, query: str, params: tuple = ()):  # type: ignore
 
 from modules.exceptions import NonexistentRoundException
 
-def get_database_path(conn: sqlite3.Connection) -> Optional[str]:
-    """Get the file path of an SQLite database from its connection object."""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA database_list")
-    # The database info is returned as (seq, name, file)
-    db_info = cursor.fetchall()
 
-    # The main database is usually the one with name 'main'
-    for entry in db_info:
-        if entry[1] == 'main':
-            return entry[2]
+def get_database_path(conn: Any) -> Optional[str]:
+    """Return an identifier for the connected database.
 
-    # If we didn't find one labeled 'main', return the first file path
-    if db_info:
-        return db_info[0][2]
+    For SQLite this returns the file path.  For PostgreSQL we return the
+    database name from the connection parameters.  If the information
+    cannot be determined, ``None`` is returned.
+    """
 
-    return None
+    if isinstance(conn, sqlite3.Connection):
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA database_list")
+        # The database info is returned as (seq, name, file)
+        db_info = cursor.fetchall()
+
+        # The main database is usually the one with name 'main'
+        for entry in db_info:
+            if entry[1] == 'main':
+                return entry[2]
+
+        # If we didn't find one labeled 'main', return the first file path
+        if db_info:
+            return db_info[0][2]
+        return None
+
+    # Assume PostgreSQL connection object from psycopg2
+    try:
+        params = conn.get_dsn_parameters()
+        return params.get("dbname")
+    except Exception:
+        return None
 
 def get_round_prompt(conn: Any, round_id: int, database_path: Optional[str] = None, dataset: str = "") -> str:
     """
