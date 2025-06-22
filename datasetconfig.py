@@ -26,16 +26,18 @@ class DatasetConfig:
     This class provides methods for retrieving and handling obfuscated data.
     """
 
-    def __init__(self, conn: Any, config_path: str, dataset: str = ""):
+    def __init__(self, conn: Any, config_path: str, dataset: str = "", investigation_id: Optional[int] = None):
         """
         Initialize with a database connection and configuration file path.
 
         Args:
-            conn: SQLite database connection
+            conn: SQLite or PostgreSQL database connection
             config_path: Path to the JSON configuration file
+            investigation_id: Filter rounds by this investigation when using PostgreSQL
         """
         self.conn = conn
         self.dataset = dataset
+        self.investigation_id = investigation_id
 
         # Load configuration
         with open(config_path, 'r') as f:
@@ -371,7 +373,7 @@ class DatasetConfig:
         Raises:
             SystemExit: If no rounds are found in the database
         """
-        return get_latest_split_id(self.conn, self.dataset)
+        return get_latest_split_id(self.conn, self.dataset, self.investigation_id)
 
     def get_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -383,7 +385,7 @@ class DatasetConfig:
         Returns:
             List of round IDs
         """
-        return get_rounds_for_split(self.conn, split_id, self.dataset)
+        return get_rounds_for_split(self.conn, split_id, self.dataset, self.investigation_id)
 
     def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -395,7 +397,7 @@ class DatasetConfig:
         Returns:
             List of round IDs that have inferences
         """
-        return get_processed_rounds_for_split(self.conn, split_id, self.dataset)
+        return get_processed_rounds_for_split(self.conn, split_id, self.dataset, self.investigation_id)
 
     def check_early_stopping(self, split_id: int, metric: str,
                             patience: int, on_validation: bool = True) -> bool:

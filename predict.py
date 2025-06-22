@@ -132,7 +132,7 @@ if __name__ == '__main__':
     if args.investigation_id is not None:
         conn = get_connection(args.dsn, args.pg_config)
         dataset, config_file = get_investigation_settings(conn, args.investigation_id)
-        config = datasetconfig.DatasetConfig(conn, config_file, dataset)
+        config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
     else:
         if not (args.database or args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
             sys.exit("Must specify --database or --dsn/--pg-config for PostgreSQL")
