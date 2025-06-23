@@ -6,16 +6,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import os
 from chartutils import draw_baselines
+from modules.postgres import get_connection
 
-def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None, 
-                                slope_output=None, filter_rsquared=0.8):
+def analyze_error_rate_by_herdan(conn, table, dataset, image_output=None,
+                                pvalue_output=None, slope_output=None,
+                                filter_rsquared=0.8):
     """
     Analyze relationship between Herdan coefficient and error rate (neg log error).
     
     Args:
-        csv_file: Path to CSV file with results
+        conn: Active PostgreSQL connection
+        table: Table name containing results data
+        dataset: Dataset name to analyze
         image_output: Path to save the output image
         pvalue_output: Path to save the p-value text file
         slope_output: Path to save the slope value text file
@@ -24,11 +27,10 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
     Returns:
         Tuple of (p_value, slope, DataFrame with filtered data)
     """
-    # Load data
-    df = pd.read_csv(csv_file)
-    
-    # Get dataset name from file
-    dataset_name = os.path.basename(csv_file).split('_')[0].capitalize()
+    # Load data from PostgreSQL
+    query = f'SELECT * FROM {table} WHERE "Task" = %s'
+    df = pd.read_sql_query(query, conn, params=(dataset,))
+    dataset_name = dataset.capitalize()
     
     # Filter data by R-squared
     filtered_df = df[df['Herdan R-squared'] >= filter_rsquared].copy()
@@ -141,29 +143,55 @@ def analyze_error_rate_by_herdan(csv_file, image_output=None, pvalue_output=None
     if slope_output:
         with open(slope_output, 'w') as f:
             f.write(f"{slope:.3f}")
-    
+
+    # Store results in PostgreSQL
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS herdan_error_rate_results (
+            dataset TEXT,
+            p_value DOUBLE PRECISION,
+            slope DOUBLE PRECISION
+        )
+        """
+    )
+    cur.execute(
+        "INSERT INTO herdan_error_rate_results(dataset, p_value, slope)"
+        " VALUES (%s, %s, %s)",
+        (dataset_name, float(p_value), float(slope))
+    )
+    conn.commit()
+
     return p_value, slope, filtered_df
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Analyze the relationship between Herdan coefficient and error rate')
-    parser.add_argument('csv_file', help='CSV file with model results')
+    parser = argparse.ArgumentParser(
+        description='Analyze the relationship between Herdan coefficient and error rate')
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--table', required=True, help='Table with results data')
+    parser.add_argument('--dataset', required=True, help='Dataset name to analyze')
     parser.add_argument('--image-output', help='Path to save the output image')
     parser.add_argument('--pvalue-output', help='Path to save the p-value text file')
     parser.add_argument('--slope-output', help='Path to save the slope value text file')
-    parser.add_argument('--filter-rsquared', type=float, default=0.8, 
+    parser.add_argument('--filter-rsquared', type=float, default=0.8,
                         help='Minimum R-squared value for Herdan coefficient to include data points')
     parser.add_argument('--show', action='store_true', help='Show the plot')
     
     args = parser.parse_args()
     
     try:
+        conn = get_connection(args.dsn, args.pg_config)
         p_value, slope, filtered_df = analyze_error_rate_by_herdan(
-            args.csv_file,
+            conn,
+            args.table,
+            args.dataset,
             args.image_output,
             args.pvalue_output,
             args.slope_output,
-            args.filter_rsquared
+            args.filter_rsquared,
         )
+        conn.close()
         
         print(f"Analysis completed successfully:")
         print(f"P-value: {p_value:.4f}")

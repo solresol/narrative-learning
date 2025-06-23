@@ -6,17 +6,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import os
 from chartutils import draw_baselines
+from modules.postgres import get_connection
 
-def analyze_error_rate_by_wordcount(csv_file, x_column='Prompt Word Count', image_output=None, 
+def analyze_error_rate_by_wordcount(conn, table, dataset, x_column='Prompt Word Count', image_output=None,
                               pvalue_output=None, slope_output=None):
     """
     Analyze relationship between word count and error rate (neg log error).
     
     Args:
-        csv_file: Path to CSV file with results
-        x_column: The word count column to use as x-axis ('Prompt Word Count', 
+        conn: Active PostgreSQL connection
+        table: Table name containing results data
+        dataset: Dataset name to analyze
+        x_column: The word count column to use as x-axis ('Prompt Word Count',
                  'Reasoning Word Count', or 'Cumulative Reasoning Words')
         image_output: Path to save the output image
         pvalue_output: Path to save the p-value text file
@@ -25,11 +27,10 @@ def analyze_error_rate_by_wordcount(csv_file, x_column='Prompt Word Count', imag
     Returns:
         Tuple of (p_value, slope, DataFrame with data)
     """
-    # Load data
-    df = pd.read_csv(csv_file)
-    
-    # Get dataset name from file
-    dataset_name = os.path.basename(csv_file).split('_')[0].capitalize()
+    # Load data from PostgreSQL
+    query = f'SELECT * FROM {table} WHERE "Task" = %s'
+    df = pd.read_sql_query(query, conn, params=(dataset,))
+    dataset_name = dataset.capitalize()
     
     # Set readable column name for display
     x_column_display = x_column
@@ -145,12 +146,34 @@ def analyze_error_rate_by_wordcount(csv_file, x_column='Prompt Word Count', imag
     if slope_output:
         with open(slope_output, 'w') as f:
             f.write(f"{slope:.6f}")
-    
+
+    # Store results in PostgreSQL
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wordcount_error_rate_results (
+            dataset TEXT,
+            wordcount_type TEXT,
+            p_value DOUBLE PRECISION,
+            slope DOUBLE PRECISION
+        )
+        """
+    )
+    cur.execute(
+        "INSERT INTO wordcount_error_rate_results(dataset, wordcount_type, p_value, slope)"
+        " VALUES (%s, %s, %s, %s)",
+        (dataset_name, x_column, float(p_value), float(slope))
+    )
+    conn.commit()
+
     return p_value, slope, filtered_df
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze the relationship between word count and error rate')
-    parser.add_argument('csv_file', help='CSV file with model results')
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--table', required=True, help='Table with results data')
+    parser.add_argument('--dataset', required=True, help='Dataset name to analyze')
     parser.add_argument('--wordcount-type', choices=['prompt', 'reasoning', 'cumulative'], default='prompt',
                         help='Type of word count to use (prompt, reasoning, or cumulative)')
     parser.add_argument('--image-output', help='Path to save the output image')
@@ -168,15 +191,19 @@ if __name__ == '__main__':
     }
     
     x_column = wordcount_columns[args.wordcount_type]
-    
+
     try:
+        conn = get_connection(args.dsn, args.pg_config)
         p_value, slope, filtered_df = analyze_error_rate_by_wordcount(
-            args.csv_file,
+            conn,
+            args.table,
+            args.dataset,
             x_column,
             args.image_output,
             args.pvalue_output,
-            args.slope_output
+            args.slope_output,
         )
+        conn.close()
         
         print(f"Analysis completed successfully:")
         print(f"P-value: {p_value:.4f}")

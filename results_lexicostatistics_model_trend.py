@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import os
+from modules.postgres import get_connection
 
 def analyze_task_correlations(task_model_data):
     """
@@ -57,12 +57,14 @@ def analyze_task_correlations(task_model_data):
     
     return correlation_matrix, corr_df
 
-def analyze_model_size_vs_lexical_complexity(csv_files, output_image=None, latex_output=None, filter_rsquared=0.8, min_model_size=10):
+def analyze_model_size_vs_lexical_complexity(conn, table, datasets, output_image=None, latex_output=None, filter_rsquared=0.8, min_model_size=10):
     """
     Analyze relationship between model size and lexical complexity metrics.
     
     Args:
-        csv_files: List of CSV file paths to analyze
+        conn: Active PostgreSQL connection
+        table: Table name containing results data
+        datasets: List of dataset names to analyze
         output_image: Path to save the output image
         latex_output: Path to save LaTeX macros
         filter_rsquared: Minimum R-squared value for Herdan coefficient to include data points
@@ -73,18 +75,19 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_image=None, latex
     """
     # Create output directory for the image file if needed
     if output_image:
+        import os
         output_dir = os.path.dirname(output_image)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-    
-    # Load and combine data from all CSV files
+
+    # Load and combine data from PostgreSQL
     dfs = []
-    for file in csv_files:
-        task_name = os.path.basename(file).split('_')[0]
-        df = pd.read_csv(file)
-        df['Task'] = task_name
+    for ds in datasets:
+        query = f'SELECT * FROM {table} WHERE "Task" = %s'
+        df = pd.read_sql_query(query, conn, params=(ds,))
+        df['Task'] = ds
         dfs.append(df)
-    
+
     combined_df = pd.concat(dfs, ignore_index=True)
     
     # Filter data
@@ -243,6 +246,28 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_image=None, latex
                 f.write(f"\\newcommand{{\\herdanaveragecorrelation}}{{{avg_correlation:.2f}}}\n")
             else:
                 f.write("\\newcommand{\\herdanaveragecorrelation}{N/A}\n")
+
+    # Store results in PostgreSQL
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lexical_complexity_trends (
+            metric TEXT,
+            slope DOUBLE PRECISION,
+            intercept DOUBLE PRECISION,
+            r_squared DOUBLE PRECISION,
+            p_value DOUBLE PRECISION,
+            std_err DOUBLE PRECISION,
+            data_points INTEGER
+        )
+        """
+    )
+    cur.execute(
+        "INSERT INTO lexical_complexity_trends(metric, slope, intercept, r_squared, p_value, std_err, data_points)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        ('herdan', float(slope), float(intercept), float(r_value**2), float(p_value), float(std_err), len(filtered_df))
+    )
+    conn.commit()
     
     # Return results
     results = {
@@ -259,24 +284,31 @@ def analyze_model_size_vs_lexical_complexity(csv_files, output_image=None, latex
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze model size vs. lexical complexity trends')
-    parser.add_argument('csv_files', nargs='+', help='CSV files with model results')
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--table', required=True, help='Table with results data')
+    parser.add_argument('--datasets', nargs='+', required=True, help='Datasets to analyze')
     parser.add_argument('--output-image', help='Path to save the output image')
     parser.add_argument('--latex-output', help='Path to save LaTeX macros file')
-    parser.add_argument('--filter-rsquared', type=float, default=0.8, 
+    parser.add_argument('--filter-rsquared', type=float, default=0.8,
                         help='Minimum R-squared value for Herdan coefficient to include data points')
-    parser.add_argument('--min-model-size', type=float, default=10, 
+    parser.add_argument('--min-model-size', type=float, default=10,
                         help='Minimum model size to include (in billions)')
     parser.add_argument('--show', action='store_true', help='Show the plot')
     
     args = parser.parse_args()
     
+    conn = get_connection(args.dsn, args.pg_config)
     results, filtered_df = analyze_model_size_vs_lexical_complexity(
-            args.csv_files,
+            conn,
+            args.table,
+            args.datasets,
             args.output_image,
             args.latex_output,
             args.filter_rsquared,
             args.min_model_size
     )
+    conn.close()
         
     print(f"Analysis completed successfully:")
     print(f"Slope: {results['slope']:.6f}")

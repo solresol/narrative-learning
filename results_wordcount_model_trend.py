@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import os
+from modules.postgres import get_connection
 
 def analyze_task_correlations(task_model_data, metric_name):
     """
@@ -58,12 +58,14 @@ def analyze_task_correlations(task_model_data, metric_name):
     
     return correlation_matrix, corr_df
 
-def analyze_model_size_vs_wordcount(csv_files, wordcount_type='prompt', output_image=None, latex_output=None, filter_rsquared=0.8, min_model_size=10):
+def analyze_model_size_vs_wordcount(conn, table, datasets, wordcount_type='prompt', output_image=None, latex_output=None, filter_rsquared=0.8, min_model_size=10):
     """
     Analyze relationship between model size and word count metrics.
     
     Args:
-        csv_files: List of CSV file paths to analyze
+        conn: Active PostgreSQL connection
+        table: Table name containing results data
+        datasets: List of dataset names to analyze
         wordcount_type: Type of word count to analyze ('prompt', 'reasoning', or 'cumulative')
         output_image: Path to save the output image
         latex_output: Path to save LaTeX macros
@@ -91,18 +93,19 @@ def analyze_model_size_vs_wordcount(csv_files, wordcount_type='prompt', output_i
     
     # Create output directory for the image file if needed
     if output_image:
+        import os
         output_dir = os.path.dirname(output_image)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-    
-    # Load and combine data from all CSV files
+
+    # Load and combine data from PostgreSQL
     dfs = []
-    for file in csv_files:
-        task_name = os.path.basename(file).split('_')[0]
-        df = pd.read_csv(file)
-        df['Task'] = task_name
+    for ds in datasets:
+        query = f'SELECT * FROM {table} WHERE "Task" = %s'
+        df = pd.read_sql_query(query, conn, params=(ds,))
+        df['Task'] = ds
         dfs.append(df)
-    
+
     combined_df = pd.concat(dfs, ignore_index=True)
     
     # Filter data
@@ -261,6 +264,28 @@ def analyze_model_size_vs_wordcount(csv_files, wordcount_type='prompt', output_i
                 f.write(f"\\newcommand{{\\{latex_prefix}averagecorrelation}}{{{avg_correlation:.2f}}}\n")
             else:
                 f.write(f"\\newcommand{{\\{latex_prefix}averagecorrelation}}{{N/A}}\n")
+
+    # Store results in PostgreSQL
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wordcount_complexity_trends (
+            metric TEXT,
+            slope DOUBLE PRECISION,
+            intercept DOUBLE PRECISION,
+            r_squared DOUBLE PRECISION,
+            p_value DOUBLE PRECISION,
+            std_err DOUBLE PRECISION,
+            data_points INTEGER
+        )
+        """
+    )
+    cur.execute(
+        "INSERT INTO wordcount_complexity_trends(metric, slope, intercept, r_squared, p_value, std_err, data_points)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (metric_column, float(slope), float(intercept), float(r_value**2), float(p_value), float(std_err), len(filtered_df))
+    )
+    conn.commit()
     
     # Return results
     results = {
@@ -277,7 +302,10 @@ def analyze_model_size_vs_wordcount(csv_files, wordcount_type='prompt', output_i
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze model size vs. word count metric trends')
-    parser.add_argument('csv_files', nargs='+', help='CSV files with model results')
+    parser.add_argument('--dsn', help='PostgreSQL DSN')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--table', required=True, help='Table with results data')
+    parser.add_argument('--datasets', nargs='+', required=True, help='Datasets to analyze')
     parser.add_argument('--wordcount-type', choices=['prompt', 'reasoning', 'cumulative'], default='prompt',
                       help='Type of word count to analyze (prompt, reasoning, or cumulative)')
     parser.add_argument('--output', help='Path to save the output image')
@@ -290,14 +318,18 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
+    conn = get_connection(args.dsn, args.pg_config)
     results, filtered_df = analyze_model_size_vs_wordcount(
-            args.csv_files,
+            conn,
+            args.table,
+            args.datasets,
             args.wordcount_type,
             args.output,
             args.latex,
             args.filter_rsquared,
             args.min_model_size
     )
+    conn.close()
         
     print(f"Analysis completed successfully:")
     print(f"Slope: {results['slope']:.6f}")
