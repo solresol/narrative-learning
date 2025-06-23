@@ -104,6 +104,8 @@ def main() -> None:
                 "uv",
                 "run",
                 "report-script.py",
+                "--investigation-id",
+                str(args.investigation_id),
                 "--metric",
                 "accuracy",
                 "--validation",
@@ -156,7 +158,14 @@ def main() -> None:
             (round_no, args.investigation_id),
         )
 
-    ret, best = capture_cmd(["uv", "run", "report-script.py", "--best"])
+    ret, best = capture_cmd([
+        "uv",
+        "run",
+        "report-script.py",
+        "--investigation-id",
+        str(args.investigation_id),
+        "--best",
+    ])
     if ret == 0 and best:
         outfile = sqlite_db[: -len(".sqlite")] + ".best-round.txt"
         with open(outfile, "w") as f:
