@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 import sys
+import random
 
 class MissingUpdatedPrompt(Exception):
     pass
@@ -457,6 +458,8 @@ Use the tool provided to submit your answer. You must include both a narrative_t
 
 
 def dispatch_prediction_prompt(model, prompt, valid_predictions):
+    if model == 'random':
+        return random_prediction(model, prompt, valid_predictions)
     if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b', 'cogito:70b']:
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]:
@@ -525,7 +528,25 @@ Supply your answer using the tool provided. You must include both reasoning expl
     return tool_call, json.dumps(usage_obj)
 
 
+def random_prediction(model, prompt, valid_predictions):
+    """Return a random prediction without calling an external LLM."""
+    return {
+        "narrative_text": "Random choice",
+        "prediction": random.choice(valid_predictions)
+    }, ""
+
+
+def random_reprompt(model, prompting_creation_prompt):
+    """Return a trivial prompt suggesting random choice."""
+    return {
+        "reasoning": "No reasoning needed for random choice",
+        "updated_prompt": "Choose randomly"
+    }, ""
+
+
 def dispatch_reprompt_prompt(model, prompting_creation_prompt):
+    if model == 'random':
+        return random_reprompt(model, prompting_creation_prompt)
     if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b', 'cogito:70b']:
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]:
