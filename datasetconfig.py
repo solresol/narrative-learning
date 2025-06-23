@@ -83,6 +83,12 @@ class DatasetConfig:
             query = query.replace("?", "%s")
         cur.execute(query, params)
 
+    def _ident(self, name: str) -> str:
+        """Return a safely quoted identifier depending on the database."""
+        if isinstance(self.conn, sqlite3.Connection):
+            return f'"{name}"'
+        return name
+
 
     def get_entity_features(self, entity_id: str) -> str:
         """
@@ -100,7 +106,7 @@ class DatasetConfig:
             if column != self.primary_key and column != self.target_field:
                 columns_to_select.append(column)
 
-        column_list = ", ".join([f'"{col}"' for col in columns_to_select])
+        column_list = ", ".join([self._ident(col) for col in columns_to_select])
 
         query = f"""
         SELECT {column_list}
@@ -137,7 +143,7 @@ class DatasetConfig:
         # (which the caller already knew) and the target (which is only used
         # in the training phase, when it's an aggregate query and we wouldn't
         # ask for one element).
-        column_list = ", ".join([f'"{col}"' for col in self.columns])
+        column_list = ", ".join([self._ident(col) for col in self.columns])
 
         query = f"""
         SELECT {column_list}
@@ -176,12 +182,13 @@ class DatasetConfig:
         query = f"""
            SELECT s.{self.primary_key}
            FROM {self.splits_table} s
-           WHERE s.split_id = ? AND s.holdout = 0
+           WHERE s.split_id = ? AND s.holdout = ?
            ORDER BY RANDOM()
            LIMIT 1
         """
 
-        self._execute(cur, query, (split_id,))
+        holdout_false = 0 if isinstance(self.conn, sqlite3.Connection) else False
+        self._execute(cur, query, (split_id, holdout_false))
         row = cur.fetchone()
 
         if row is None:

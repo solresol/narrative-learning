@@ -111,4 +111,7 @@ uv run investigate.py <investigation-id>
 `investigate.py` reads the settings for the given investigation ID from
 PostgreSQL and updates the `round_number` field after each successful round.
 The initial value should be loaded from the `round_tracking_file` referenced in
-the `investigations` table (no loader script exists yet).
+the `investigations` table (no loader script exists yet).  Each dataset has its
+own tables such as `espionage_rounds` and `espionage_inferences`; the training
+scripts use the dataset name from the configuration to construct these table
+names.
