@@ -41,13 +41,21 @@ would handle one of those situations correctly.
     # History rounds (without examples)
     if history_rounds > 0:
         cur = config.conn.cursor()
-        cur.execute("""
+        if not getattr(config, "dataset", ""):
+            raise RuntimeError("Dataset name must be provided")
+        table = f"{config.dataset}_rounds"
+        query = f"""
             SELECT round_id, prompt
-              FROM rounds
+              FROM {table}
              WHERE round_id < ?
-          ORDER BY round_id DESC
-             LIMIT ?
-        """, (round_id, history_rounds))
+        """
+        params = [round_id]
+        if getattr(config, "investigation_id", None) is not None:
+            query += " AND investigation_id = ?"
+            params.append(config.investigation_id)
+        query += " ORDER BY round_id DESC LIMIT ?"
+        params.append(history_rounds)
+        config._execute(cur, query, tuple(params))
         history_rounds = cur.fetchall()
 
         if history_rounds:
@@ -90,7 +98,9 @@ def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose
     if verbose:
         print(f"Quality control passed the following prompt:\n\n```\n{new_prompt}\n```")
     cur = config.conn.cursor()
-    table = f"{config.dataset}_rounds" if getattr(config, 'dataset', '') else "rounds"
+    if not getattr(config, "dataset", ""):
+        raise RuntimeError("Dataset name must be provided")
+    table = f"{config.dataset}_rounds"
     fields = "split_id, prompt, reasoning_for_this_prompt, stderr_from_prompt_creation"
     placeholders = "?, ?, ?, ?"
     params = [split_id, new_prompt['updated_prompt'], new_prompt['reasoning'], process_info]
