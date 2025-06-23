@@ -122,10 +122,12 @@ def main() -> None:
                     "uv",
                     "run",
                     "process_round.py",
-                    "--round",
+                    "--round-id",
                     str(round_no),
                     "--loop",
                     "--progress-bar",
+                    "--investigation-id",
+                    str(args.investigation_id),
                 ]
             )
             != 0
@@ -141,6 +143,8 @@ def main() -> None:
                         "train.py",
                         "--round-id",
                         str(round_no),
+                        "--investigation-id",
+                        str(args.investigation_id),
                         "--round-tracking-file",
                         tmp.name,
                         "--verbose",

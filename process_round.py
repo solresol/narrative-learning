@@ -28,8 +28,23 @@ def main():
 
     if args.investigation_id is not None:
         conn = get_connection(args.dsn, args.pg_config)
-        dataset, config_file = get_investigation_settings(conn, args.investigation_id)
         cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT i.dataset, d.config_file, m.inference_model
+              FROM investigations i
+              JOIN datasets d ON i.dataset = d.dataset
+              JOIN models m ON i.model = m.model
+             WHERE i.id = %s
+            """,
+            (args.investigation_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            sys.exit(f"investigation {args.investigation_id} not found")
+        dataset, config_file, inference_model = row
+        if "--model" not in sys.argv:
+            args.model = inference_model
         config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
     else:
         if args.model is None and not args.list:
