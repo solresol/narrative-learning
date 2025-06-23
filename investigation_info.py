@@ -6,12 +6,10 @@ system is migrating between SQLite and PostgreSQL.
 """
 from __future__ import annotations
 import argparse
-import os
-import sqlite3
 
 from modules.postgres import get_connection
 from datasetconfig import DatasetConfig
-from modules.exceptions import NoProcessedRoundsException, NonexistentRoundException
+from modules.exceptions import NoProcessedRoundsException
 
 
 def main() -> None:
@@ -72,34 +70,24 @@ def main() -> None:
     print(f"  SQLite DB: {sqlite_db}")
     print(f"  Round tracking file: {round_file}")
 
-    if sqlite_db and os.path.exists(sqlite_db):
+    cfg = DatasetConfig(conn, config_file, dataset, args.investigation_id)
+    try:
+        split_id = cfg.get_latest_split_id()
+        rounds = cfg.get_rounds_for_split(split_id)
+        processed = cfg.get_processed_rounds_for_split(split_id)
+        print(f"  Total rounds in DB: {len(rounds)}")
+        print(f"  Rounds with data: {len(processed)}")
         try:
-            db_conn = sqlite3.connect(f"file:{sqlite_db}?mode=ro", uri=True)
-        except sqlite3.Error as exc:
-            print(f"  Could not open SQLite database: {exc}")
-        else:
-            cfg = DatasetConfig(db_conn, config_file, dataset)
-            try:
-                split_id = cfg.get_latest_split_id()
-                rounds = cfg.get_rounds_for_split(split_id)
-                processed = cfg.get_processed_rounds_for_split(split_id)
-                print(f"  Total rounds in DB: {len(rounds)}")
-                print(f"  Rounds with data: {len(processed)}")
-                try:
-                    best = cfg.get_best_round_id(split_id, "accuracy")
-                    print(f"  Best round: {best}")
-                except NoProcessedRoundsException:
-                    print("  Best round: none (no processed rounds)")
-                except Exception as exc:
-                    print(f"  Best round: error ({exc})")
-            except SystemExit:
-                print("  No rounds found in SQLite database")
-            except Exception as exc:
-                print(f"  Error reading SQLite data: {exc}")
-            finally:
-                db_conn.close()
-    else:
-        print("  SQLite database not found")
+            best = cfg.get_best_round_id(split_id, "accuracy")
+            print(f"  Best round: {best}")
+        except NoProcessedRoundsException:
+            print("  Best round: none (no processed rounds)")
+        except Exception as exc:
+            print(f"  Best round: error ({exc})")
+    except SystemExit:
+        print("  No rounds found in database")
+    except Exception as exc:
+        print(f"  Error reading data: {exc}")
 
     cur.close()
     conn.close()
