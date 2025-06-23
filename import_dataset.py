@@ -47,6 +47,18 @@ def insert_rows(cur, table: str, columns: List[str], rows: List[Tuple]) -> None:
             converted_rows.append(tuple(row_list))
         rows = converted_rows
 
+    # Remove any NUL characters from string fields to avoid psycopg2 errors
+    sanitized_rows = []
+    for row in rows:
+        sanitized = []
+        for value in row:
+            if isinstance(value, str):
+                sanitized.append(value.replace("\x00", ""))
+            else:
+                sanitized.append(value)
+        sanitized_rows.append(tuple(sanitized))
+    rows = sanitized_rows
+
     cur.executemany(
         f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING",
         rows,
