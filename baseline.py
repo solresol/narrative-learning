@@ -8,17 +8,26 @@ from sklearn.linear_model import LogisticRegressionCV
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.dummy import DummyClassifier
+from imodels import RuleFitClassifier, BayesianRuleListClassifier, OptimalRuleListClassifier
+from interpret.glassbox import ExplainableBoostingClassifier
 from datasetconfig import DatasetConfig
+from modules.postgres import get_connection, get_investigation_settings
 import sys
 import os
 import json
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Train baseline models using dataset configuration.')
-    parser.add_argument('--config', required=True, help='Path to the dataset configuration JSON file')
-    parser.add_argument('--database', required=True, help='Path to the SQLite database file')
-    parser.add_argument('--output', required=True, help='Path for baseline results JSON file')
+    parser = argparse.ArgumentParser(
+        description='Train baseline models using dataset configuration.'
+    )
+    parser.add_argument('--config', help='Path to the dataset configuration JSON file')
+    parser.add_argument('--database', help='Path to the SQLite database file')
+    parser.add_argument('--dsn', help='PostgreSQL DSN for connecting to the database')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--investigation-id', type=int, help='Investigation ID when using PostgreSQL')
+    parser.add_argument('--dataset', help='Dataset name when using PostgreSQL without investigation ID')
+    parser.add_argument('--output', help='Path for baseline results JSON file')
     return parser.parse_args()
 
 def load_data(conn, config):
@@ -115,77 +124,76 @@ def preprocess_data(train_df, test_df, config):
 
     return X_train, y_train, X_test, y_test, feature_names
 
-def train_and_evaluate_models(X_train, y_train, X_test, y_test, output_path):
-    """
-    Train logistic regression and decision tree models.
-    Evaluate on test set and save results to specified files.
-    Includes 95% confidence lower bound on accuracy.
-    """
+
+def train_and_evaluate_models(X_train, y_train, X_test, y_test):
+    """Train multiple baseline models and return accuracy metrics."""
     from statsmodels.stats.proportion import proportion_confint
 
-    # Train logistic regression model
-    lr_model = LogisticRegressionCV(max_iter=10000)
-    lr_model.fit(X_train, y_train)
-    lr_accuracy = lr_model.score(X_test, y_test)
-
-    # Train decision tree model
-    dt_model = DecisionTreeClassifier()
-    dt_model.fit(X_train, y_train)
-    dt_accuracy = dt_model.score(X_test, y_test)
-
-    dummy_model = DummyClassifier()
-    dummy_model.fit(X_train, y_train)
-    dummy_accuracy = dummy_model.score(X_test, y_test)
-
-    # Calculate 95% confidence lower bounds
-    n_test = len(y_test)
-    lr_correct = round(lr_accuracy * n_test)
-    dt_correct = round(dt_accuracy * n_test)
-    dummy_correct = round(dummy_accuracy * n_test)
-
-    # Clopper-Pearson method for confidence intervals
-    lr_lower_bound, _ = proportion_confint(count=lr_correct, nobs=n_test, alpha=0.05, method='beta')
-    dt_lower_bound, _ = proportion_confint(count=dt_correct, nobs=n_test, alpha=0.05, method='beta')
-    dummy_lower_bound, _ = proportion_confint(count=dummy_correct, nobs=n_test, alpha=0.05, method='beta')
-    
-    # Calculate negative log10 of error rates
-    import math
-    lr_neg_log_error = -math.log10(1 - lr_lower_bound) if lr_lower_bound < 1 else float('inf')
-    dt_neg_log_error = -math.log10(1 - dt_lower_bound) if dt_lower_bound < 1 else float('inf')
-    dummy_neg_log_error = -math.log10(1 - dummy_lower_bound) if dummy_lower_bound < 1 else float('inf')
-
-    output = {
-        'logistic regression': {
-            'accuracy': lr_accuracy,
-            'lower_bound': lr_lower_bound,
-            'neg_log_error': lr_neg_log_error
-        },
-        'decision trees': {
-            'accuracy': dt_accuracy,
-            'lower_bound': dt_lower_bound,
-            'neg_log_error': dt_neg_log_error
-        },
-        'dummy': {
-            'accuracy': dummy_accuracy,
-            'lower_bound': dummy_lower_bound,
-            'neg_log_error': dummy_neg_log_error
-        }
+    models = {
+        'logistic regression': LogisticRegressionCV(max_iter=10000),
+        'decision trees': DecisionTreeClassifier(),
+        'dummy': DummyClassifier(),
+        'RuleFit': RuleFitClassifier(),
+        'BayesianRuleList': BayesianRuleListClassifier(),
+        'CORELS': OptimalRuleListClassifier(max_depth=3, n_iter=5000, lambda_=0.05),
+        'EBM': ExplainableBoostingClassifier(interactions=10),
     }
 
-    # Save results
-    with open(output_path, 'w') as f:
-        json.dump(output, f, indent=2)
+    accuracies = {}
+    for name, clf in models.items():
+        clf.fit(X_train, y_train)
+        accuracies[name] = clf.score(X_test, y_test)
 
-    print(f"Logistic Regression Test Accuracy: {lr_accuracy:.4f} (95% CI Lower Bound: {lr_lower_bound:.4f})")
-    print(f"Decision Tree Test Accuracy: {dt_accuracy:.4f} (95% CI Lower Bound: {dt_lower_bound:.4f})")
-    print(f"Dummy Accuracy: {dummy_accuracy:.4f} (95% CI Lower Bound: {dummy_lower_bound:.4f})")
+    n_test = len(y_test)
+    correct_counts = {name: round(acc * n_test) for name, acc in accuracies.items()}
+
+    lower_bounds = {}
+    for name, count in correct_counts.items():
+        lb, _ = proportion_confint(count=count, nobs=n_test, alpha=0.05, method='beta')
+        lower_bounds[name] = lb
+
+    import math
+    neg_log_errors = {
+        name: -math.log10(1 - lb) if lb < 1 else float('inf')
+        for name, lb in lower_bounds.items()
+    }
+
+    output = {
+        name: {
+            'accuracy': accuracies[name],
+            'lower_bound': lower_bounds[name],
+            'neg_log_error': neg_log_errors[name],
+        }
+        for name in models
+    }
+
+    for name in models:
+        print(f"{name}: accuracy = {accuracies[name]:.4f} (95% CI Lower Bound: {lower_bounds[name]:.4f})")
+
+    return output
+
 
 def main():
     """Main function to execute the baseline model training and evaluation."""
     args = parse_arguments()
 
-    conn = sqlite3.connect(f"file:{args.database}?mode=ro", uri=True)
-    config = DatasetConfig(conn, args.config)
+    if args.investigation_id is not None:
+        conn = get_connection(args.dsn, args.pg_config)
+        dataset, config_path = get_investigation_settings(conn, args.investigation_id)
+        config = DatasetConfig(conn, config_path, dataset, args.investigation_id)
+    else:
+        if args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN"):
+            conn = get_connection(args.dsn, args.pg_config)
+            dataset = args.dataset
+        else:
+            if not args.database:
+                sys.exit("Must specify --database or --dsn/--pg-config")
+            conn = sqlite3.connect(f"file:{args.database}?mode=ro", uri=True)
+            dataset = ""
+
+        if not args.config:
+            sys.exit("Must specify --config")
+        config = DatasetConfig(conn, args.config, dataset)
     # Load and preprocess data
     train_df, test_df = load_data(conn, config)
 
@@ -198,7 +206,55 @@ def main():
         sys.exit("Error: No usable features found after preprocessing")
 
     # Train and evaluate models
-    train_and_evaluate_models(X_train, y_train, X_test, y_test, args.output)
+    results = train_and_evaluate_models(X_train, y_train, X_test, y_test)
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            json.dump(results, f, indent=2)
+
+    if not isinstance(conn, sqlite3.Connection) and dataset:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS baseline_results (
+                dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+                logistic_regression DOUBLE PRECISION,
+                decision_trees DOUBLE PRECISION,
+                dummy DOUBLE PRECISION,
+                rulefit DOUBLE PRECISION,
+                bayesian_rule_list DOUBLE PRECISION,
+                corels DOUBLE PRECISION,
+                ebm DOUBLE PRECISION
+            )
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO baseline_results (
+                dataset, logistic_regression, decision_trees, dummy,
+                rulefit, bayesian_rule_list, corels, ebm
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (dataset) DO UPDATE SET
+                logistic_regression=EXCLUDED.logistic_regression,
+                decision_trees=EXCLUDED.decision_trees,
+                dummy=EXCLUDED.dummy,
+                rulefit=EXCLUDED.rulefit,
+                bayesian_rule_list=EXCLUDED.bayesian_rule_list,
+                corels=EXCLUDED.corels,
+                ebm=EXCLUDED.ebm
+            """,
+            (
+                dataset,
+                results['logistic regression']['lower_bound'],
+                results['decision trees']['lower_bound'],
+                results['dummy']['lower_bound'],
+                results['RuleFit']['lower_bound'],
+                results['BayesianRuleList']['lower_bound'],
+                results['CORELS']['lower_bound'],
+                results['EBM']['lower_bound'],
+            ),
+        )
+        conn.commit()
 
     # Close database connection
     conn.close()

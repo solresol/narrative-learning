@@ -21,3 +21,14 @@ CREATE TABLE investigations (
     dump_file TEXT,
     round_number INTEGER DEFAULT 1
 );
+
+CREATE TABLE baseline_results (
+    dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+    logistic_regression DOUBLE PRECISION,
+    decision_trees DOUBLE PRECISION,
+    dummy DOUBLE PRECISION,
+    rulefit DOUBLE PRECISION,
+    bayesian_rule_list DOUBLE PRECISION,
+    corels DOUBLE PRECISION,
+    ebm DOUBLE PRECISION
+);
