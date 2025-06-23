@@ -3,3 +3,5 @@ pandas
 matplotlib
 openai
 psycopg2-binary>=2.9.9
+imodels
+interpret
