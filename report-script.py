@@ -41,6 +41,8 @@ def main():
         dataset, config_file = get_investigation_settings(conn, args.investigation_id)
         config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
     else:
+        if args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN"):
+            sys.exit("Must specify --investigation-id for PostgreSQL")
         if args.config is None:
             sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
