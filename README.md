@@ -49,13 +49,13 @@ Then copy everything from `outputs/*_results.csv`
 Then, run the ensemble analysis:
 
 ```bash
-# Generate ensemble results for each dataset using the env directory structure
-python results_ensembling.py --env-dir envs/titanic --output outputs/titanic_ensemble.csv --summary outputs/titanic_ensemble_summary.txt
-python results_ensembling.py --env-dir envs/wisconsin --output outputs/wisconsin_ensemble.csv --summary outputs/wisconsin_ensemble_summary.txt
-python results_ensembling.py --env-dir envs/southgermancredit --output outputs/southgermancredit_ensemble.csv --summary outputs/southgermancredit_ensemble_summary.txt
-python results_ensembling.py --env-dir envs/potions --output outputs/potions_ensemble.csv --summary outputs/potions_ensemble_summary.txt
-python results_ensembling.py --env-dir envs/timetravel_insurance --output outputs/timetravel_insurance_ensemble.csv --summary outputs/timetravel_insurance_ensemble_summary.txt
-python results_ensembling.py --env-dir envs/espionage --output outputs/espionage_ensemble.csv --summary outputs/espionage_ensemble_summary.txt
+# Generate ensemble results for each dataset stored in PostgreSQL
+python results_ensembling.py titanic --output outputs/titanic_ensemble.csv --summary outputs/titanic_ensemble_summary.txt
+python results_ensembling.py wisconsin --output outputs/wisconsin_ensemble.csv --summary outputs/wisconsin_ensemble_summary.txt
+python results_ensembling.py southgermancredit --output outputs/southgermancredit_ensemble.csv --summary outputs/southgermancredit_ensemble_summary.txt
+python results_ensembling.py potions --output outputs/potions_ensemble.csv --summary outputs/potions_ensemble_summary.txt
+python results_ensembling.py timetravel_insurance --output outputs/timetravel_insurance_ensemble.csv --summary outputs/timetravel_insurance_ensemble_summary.txt
+python results_ensembling.py espionage --output outputs/espionage_ensemble.csv --summary outputs/espionage_ensemble_summary.txt
 ```
 
 The ensemble script will automatically organize results by model release dates from the `release-dates.csv` file.

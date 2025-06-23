@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 
 import argparse
-import sqlite3
-import pandas as pd
 import os
 import itertools
+import pandas as pd
 import datasetconfig
-import glob
-import re
+from modules.postgres import get_connection
 from typing import List, Dict, Tuple, Optional
 import sys
 from datetime import datetime
@@ -124,15 +122,18 @@ def calculate_metrics(predictions_df, ensemble_name="ensemble"):
     }
 
 
-def process_database_combinations(config_path, db_paths, model_names, k=3, verbose=False, progress_bar=False, use_decodex=True):
-    """Process all combinations of k databases and evaluate ensemble performance.
-    
+def process_investigation_combinations(conn, dataset, config_path, investigation_ids, model_names,
+                                        k=3, verbose=False, progress_bar=False, use_decodex=True):
+    """Process all combinations of ``k`` investigations and evaluate ensemble performance.
+
     Uses validation data to determine the best combinations, then scores them on test data.
-    
+
     Args:
+        conn: PostgreSQL connection
+        dataset: Dataset name for table prefixes
         config_path: Path to the configuration file
-        db_paths: List of database paths
-        model_names: List of model names corresponding to db_paths
+        investigation_ids: List of investigation IDs
+        model_names: List of model names corresponding to investigations
         k: Number of models to include in each ensemble
         verbose: Whether to print detailed progress
         progress_bar: Whether to show a progress bar
@@ -140,13 +141,13 @@ def process_database_combinations(config_path, db_paths, model_names, k=3, verbo
     """
     validation_results = []
     test_results = []
-    
+
     # Generate all combinations of indices
-    indices = list(range(len(db_paths)))
+    indices = list(range(len(investigation_ids)))
     index_combinations = list(itertools.combinations(indices, k))
-    
+
     if verbose:
-        print(f"Processing {len(index_combinations)} combinations of {k} databases...")
+        print(f"Processing {len(index_combinations)} combinations of {k} investigations...")
 
     iterator = index_combinations
     if progress_bar:
@@ -154,60 +155,52 @@ def process_database_combinations(config_path, db_paths, model_names, k=3, verbo
         iterator = tqdm.tqdm(index_combinations)
 
     for combo_indices in iterator:
-        combo = [db_paths[i] for i in combo_indices]
+        combo_investigations = [investigation_ids[i] for i in combo_indices]
         combo_models = [model_names[i] for i in combo_indices]
-        
+
         if verbose:
-            print(f"\nEvaluating combination: {[db for db in combo]}")
-        
+            print(f"\nEvaluating combination: {combo_investigations}")
+
         val_predictions_list = []
         test_predictions_list = []
         models_info = []
 
-        for i, db_path in enumerate(combo):
-            # Connect to the database
-            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-            
-            # Load the configuration
-            config = datasetconfig.DatasetConfig(conn, config_path)
-            
+        for i, inv_id in enumerate(combo_investigations):
+            # Load the configuration for this investigation
+            config = datasetconfig.DatasetConfig(conn, config_path, dataset, inv_id)
+
             # Get the best round ID
             split_id = config.get_latest_split_id()
             best_round_id = config.get_best_round_id(split_id)
-            
-            # Get model name from database path
-            model_name = os.path.basename(db_path)[:-7] 
-            # Get the model name from the provided list
+
+            # Investigation/model identifier
             model_name_from_env = combo_models[i]
-            
+
             # Get validation predictions for determining best combinations
             val_predictions_df = get_predictions_for_round(config, best_round_id, validation=True, use_decodex=use_decodex)
-            
+
             # Get test predictions for final evaluation
             test_predictions_df = get_predictions_for_round(config, best_round_id, validation=False, use_decodex=use_decodex)
 
             if verbose:
-                print(f"{db_path=} val:{val_predictions_df.shape=} test:{test_predictions_df.shape=}")
-            
+                print(f"investigation={inv_id} val:{val_predictions_df.shape=} test:{test_predictions_df.shape=}")
+
             if not val_predictions_df.empty and not test_predictions_df.empty:
                 val_predictions_list.append(val_predictions_df)
                 test_predictions_list.append(test_predictions_df)
                 models_info.append({
-                    'db_path': db_path,
-                    'model_name': model_name,
+                    'investigation_id': inv_id,
                     'model_name_from_env': model_name_from_env,
                     'best_round_id': best_round_id
                 })
-                
+
             if verbose:
                 # Calculate individual model accuracy on validation set
                 if not val_predictions_df.empty:
                     correct = (val_predictions_df['ground_truth'] == val_predictions_df['prediction']).sum()
                     accuracy = correct / len(val_predictions_df)
-                    print(f"  {model_name} (Round {best_round_id}): Validation Accuracy = {accuracy:.4f}")
-                
-            conn.close()
-        
+                    print(f"  {model_name_from_env} (Round {best_round_id}): Validation Accuracy = {accuracy:.4f}")
+
         # Check if we have enough predictions
         if len(val_predictions_list) < k or len(test_predictions_list) < k:
             print(f"  Warning: Skipping combination due to insufficient valid predictions (validation: {len(val_predictions_list)}, test: {len(test_predictions_list)})")
@@ -222,7 +215,7 @@ def process_database_combinations(config_path, db_paths, model_names, k=3, verbo
         
         # Add to validation results
         val_result = {
-            'models': [model['model_name'] for model in models_info],
+            'models': [model['model_name_from_env'] for model in models_info],
             'model_names': [model['model_name_from_env'] for model in models_info],
             'model_rounds': [model['best_round_id'] for model in models_info],
             'accuracy': val_metrics['accuracy'],
@@ -243,7 +236,7 @@ def process_database_combinations(config_path, db_paths, model_names, k=3, verbo
         
         # Add to test results (with same index as validation results for later matching)
         test_result = {
-            'models': [model['model_name'] for model in models_info],
+            'models': [model['model_name_from_env'] for model in models_info],
             'model_names': [model['model_name_from_env'] for model in models_info],
             'model_rounds': [model['best_round_id'] for model in models_info],
             'accuracy': test_metrics['accuracy'],
@@ -272,29 +265,6 @@ def find_best_combinations(results, top_n=5):
     return sorted_results[:top_n]
 
 
-def parse_env_file(env_file_path):
-    """Parse environment file to extract database path and model name.
-    
-    Args:
-        env_file_path: Path to the .env file
-        
-    Returns:
-        Tuple of (database_path, config_path, model_name)
-    """
-    database_path = None
-    config_path = None
-    model_name = None
-    
-    with open(env_file_path, 'r') as f:
-        for line in f:
-            if line.startswith('export NARRATIVE_LEARNING_DATABASE='):
-                database_path = line.strip().split('=', 1)[1].strip()
-            elif line.startswith('export NARRATIVE_LEARNING_CONFIG='):
-                config_path = line.strip().split('=', 1)[1].strip()
-            elif line.startswith('export NARRATIVE_LEARNING_TRAINING_MODEL='):
-                model_name = line.strip().split('=', 1)[1].strip()
-    
-    return database_path, config_path, model_name
 
 
 def get_model_release_date(model_name, release_dates_df):
@@ -636,101 +606,45 @@ def export_best_by_date_to_csv(validation_results, test_results, output_path, re
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate ensemble performance using majority voting")
-    parser.add_argument("--config", help="Path to the configuration file (optional if env files are consistent)")
-    parser.add_argument("--env-dir", help="Directory containing .env files to analyze")
-    parser.add_argument("--output", help="Output CSV file path for detailed results")
-    parser.add_argument("--summary", help="Output text file path for summary")
-    parser.add_argument("--k", type=int, default=3, help="Number of models to ensemble (default: 3)")
-    parser.add_argument("--verbose", action="store_true", help="Print detailed progress")
-    parser.add_argument("--progress-bar", action="store_true", help="Show progress bar")
-    parser.add_argument("--no-decodex", action="store_false", dest="use_decodex", help="Normally we use the decodex column, but for synthetic data there is no decodex")
-    parser.add_argument("--release-dates", default="release-dates.csv", help="Path to CSV file containing model release dates")
-    parser.add_argument("database", nargs="*", help="SQLite database files to analyze (if not using --env-dir)")
-    
+    parser.add_argument('dataset', help='Dataset name from the datasets table')
+    parser.add_argument('--dsn', help='PostgreSQL connection string')
+    parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
+    parser.add_argument('--output', help='Output CSV file path for detailed results')
+    parser.add_argument('--summary', help='Output text file path for summary')
+    parser.add_argument('--k', type=int, default=3, help='Number of models to ensemble (default: 3)')
+    parser.add_argument('--verbose', action='store_true', help='Print detailed progress')
+    parser.add_argument('--progress-bar', action='store_true', help='Show progress bar')
+    parser.add_argument('--no-decodex', action='store_false', dest='use_decodex', help='Normally we use the decodex column, but for synthetic data there is no decodex')
+    parser.add_argument('--release-dates', default='release-dates.csv', help='Path to CSV file containing model release dates')
+
     args = parser.parse_args()
-    
-    # Check if we're using env directory or database list
-    if args.env_dir and args.database:
-        print("Error: Cannot specify both --env-dir and database list")
-        sys.exit(1)
-    
-    if not args.env_dir and not args.database:
-        print("Error: Must specify either --env-dir or a list of database files")
-        sys.exit(1)
-    
-    # If using env directory, parse env files to get database paths and model names
-    if args.env_dir:
-        # Find all .env files in the directory
-        env_files = glob.glob(os.path.join(args.env_dir, "*.env"))
-        
-        if not env_files:
-            print(f"Error: No .env files found in {args.env_dir}")
-            sys.exit(1)
-        
-        # Parse each env file
-        db_paths = []
-        config_paths = []
-        model_names = []
-        
-        for env_file in env_files:
-            db_path, config_path, model_name = parse_env_file(env_file)
-            
-            if not db_path:
-                print(f"Warning: No database path found in {env_file}")
-                continue
-                
-            # Check if the database exists
-            if not os.path.exists(db_path):
-                print(f"Warning: Database {db_path} from {env_file} does not exist")
-                continue
-                
-            # Skip if config_path is not defined and args.config is not provided
-            if not config_path and not args.config:
-                print(f"Warning: No config path found in {env_file} and --config not provided")
-                continue
-                
-            db_paths.append(db_path)
-            config_paths.append(config_path or args.config)
-            model_names.append(model_name)
-        
-        # Filter database paths to remove baselines
-        filtered_paths = []
-        filtered_configs = []
-        filtered_models = []
-        
-        for i, path in enumerate(db_paths):
-            if 'baseline' not in path:
-                filtered_paths.append(path)
-                filtered_configs.append(config_paths[i])
-                filtered_models.append(model_names[i])
-        
-        # Use the first config path if all are the same
-        config_path = filtered_configs[0] if filtered_configs and len(set(filtered_configs)) == 1 else args.config
-        
-        if not config_path:
-            print("Error: No config path found in env files and --config not provided")
-            sys.exit(1)
-            
-        if args.verbose:
-            print(f"Using config path: {config_path}")
-            print(f"Found {len(filtered_paths)} valid databases")
-            print(f"Found {len(filtered_models)} valid models")
-            
-        db_paths = filtered_paths
-        model_names = filtered_models
-    else:
-        # Using the database list provided
-        if not args.config:
-            print("Error: --config is required when specifying database files directly")
-            sys.exit(1)
-            
-        # Filter database paths to remove baselines
-        db_paths = [x for x in args.database if 'baseline' not in x]
-        # Extract model names from database paths (just for compatibility)
-        model_names = [os.path.basename(db_path)[:-7] for db_path in db_paths]
-        config_path = args.config
-    
-    # Load release dates if provided
+
+    conn = get_connection(args.dsn, args.pg_config)
+    cur = conn.cursor()
+
+    cur.execute('SELECT config_file FROM datasets WHERE dataset = %s', (args.dataset,))
+    row = cur.fetchone()
+    if row is None:
+        sys.exit(f"Dataset {args.dataset} not found")
+    config_path = row[0]
+
+    cur.execute(
+        """
+        SELECT i.id, m.training_model
+          FROM investigations i
+          JOIN models m ON i.model = m.model
+         WHERE i.dataset = %s
+         ORDER BY i.id
+        """,
+        (args.dataset,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        sys.exit(f"No investigations found for dataset {args.dataset}")
+
+    investigation_ids = [r[0] for r in rows]
+    model_names = [r[1] for r in rows]
+
     release_dates_df = None
     if args.release_dates:
         try:
@@ -739,36 +653,33 @@ if __name__ == '__main__':
                 print(f"Loaded {len(release_dates_df)} release dates from {args.release_dates}")
         except Exception as e:
             print(f"Warning: Failed to load release dates from {args.release_dates}: {e}")
-    
-    # Filter models not in release dates if possible
-    if args.env_dir and release_dates_df is not None:
-        valid_paths = []
+
+    if release_dates_df is not None:
+        valid_invs = []
         valid_models = []
-        
-        for i, model_name in enumerate(model_names):
-            if not model_name or model_name in release_dates_df['Model Name'].values:
-                valid_paths.append(db_paths[i])
-                valid_models.append(model_name)
+        for inv_id, name in zip(investigation_ids, model_names):
+            if name in release_dates_df['Model Name'].values:
+                valid_invs.append(inv_id)
+                valid_models.append(name)
             else:
                 if args.verbose:
-                    print(f"Skipping model {model_name} - not found in release dates")
-        
-        db_paths = valid_paths
+                    print(f"Skipping model {name} - not found in release dates")
+        investigation_ids = valid_invs
         model_names = valid_models
-    
-    if len(db_paths) < args.k:
-        print(f"Error: At least {args.k} databases are required for {args.k}-ensemble, but only {len(db_paths)} valid databases found")
-        sys.exit(1)
-    
-    # Process all combinations
-    validation_results, test_results = process_database_combinations(
-        config_path, 
-        db_paths,
+
+    if len(investigation_ids) < args.k:
+        sys.exit(f"At least {args.k} investigations are required for {args.k}-ensemble, but only {len(investigation_ids)} found")
+
+    validation_results, test_results = process_investigation_combinations(
+        conn,
+        args.dataset,
+        config_path,
+        investigation_ids,
         model_names,
-        args.k, 
-        args.verbose, 
+        args.k,
+        args.verbose,
         args.progress_bar,
-        args.use_decodex
+        args.use_decodex,
     )
     
     if not validation_results or not test_results:
@@ -800,3 +711,5 @@ if __name__ == '__main__':
             # Export traditional results
             export_validation_test_results_to_csv(validation_results, test_results, args.output)
         print(f"Detailed results saved to {args.output}")
+
+    conn.close()
