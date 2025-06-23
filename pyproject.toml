@@ -16,4 +16,6 @@ dependencies = [
     "seaborn>=0.13.2",
     "statsmodels>=0.14.4",
     "psycopg2-binary>=2.9.9",
+    "imodels>=2.0.0",
+    "interpret>=0.6.12",
 ]
