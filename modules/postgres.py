@@ -24,8 +24,13 @@ def get_connection(dsn: Optional[str] = None, config_file: Optional[str] = None)
         config_path = config_file or os.environ.get("POSTGRES_CONFIG")
         if config_path:
             dsn = _load_dsn_from_config(config_path)
-    # Fall back to libpq environment variables and defaults if no DSN is found
-    return psycopg2.connect(dsn or "")
+    if not dsn:
+        # Default to the local narrative database using the root role. This
+        # avoids failures when PGUSER is set to an account without peer access
+        # ("narrative" in the training environment).
+        dsn = "postgresql:///narrative?user=root"
+
+    return psycopg2.connect(dsn)
 
 
 def get_investigation_settings(conn, investigation_id: int) -> Tuple[str, str]:

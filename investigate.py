@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-import psycopg2
+from modules.postgres import get_connection
 
 
 def run_cmd(cmd: list[str]) -> int:
@@ -42,15 +42,16 @@ def main() -> None:
 
     dsn = args.dsn or os.environ.get("POSTGRES_DSN")
 
-    # Passing an empty string uses libpq's standard environment variables and
-    # defaults for the connection parameters.
-    conn = psycopg2.connect(dsn or "")
+    # Use modules.postgres helper to fall back to the local narrative database if
+    # no DSN is provided.
+    conn = get_connection(dsn)
     conn.autocommit = True
     cur = conn.cursor()
 
     cur.execute(
         """
         SELECT i.round_number,
+               i.dataset,
                d.config_file,
                i.sqlite_database,
                m.training_model,
@@ -72,6 +73,7 @@ def main() -> None:
 
     (
         round_no,
+        dataset,
         config,
         sqlite_db,
         training_model,
@@ -97,6 +99,23 @@ def main() -> None:
         env["NARRATIVE_LEARNING_DUMP"] = dump_path
 
     os.environ.update(env)
+
+    # Ensure there is at least one round for this investigation.
+    cur.execute(
+        f"SELECT 1 FROM {dataset}_rounds WHERE investigation_id=%s LIMIT 1",
+        (args.investigation_id,),
+    )
+    if cur.fetchone() is None:
+        cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {dataset}_rounds")
+        next_id = cur.fetchone()[0]
+        cur.execute(
+            f"SELECT setval('{dataset}_rounds_round_id_seq', %s, true)",
+            (next_id,),
+        )
+        cur.execute(
+            f"INSERT INTO {dataset}_rounds (round_id, split_id, prompt, investigation_id) VALUES (%s, 0, 'Choose randomly', %s)",
+            (next_id, args.investigation_id),
+        )
 
     while True:
         ret = run_cmd(
