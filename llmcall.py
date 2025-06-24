@@ -550,7 +550,7 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return random_reprompt(model, prompting_creation_prompt)
     if model in ['phi4:latest', 'llama3.3:latest', 'falcon3:1b', 'falcon3:10b', 'gemma2:27b', 'gemma2:2b', 'phi4-mini', 'deepseek-r1:70b', 'qwq:32b', 'gemma3:27b', 'cogito:70b']:
         return ollama_reprompt(model, prompting_creation_prompt)
-    if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219", "claude-sonnet-4-20250514"]:
+    if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219", "claude-sonnet-4-20250514", "claude-opus-4-20250514"]:
         return claude_reprompt(model, prompting_creation_prompt)
     if model in ["gpt-4o", "gpt-4o-mini", 'o1',  'o3', 'gpt-4.1', 'gpt-4.5-preview', 'gpt-3.5-turbo']:
         return openai_reprompt(model, prompting_creation_prompt)
