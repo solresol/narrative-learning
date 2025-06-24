@@ -209,7 +209,6 @@ def create_config_file(output_path, obfuscation_plan):
 def main():
     parser = argparse.ArgumentParser(description="Import CSV data into PostgreSQL using an obfuscation plan.")
     parser.add_argument("--dsn", help="PostgreSQL DSN for connecting to the database")
-    parser.add_argument("--pg-config", help="JSON file containing postgres_dsn")
     parser.add_argument("--dataset", help="Dataset name prefix when using PostgreSQL")
     parser.add_argument("--source", required=True, help="CSV source file to transform.")
     parser.add_argument( "--obfuscation", required=True, help="Path to SQLite database containing the obfuscation plan.")
@@ -220,9 +219,6 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     
     args = parser.parse_args()
-    
-    if not (args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN")):
-        sys.exit("Must specify --dsn/--pg-config for PostgreSQL")
     
     # Extract the obfuscation plan
     obfuscation_plan = extract_obfuscation_plan(args.obfuscation)
@@ -240,7 +236,7 @@ def main():
     if args.verbose:
         print(f"Transformations applied, resulting in DataFrame with {len(obfuscated_df)} rows")
     
-    conn = get_connection(args.dsn, args.pg_config)
+    conn = get_connection(args.dsn)
     dataset_prefix = args.dataset
     if not dataset_prefix:
         sys.exit("--dataset is required when using PostgreSQL")
@@ -278,6 +274,7 @@ def main():
     
     # Create a new split
     cur = conn.cursor()
+    
     cur.execute("INSERT INTO splits DEFAULT VALUES RETURNING split_id")
     row = cur.fetchone()
     split_id = row[0]
