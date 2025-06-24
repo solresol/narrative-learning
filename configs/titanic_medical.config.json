@@ -3,6 +3,7 @@
   "primary_key": "Patient_ID",
   "target_field": "Outcome",
   "splits_table": "patient_splits",
+  "rounds_table": "titanic_rounds",
   "columns": [
     "Outcome",
     "Patient_ID",

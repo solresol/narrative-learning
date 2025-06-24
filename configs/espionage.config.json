@@ -3,6 +3,7 @@
   "primary_key": "AgentID",
   "target_field": "AgentStatus",
   "splits_table": "espionage_splits",
+  "rounds_table": "espionage_rounds",
   "columns": [
     "AgentID",
     "SecretHandshakeQuality",

@@ -3,6 +3,7 @@
   "primary_key": "PotionBatchID",
   "target_field": "PotionEffectiveness",
   "splits_table": "potion_splits",
+  "rounds_table": "potions_rounds",
   "columns": [
     "PotionBatchID",
     "FizzIntensity",

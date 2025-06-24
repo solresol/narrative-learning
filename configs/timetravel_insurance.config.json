@@ -3,6 +3,7 @@
   "primary_key": "IncidentID",
   "target_field": "PolicyClaim",
   "splits_table": "time_travel_splits",
+  "rounds_table": "timetravel_insurance_rounds",
   "columns": [
     "IncidentID",
     "TimelineDeviation",

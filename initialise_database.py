@@ -189,15 +189,17 @@ def apply_transformation(original_df, obfuscation_plan):
         result = exec(column_info["transformation"])
     return obfuscated_df
 
-def create_config_file(output_path, obfuscation_plan):
+def create_config_file(output_path, obfuscation_plan, dataset_prefix: str = ""):
     # Get a list of all columns in the transformed dataset for reference
     column_lookup = { x['original_column']: x['obfuscated_column'] for x in obfuscation_plan['columns'] }
 
+    rounds_table = f"{dataset_prefix}_rounds" if dataset_prefix else "rounds"
     config = {
         "table_name": obfuscation_plan['obfuscated_table_name'],
         "primary_key": column_lookup[obfuscation_plan['primary_key']],
         "target_field": column_lookup[obfuscation_plan['target_variable']],
-        "splits_table": obfuscation_plan['obfuscated_split_table_name']
+        "splits_table": obfuscation_plan['obfuscated_split_table_name'],
+        "rounds_table": rounds_table
     }
     config["columns"] = [col['obfuscated_column'] for col in obfuscation_plan['columns'] if not col['remove']]
     
@@ -327,7 +329,7 @@ def main():
         print(f"Target field identified as: {target_field}")
 
     
-    config_path = create_config_file(args.config_file, obfuscation_plan)
+    config_path = create_config_file(args.config_file, obfuscation_plan, dataset_prefix)
     
     if args.verbose:
         print(f"Database initialized successfully with table '{obfuscated_table_name}'!")

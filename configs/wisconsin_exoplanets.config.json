@@ -3,6 +3,7 @@
   "primary_key": "exoplanet_id",
   "target_field": "occupying_species",
   "splits_table": "exoplanet_splits",
+  "rounds_table": "wisconsin_rounds",
   "columns": [
     "exoplanet_id",
     "mean_orbital_radius",

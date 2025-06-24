@@ -8,10 +8,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from modules.exceptions import TargetClassingException, NonexistentRoundException, MissingConfigElementException, NoProcessedRoundsException
-from modules.database import (
-    get_database_path, get_round_prompt, get_round_reasoning, get_split_id, 
-    get_latest_split_id, get_rounds_for_split, get_processed_rounds_for_split
-)
+from modules.database import get_database_path
 from modules.metrics import (
     calculate_metric, get_matrix_label_for_prediction, format_confusion_matrix,
     generate_metrics_data, create_metrics_dataframe
@@ -49,6 +46,7 @@ class DatasetConfig:
             "primary_key",
             "target_field",
             "splits_table",
+            "rounds_table",
             "columns",
         ]
 
@@ -62,6 +60,7 @@ class DatasetConfig:
         self.primary_key = self.config["primary_key"]
         self.target_field = self.config["target_field"]
         self.splits_table = self.config["splits_table"]
+        self.rounds_table = self.config["rounds_table"]
         self.columns = self.config["columns"]
         self.database_path = get_database_path(self.conn)
 
@@ -232,7 +231,12 @@ class DatasetConfig:
         Returns:
             Prompt text
         """
-        return get_round_prompt(self.conn, round_id, self.database_path, self.dataset)
+        cur = self.conn.cursor()
+        self._execute(cur, f"SELECT prompt FROM {self.rounds_table} WHERE round_id = ?", (int(round_id),))
+        row = cur.fetchone()
+        if row is None:
+            raise NonexistentRoundException(round_id, self.database_path)
+        return row[0]
         
     def get_round_reasoning(self, round_id: int) -> str:
         """
@@ -244,7 +248,12 @@ class DatasetConfig:
         Returns:
             Reasoning text for the prompt
         """
-        return get_round_reasoning(self.conn, round_id, self.database_path, self.dataset)
+        cur = self.conn.cursor()
+        self._execute(cur, f"SELECT reasoning_for_this_prompt FROM {self.rounds_table} WHERE round_id = ?", (int(round_id),))
+        row = cur.fetchone()
+        if row is None:
+            raise NonexistentRoundException(round_id, self.database_path)
+        return row[0] if row[0] is not None else ""
 
     def get_split_id(self, round_id: int) -> int:
         """
@@ -256,7 +265,12 @@ class DatasetConfig:
         Returns:
             Split ID
         """
-        return get_split_id(self.conn, round_id, self.database_path, self.dataset)
+        cur = self.conn.cursor()
+        self._execute(cur, f"SELECT split_id FROM {self.rounds_table} WHERE round_id = ?", (int(round_id),))
+        row = cur.fetchone()
+        if row is None:
+            raise NonexistentRoundException(round_id, self.database_path)
+        return row[0]
 
     def positive_label(self):
         # This ain't great. Fundamentally, we are trying to shoe-horn into a "true positive" / "false positive"
@@ -380,7 +394,18 @@ class DatasetConfig:
         Raises:
             SystemExit: If no rounds are found in the database
         """
-        return get_latest_split_id(self.conn, self.dataset, self.investigation_id)
+        cur = self.conn.cursor()
+        query = f"SELECT split_id FROM {self.rounds_table}"
+        params: list[Any] = []
+        if self.investigation_id is not None:
+            query += " WHERE investigation_id = ?"
+            params.append(self.investigation_id)
+        query += " ORDER BY round_id DESC LIMIT 1"
+        self._execute(cur, query, tuple(params))
+        row = cur.fetchone()
+        if row is None:
+            sys.exit("No rounds found in database")
+        return row[0]
 
     def get_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -392,7 +417,16 @@ class DatasetConfig:
         Returns:
             List of round IDs
         """
-        return get_rounds_for_split(self.conn, split_id, self.dataset, self.investigation_id)
+        cur = self.conn.cursor()
+        query = f"SELECT round_id FROM {self.rounds_table} WHERE split_id = ?"
+        params: list[Any] = [split_id]
+        if self.investigation_id is not None:
+            query += " AND investigation_id = ?"
+            params.append(self.investigation_id)
+        query += " ORDER BY round_id"
+        self._execute(cur, query, tuple(params))
+        rounds = [row[0] for row in cur.fetchall()]
+        return rounds
 
     def get_processed_rounds_for_split(self, split_id: int) -> List[int]:
         """
@@ -404,7 +438,21 @@ class DatasetConfig:
         Returns:
             List of round IDs that have inferences
         """
-        return get_processed_rounds_for_split(self.conn, split_id, self.dataset, self.investigation_id)
+        cur = self.conn.cursor()
+        inf_table = f"{self.dataset}_inferences" if self.dataset else "inferences"
+        answer = []
+        for r in self.get_rounds_for_split(split_id):
+            query = f"select count(*) from {inf_table} where round_id = ?"
+            params: list[Any] = [r]
+            if self.investigation_id is not None:
+                query += " and investigation_id = ?"
+                params.append(self.investigation_id)
+            self._execute(cur, query, tuple(params))
+            row = cur.fetchone()
+            if row[0] == 0:
+                continue
+            answer.append(r)
+        return answer
 
     def check_early_stopping(self, split_id: int, metric: str,
                             patience: int, on_validation: bool = True) -> bool:
