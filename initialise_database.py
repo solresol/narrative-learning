@@ -75,7 +75,10 @@ def extract_obfuscation_plan(db_path):
 
 
 def generate_schema_sql(
-    obfuscation_plan, source_df, rounds_table: str = "rounds", splits_table: str = "splits"
+    obfuscation_plan,
+    source_df,
+    rounds_table: str,
+    splits_table: str,
 ):
     """
     Generate SQL schema based on the obfuscation plan.
@@ -116,11 +119,11 @@ def generate_schema_sql(
     schema_sql += ",\n  ".join(columns)
     schema_sql += "\n);\n\n"
     
-    # Add inferences table with updated references
-    dataset_prefix = ""
+    # Add inferences table with name based on the rounds table
     if rounds_table.endswith("_rounds"):
-        dataset_prefix = rounds_table[: -len("_rounds")]
-    inferences_table = f"{dataset_prefix}_inferences" if dataset_prefix else "inferences"
+        inferences_table = f"{rounds_table[: -len('_rounds')]}_inferences"
+    else:
+        inferences_table = "inferences"
 
     schema_sql += f"""create table if not exists {inferences_table} (
   round_id integer references {rounds_table}(round_id),
@@ -195,7 +198,7 @@ def apply_transformation(original_df, obfuscation_plan):
         result = exec(column_info["transformation"])
     return obfuscated_df
 
-def create_config_file(output_path, obfuscation_plan, rounds_table: str = "rounds"):
+def create_config_file(output_path, obfuscation_plan, rounds_table: str):
     # Get a list of all columns in the transformed dataset for reference
     column_lookup = { x['original_column']: x['obfuscated_column'] for x in obfuscation_plan['columns'] }
 
@@ -216,10 +219,6 @@ def create_config_file(output_path, obfuscation_plan, rounds_table: str = "round
 def main():
     parser = argparse.ArgumentParser(description="Import CSV data into PostgreSQL using an obfuscation plan.")
     parser.add_argument("--dsn", help="PostgreSQL DSN for connecting to the database")
-    parser.add_argument(
-        "--dataset",
-        help="Dataset name prefix when using PostgreSQL (overrides config if provided)",
-    )
     parser.add_argument("--source", required=True, help="CSV source file to transform.")
     parser.add_argument( "--obfuscation", required=True, help="Path to SQLite database containing the obfuscation plan.")
     parser.add_argument("--prompt", default="Choose randomly", help="Prompt to insert into the rounds table (default: 'Choose randomly').")
@@ -255,17 +254,10 @@ def main():
             if args.verbose:
                 print(f"Warning: failed to read existing config {args.config_file}: {e}")
 
-    dataset_prefix = args.dataset or ""
-    rounds_table = config_data.get("rounds_table") if config_data else None
-    splits_table = config_data.get("splits_table") if config_data else None
-
-    if not dataset_prefix and rounds_table and rounds_table.endswith("_rounds"):
-        dataset_prefix = rounds_table[: -len("_rounds")]
-
-    if not rounds_table:
-        rounds_table = f"{dataset_prefix}_rounds" if dataset_prefix else "rounds"
-    if not splits_table:
-        splits_table = obfuscation_plan["obfuscated_split_table_name"]
+    rounds_table = config_data.get("rounds_table") if config_data else "rounds"
+    splits_table = (
+        config_data.get("splits_table") if config_data else obfuscation_plan["obfuscated_split_table_name"]
+    )
 
     conn = get_connection(args.dsn)
     if args.verbose:
