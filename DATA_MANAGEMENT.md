@@ -48,9 +48,9 @@ programs and some ideas for improving the layout.
 
 ## Programs and their data
 
-- `initialise_titanic.py` and `initialise_database.py` load a CSV from
-  `datasets/` and produce an SQLite database under `results/`. They also
-  generate or update the dataset configuration in `configs/`.
+- `initialise_database.py` loads a CSV from `datasets/` and produces an
+  SQLite database under `results/` or inserts into PostgreSQL. It also
+  generates or updates the dataset configuration in `configs/`.
 - `obfuscation_plan_generator.py` takes a CSV and guidelines file and
   writes an obfuscation plan SQLite database (often kept in
   `obfuscations/`).
