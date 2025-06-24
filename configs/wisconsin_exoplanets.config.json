@@ -2,7 +2,7 @@
   "table_name": "exoplanets",
   "primary_key": "exoplanet_id",
   "target_field": "occupying_species",
-  "splits_table": "exoplanet_splits",
+  "splits_table": "exoplanet_split_ids",
   "rounds_table": "wisconsin_rounds",
   "columns": [
     "exoplanet_id",
