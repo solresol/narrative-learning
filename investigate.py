@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import json
 
 from modules.postgres import get_connection
 
