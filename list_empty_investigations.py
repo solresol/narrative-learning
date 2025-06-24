@@ -9,6 +9,7 @@ import argparse
 import os
 import sqlite3
 import sys
+import fnmatch
 
 from typing import Iterable
 
@@ -56,6 +57,16 @@ def main() -> None:
         help="Exclude investigations that use ollama-backed models",
     )
     parser.add_argument(
+        "--dataset",
+        action="append",
+        help="Only include investigations matching this dataset glob pattern",
+    )
+    parser.add_argument(
+        "--model",
+        action="append",
+        help="Only include investigations matching this model glob pattern",
+    )
+    parser.add_argument(
         "--print-view",
         action="store_true",
         help="Output SQL for a temporary view instead of plain IDs",
@@ -66,14 +77,18 @@ def main() -> None:
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT i.id, i.sqlite_database, m.training_model
+        SELECT i.id, i.sqlite_database, m.training_model, i.dataset, i.model
           FROM investigations i
           JOIN models m ON i.model = m.model
          ORDER BY i.id
         """
     )
     missing: list[tuple[int, str]] = []
-    for inv_id, db_path, training_model in cur.fetchall():
+    for inv_id, db_path, training_model, dataset, model in cur.fetchall():
+        if args.dataset and not any(fnmatch.fnmatch(dataset, pat) for pat in args.dataset):
+            continue
+        if args.model and not any(fnmatch.fnmatch(model, pat) for pat in args.model):
+            continue
         if args.skip_ollama and training_model in OLLAMA_TRAINING_MODELS:
             continue
         if not has_inferences(db_path):
