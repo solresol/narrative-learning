@@ -3,6 +3,7 @@
   "primary_key": "CoralReefID",
   "target_field": "ReefHealthStatus",
   "splits_table": "coral_reef_splits",
+  "rounds_table": "southgermancredit_rounds",
   "columns": [
     "CoralReefID",
     "CurrentFlowQuality",

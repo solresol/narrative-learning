@@ -16,16 +16,23 @@ class InvalidExpressionError(Exception):
 def create_tables(conn, args):
     """Create the main data table and splits table in the database."""
     cursor = conn.cursor()
-    
+
+    rounds_table = f"{args.dataset_prefix}_rounds" if args.dataset_prefix else "rounds"
+    inferences_table = (
+        f"{args.dataset_prefix}_inferences" if args.dataset_prefix else "inferences"
+    )
+
     # Create the main data table
-    cursor.execute(f'''
+    cursor.execute(
+        f'''
     CREATE TABLE {args.table_name} (
         {args.primary_key_name} TEXT PRIMARY KEY,
         {args.feature1_name} REAL,
         {args.feature2_name} REAL,
         {args.target_column_name} TEXT
     )
-    ''')
+    '''
+    )
     
     # Create the splits table
     cursor.execute(f'''
@@ -49,28 +56,34 @@ def create_tables(conn, args):
     # Insert default split
     cursor.execute("INSERT INTO splits (split_id, name) VALUES (0, 'default')")
 
-    cursor.execute(f'''
-      CREATE TABLE inferences (
-          round_id integer references rounds(round_id),
+    cursor.execute(
+        f'''
+      CREATE TABLE {inferences_table} (
+          round_id integer references {rounds_table}(round_id),
           creation_time datetime default current_timestamp,
           {args.primary_key_name} text references {args.table_name}({args.primary_key_name}),
           narrative_text text,
           llm_stderr text,
           prediction text,
           primary key (round_id, {args.primary_key_name})
-        );''')
+        );'''
+    )
 
-    cursor.execute('''
-      CREATE TABLE rounds (
+    cursor.execute(
+        f'''
+      CREATE TABLE {rounds_table} (
          round_id integer primary key autoincrement,
          round_start datetime default current_timestamp,
          split_id integer references splits(split_id),
          prompt text,
          reasoning_for_this_prompt text,
          stderr_from_prompt_creation text
-      );''')
+      );'''
+    )
 
-    cursor.execute("INSERT INTO rounds (prompt, split_id) VALUES (?, 0)", [args.prompt])
+    cursor.execute(
+        f"INSERT INTO {rounds_table} (prompt, split_id) VALUES (?, 0)", [args.prompt]
+    )
     
     conn.commit()
 
@@ -182,11 +195,13 @@ def generate_data(args):
     conn.commit()
     
     # Create and save config file
+    rounds_table = f"{args.dataset_prefix}_rounds" if args.dataset_prefix else "rounds"
     config = {
         "table_name": args.table_name,
         "primary_key": args.primary_key_name,
         "target_field": args.target_column_name,
         "splits_table": args.splits_table_name,
+        "rounds_table": rounds_table,
         "columns": [
             args.primary_key_name,
             args.feature1_name,
@@ -243,6 +258,8 @@ def parse_arguments():
                         help='Name of the primary key column')
     parser.add_argument('--splits-table-name', type=str, required=True,
                         help='Name of the table for splits information')
+    parser.add_argument('--dataset-prefix', type=str, default='',
+                        help='Prefix for rounds and inferences tables')
     parser.add_argument('--use-uuid', action='store_true',
                         help='Use UUID for primary key instead of sequential IDs')
     parser.add_argument('--holdout', type=float, default=0.2,

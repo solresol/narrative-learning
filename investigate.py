@@ -84,6 +84,10 @@ def main() -> None:
         dump_path,
     ) = row
 
+    with open(config) as f:
+        config_json = json.load(f)
+    rounds_table = config_json.get("rounds_table", f"{dataset}_rounds")
+
     env = {
         "NARRATIVE_LEARNING_CONFIG": config,
         "NARRATIVE_LEARNING_DATABASE": sqlite_db,
@@ -102,18 +106,18 @@ def main() -> None:
 
     # Ensure there is at least one round for this investigation.
     cur.execute(
-        f"SELECT 1 FROM {dataset}_rounds WHERE investigation_id=%s LIMIT 1",
+        f"SELECT 1 FROM {rounds_table} WHERE investigation_id=%s LIMIT 1",
         (args.investigation_id,),
     )
     if cur.fetchone() is None:
-        cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {dataset}_rounds")
+        cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {rounds_table}")
         next_id = cur.fetchone()[0]
         cur.execute(
-            f"SELECT setval('{dataset}_rounds_round_id_seq', %s, true)",
+            f"SELECT setval('{rounds_table}_round_id_seq', %s, true)",
             (next_id,),
         )
         cur.execute(
-            f"INSERT INTO {dataset}_rounds (round_id, split_id, prompt, investigation_id) VALUES (%s, 0, 'Choose randomly', %s)",
+            f"INSERT INTO {rounds_table} (round_id, split_id, prompt, investigation_id) VALUES (%s, 0, 'Choose randomly', %s)",
             (next_id, args.investigation_id),
         )
 
