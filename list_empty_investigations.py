@@ -8,6 +8,7 @@ create a temporary view for use with other scripts.
 import argparse
 import os
 import sqlite3
+import sys
 
 from typing import Iterable
 
@@ -91,11 +92,10 @@ def main() -> None:
         return
 
     if ids:
-        print("Investigations with no inferences:")
         for inv_id in ids:
             print(inv_id)
     else:
-        print("All investigations have inference data.")
+        sys.stderr.write("All investigations have inference data.\n")
 
 
 if __name__ == "__main__":
