@@ -10,6 +10,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Find duplicate investigations")
     parser.add_argument("--dsn", help="PostgreSQL connection string")
     parser.add_argument("--config", help="Path to PostgreSQL config JSON")
+    parser.add_argument(
+        "--delete-sql",
+        action="store_true",
+        help="Output SQL to delete duplicate investigations without data",
+    )
     args = parser.parse_args()
 
     conn = get_connection(args.dsn, args.config)
@@ -61,6 +66,16 @@ def main() -> None:
         print(
             f"{dataset}|{model}|{db}|{round_file}|{dump_file}|{round_no}|{ids_str}|{ids_with_data_str}"
         )
+
+        if args.delete_sql:
+            duplicates_without_data = [i for i in ids if i not in ids_with_data]
+            if ids_with_data:
+                to_delete = duplicates_without_data
+            else:
+                to_delete = duplicates_without_data[1:]
+            if to_delete:
+                del_ids = ",".join(str(i) for i in sorted(to_delete))
+                print(f"DELETE FROM investigations WHERE id IN ({del_ids});")
 
     cur.close()
     conn.close()
