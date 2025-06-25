@@ -57,11 +57,11 @@ def main() -> None:
         ids_with_data: list[int] = []
         for inv_id in ids:
             cur.execute(
-                f"SELECT count(*) FROM {round_table} WHERE investigation_id = %s LIMIT 1",
+                f"SELECT count(*) FROM {round_table} WHERE investigation_id = %s and prompt != 'Choose randomly'",
                 (inv_id,),
             )
             n = cur.fetchone()
-            if n is not None and n[0] > 1:
+            if n is not None and n[0] > 0:
                 ids_with_data.append(inv_id)
         ids_str = ",".join(str(i) for i in ids)
         ids_with_data_str = ",".join(str(i) for i in ids_with_data)
@@ -75,8 +75,12 @@ def main() -> None:
                 print(f"-- no investigation has data, so let's keep {duplicates_without_data[0]}")
                 to_delete = duplicates_without_data[1:]
             if to_delete:
-                del_ids = ",".join(str(i) for i in sorted(to_delete))
-                print(f"DELETE FROM investigations WHERE id IN ({del_ids});")
+                for del_id in to_delete:
+                    cur.execute(f"select round_id, prompt from {round_table} where investigation_id = %s", [del_id])
+                    for r in cur:
+                        print(f"-- round id = {r[0]} has the prompt '{r[1]}' so no loss if we kill it")
+                        print(f"DELETE FROM {round_table} where round_id = {r[0]};")
+                    print(f"DELETE FROM investigations WHERE id = {del_id};")
         else:
             print(
                 f"{dataset}|{model}|{db}|{round_file}|{dump_file}|{round_no}|{ids_str}|{ids_with_data_str}"
