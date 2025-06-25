@@ -19,7 +19,7 @@ CREATE TABLE investigations (
     sqlite_database TEXT,
     round_tracking_file TEXT,
     dump_file TEXT,
-    round_number INTEGER DEFAULT 1
+    round_number INTEGER
 );
 
 CREATE TABLE baseline_results (
