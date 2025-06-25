@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Update package lists and install PostgreSQL
 sudo apt-get update
-sudo apt-get install -y postgresql postgresql-client
+sudo apt-get install -y postgresql postgresql-client python3-psycopg2
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 uv run uvbootstrapper.py
