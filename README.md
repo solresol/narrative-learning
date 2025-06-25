@@ -93,7 +93,9 @@ three tables:
 * `models` – training and inference model names with optional `example_count`
   and `patience` values
 * `investigations` – links a dataset and model, records the `sqlite_database`,
-  `round_tracking_file`, optional `dump_file` and the current `round_number`
+  `round_tracking_file`, optional `dump_file` and the current `round_number`.
+  New investigations no longer default to round 1 – the value should be set
+  explicitly from the associated round tracking file.
 
 Load the schema and initial data with:
 
@@ -115,3 +117,12 @@ the `investigations` table (no loader script exists yet).  Each dataset has its
 own tables such as `espionage_rounds` and `espionage_inferences`; the training
 scripts use the dataset name from the configuration to construct these table
 names.
+
+The `check_round_consistency.py` helper reports how many investigations have a
+`round_number` that does not match an entry in the relevant `*_rounds` table.
+It also prints `UPDATE` statements to correct the values.
+Run it with libpq environment variables set, for example:
+
+```bash
+PGUSER=root PGDATABASE=narrative ./check_round_consistency.py
+```
