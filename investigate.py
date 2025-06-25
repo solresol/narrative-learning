@@ -88,6 +88,7 @@ def main() -> None:
     with open(config) as f:
         config_json = json.load(f)
     rounds_table = config_json.get("rounds_table", f"{dataset}_rounds")
+    splits_table = config_json.get("splits_table", f"{dataset}_splits")
 
     env = {
         "NARRATIVE_LEARNING_CONFIG": config,
@@ -111,6 +112,8 @@ def main() -> None:
         (args.investigation_id,),
     )
     if cur.fetchone() is None:
+        cur.execute(f"SELECT MIN(split_id) FROM {splits_table}")
+        default_split = cur.fetchone()[0] or 0
         cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {rounds_table}")
         next_id = cur.fetchone()[0]
         cur.execute(
@@ -118,8 +121,8 @@ def main() -> None:
             (next_id,),
         )
         cur.execute(
-            f"INSERT INTO {rounds_table} (round_id, split_id, prompt, investigation_id) VALUES (%s, 0, 'Choose randomly', %s)",
-            (next_id, args.investigation_id),
+            f"INSERT INTO {rounds_table} (round_id, split_id, prompt, investigation_id) VALUES (%s, %s, 'Choose randomly', %s)",
+            (next_id, default_split, args.investigation_id),
         )
 
     while True:
