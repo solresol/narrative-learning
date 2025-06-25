@@ -41,11 +41,13 @@ def main() -> None:
         )
         rows = cur.fetchall()
 
-        mismatches = [r for r in rows if (r[2] or 0) != r[1]]
-        print(f"{dataset}: {len(mismatches)} mismatches")
+        mismatches = [r for r in rows if (r[2] or None) != r[1]]
+        print(f"-- {dataset}: {len(mismatches)} mismatches")
 
         for inv_id, round_no, max_round in mismatches:
-            correct = max_round or 0
+            correct = max_round or None
+            if correct == round_no:
+                continue
             print(
                 f"-- investigation {inv_id}: found max round {correct} (currently {round_no})"
             )
