@@ -201,6 +201,7 @@ def generate_data(args):
         "primary_key": args.primary_key_name,
         "target_field": args.target_column_name,
         "splits_table": args.splits_table_name,
+        "split_ids_table": "splits",
         "rounds_table": rounds_table,
         "columns": [
             args.primary_key_name,

@@ -270,7 +270,28 @@ class DatasetConfig:
         row = cur.fetchone()
         if row is None:
             raise NonexistentRoundException(round_id, self.database_path)
-        return row[0]
+        split_id = row[0]
+
+        # Ensure the split ID actually exists in the splits table. Earlier
+        # datasets used an initial value of ``0`` before any splits were
+        # created which means there may not be matching rows.  If no entry is
+        # found, default to the minimum available split ID and update the round
+        # so subsequent calls use the valid value.
+        self._execute(cur, f"SELECT 1 FROM {self.splits_table} WHERE split_id = ? LIMIT 1", (split_id,))
+        if cur.fetchone() is None:
+            self._execute(cur, f"SELECT MIN(split_id) FROM {self.splits_table}")
+            row_min = cur.fetchone()
+            if row_min is None or row_min[0] is None:
+                raise ValueError(f"No splits defined in table {self.splits_table}")
+            split_id = row_min[0]
+            self._execute(
+                cur,
+                f"UPDATE {self.rounds_table} SET split_id = ? WHERE round_id = ?",
+                (split_id, int(round_id)),
+            )
+            self.conn.commit()
+
+        return split_id
 
     def positive_label(self):
         # This ain't great. Fundamentally, we are trying to shoe-horn into a "true positive" / "false positive"
