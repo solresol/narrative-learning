@@ -45,10 +45,7 @@ def main() -> None:
             cfg = json.load(f)
         dataset_round_tables[dataset] = cfg.get("rounds_table", f"{dataset}_rounds")
 
-    if not args.delete_sql:
-        print(
-            "dataset|model|sqlite_database|round_tracking_file|dump_file|round_number|ids|ids_with_data"
-        )
+    header_printed = False
     def sort_key(item: tuple[tuple, list[int]]) -> tuple:
         key = item[0]
         # Sort elements safely even if they have mixed types or None
@@ -59,6 +56,11 @@ def main() -> None:
     for key, ids in sorted(groups.items(), key=sort_key):
         if len(ids) <= 1:
             continue
+        if not args.delete_sql and not header_printed:
+            print(
+                "dataset|model|sqlite_database|round_tracking_file|dump_file|round_number|ids|ids_with_data"
+            )
+            header_printed = True
         dataset, model, db, round_file, dump_file, round_no = key
         round_table = dataset_round_tables.get(dataset, f"{dataset}_rounds")
         ids_with_data: list[int] = []
