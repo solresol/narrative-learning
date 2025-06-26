@@ -49,7 +49,14 @@ def main() -> None:
         print(
             "dataset|model|sqlite_database|round_tracking_file|dump_file|round_number|ids|ids_with_data"
         )
-    for key, ids in sorted(groups.items(), key=lambda kv: kv[0]):
+    def sort_key(item: tuple[tuple, list[int]]) -> tuple:
+        key = item[0]
+        # Sort elements safely even if they have mixed types or None
+        # by converting each part of the key to a string. None becomes
+        # an empty string so that keys remain comparable.
+        return tuple("" if part is None else str(part) for part in key)
+
+    for key, ids in sorted(groups.items(), key=sort_key):
         if len(ids) <= 1:
             continue
         dataset, model, db, round_file, dump_file, round_no = key
