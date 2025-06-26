@@ -198,7 +198,7 @@ def apply_transformation(original_df, obfuscation_plan):
         result = exec(column_info["transformation"])
     return obfuscated_df
 
-def create_config_file(output_path, obfuscation_plan, rounds_table: str):
+def create_config_file(output_path, obfuscation_plan, rounds_table: str, split_ids_table: str):
     """Create or update a dataset configuration file."""
 
     # Get a list of all columns in the transformed dataset for reference
@@ -217,6 +217,7 @@ def create_config_file(output_path, obfuscation_plan, rounds_table: str):
         "primary_key": column_lookup[obfuscation_plan['primary_key']],
         "target_field": column_lookup[obfuscation_plan['target_variable']],
         "splits_table": existing.get("splits_table", obfuscation_plan['obfuscated_split_table_name']),
+        "split_ids_table": existing.get("split_ids_table", split_ids_table),
         "rounds_table": rounds_table
     }
     config["columns"] = [col['obfuscated_column'] for col in obfuscation_plan['columns'] if not col['remove']]
@@ -265,6 +266,11 @@ def main():
                 print(f"Warning: failed to read existing config {args.config_file}: {e}")
 
     rounds_table = config_data.get("rounds_table") if config_data else "rounds"
+    split_ids_table = (
+        config_data.get("split_ids_table")
+        if config_data
+        else f"{obfuscation_plan['obfuscated_split_table_name']}_ids"
+    )
     splits_table = (
         config_data.get("splits_table") if config_data else obfuscation_plan["obfuscated_split_table_name"]
     )
@@ -279,7 +285,9 @@ def main():
     obfuscated_primary_key = column_lookup[obfuscation_plan['primary_key']]
         
     # Generate dynamic schema SQL
-    schema_sql = generate_schema_sql(obfuscation_plan, source_df, rounds_table, splits_table)
+    schema_sql = generate_schema_sql(
+        obfuscation_plan, source_df, rounds_table, split_ids_table
+    )
     if args.verbose:
         print("Generated schema SQL:")
         print(schema_sql)
@@ -305,7 +313,9 @@ def main():
     # Create a new split
     cur = conn.cursor()
     
-    cur.execute(f"INSERT INTO {splits_table} DEFAULT VALUES RETURNING split_id")
+    cur.execute(
+        f"INSERT INTO {split_ids_table} DEFAULT VALUES RETURNING split_id"
+    )
     row = cur.fetchone()
     split_id = row[0]
     
@@ -356,13 +366,17 @@ def main():
         print(f"Target field identified as: {target_field}")
 
     
-    config_path = create_config_file(args.config_file, obfuscation_plan, rounds_table)
+    config_path = create_config_file(
+        args.config_file, obfuscation_plan, rounds_table, split_ids_table
+    )
     
     if args.verbose:
         print(
             f"Database initialized successfully with table '{obfuscated_table_name}'!"
         )
-        print(f"Created splits table {splits_table} and {obfuscated_split_table_name}")
+        print(
+            f"Created splits table {split_ids_table} and {obfuscated_split_table_name}"
+        )
     print(f"Configuration saved to {config_path}")
     
     conn.close()
