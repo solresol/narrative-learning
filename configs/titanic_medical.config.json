@@ -2,7 +2,8 @@
   "table_name": "patients",
   "primary_key": "Patient_ID",
   "target_field": "Outcome",
-  "splits_table": "patient_split_ids",
+  "splits_table": "patient_splits",
+  "split_ids_table": "patient_split_ids",
   "rounds_table": "titanic_rounds",
   "columns": [
     "Outcome",

@@ -3,6 +3,7 @@
   "primary_key": "PotionBatchID",
   "target_field": "PotionEffectiveness",
   "splits_table": "potion_splits",
+  "split_ids_table": "potion_split_ids",
   "rounds_table": "potions_rounds",
   "columns": [
     "PotionBatchID",
