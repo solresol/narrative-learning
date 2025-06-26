@@ -34,3 +34,14 @@ jobs:
           PGDATABASE: narrative
         run: |
           uv run python -m unittest discover -v
+      - name: Check duplicate investigations
+        env:
+          PGHOST: localhost
+          PGUSER: root
+          PGDATABASE: narrative
+        run: |
+          output=$(uv run find_duplicate_investigations.py)
+          if [ -n "$output" ]; then
+            echo "$output"
+            exit 1
+          fi
