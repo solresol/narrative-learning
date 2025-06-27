@@ -197,15 +197,6 @@ def main() -> None:
         str(args.investigation_id),
         "--best",
     ])
-    if ret == 0 and best:
-        outfile = sqlite_db[: -len(".sqlite")] + ".best-round.txt"
-        with open(outfile, "w") as f:
-            f.write(best + "\n")
-
-    if dump_path:
-        with open(dump_path, "w") as f:
-            subprocess.run(["sqlite3", sqlite_db, ".dump"], stdout=f)
-
     cur.close()
     conn.close()
 
