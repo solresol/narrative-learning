@@ -27,6 +27,15 @@ jobs:
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Restore database
+        env:
+          PGHOST: localhost
+          PGUSER: root
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          curl -L https://datadumps.ifost.org.au/narrative-learning/narrative.sql.gz -o narrative.sql.gz
+          gunzip -c narrative.sql.gz | psql -d narrative
       - name: Run tests
         env:
           PGHOST: localhost
@@ -34,3 +43,14 @@ jobs:
           PGDATABASE: narrative
         run: |
           uv run python -m unittest discover -v
+      - name: Check duplicate investigations
+        env:
+          PGHOST: localhost
+          PGUSER: root
+          PGDATABASE: narrative
+        run: |
+          output=$(uv run find_duplicate_investigations.py)
+          if [ -n "$output" ]; then
+            echo "$output"
+            exit 1
+          fi
