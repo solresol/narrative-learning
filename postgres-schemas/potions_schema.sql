@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS potions_rounds (
     prompt TEXT,
     reasoning_for_this_prompt TEXT,
     stderr_from_prompt_creation TEXT,
+    train_accuracy DOUBLE PRECISION,
+    validation_accuracy DOUBLE PRECISION,
+    test_accuracy DOUBLE PRECISION,
+    round_completed TIMESTAMP,
     investigation_id INTEGER REFERENCES investigations(id)
 );
 

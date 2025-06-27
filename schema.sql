@@ -40,6 +40,10 @@ create table if not exists rounds (
   split_id integer references splits(split_id),
   prompt text,
   reasoning_for_this_prompt text,
-  stderr_from_prompt_creation text
+  stderr_from_prompt_creation text,
+  train_accuracy real,
+  validation_accuracy real,
+  test_accuracy real,
+  round_completed datetime
 );
 
