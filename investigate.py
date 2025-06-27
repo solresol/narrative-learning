@@ -17,6 +17,9 @@ import sys
 import tempfile
 import json
 
+import datasetconfig
+from modules.round_utils import update_round_statistics
+
 from modules.postgres import get_connection
 
 
@@ -89,6 +92,7 @@ def main() -> None:
         config_json = json.load(f)
     rounds_table = config_json.get("rounds_table", f"{dataset}_rounds")
     splits_table = config_json.get("splits_table", f"{dataset}_splits")
+    config_obj = datasetconfig.DatasetConfig(conn, config, dataset, args.investigation_id)
 
     env = {
         "NARRATIVE_LEARNING_CONFIG": config,
@@ -160,6 +164,8 @@ def main() -> None:
             != 0
         ):
             sys.exit(1)
+
+        update_round_statistics(config_obj, round_no)
 
         with tempfile.NamedTemporaryFile() as tmp:
             if (

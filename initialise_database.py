@@ -140,7 +140,11 @@ def generate_schema_sql(
     schema_sql += f"  split_id integer references {splits_table}(split_id),\n"
     schema_sql += "  prompt text,\n"
     schema_sql += "  reasoning_for_this_prompt text,\n"
-    schema_sql += "  stderr_from_prompt_creation text\n"
+    schema_sql += "  stderr_from_prompt_creation text,\n"
+    schema_sql += "  train_accuracy real,\n"
+    schema_sql += "  validation_accuracy real,\n"
+    schema_sql += "  test_accuracy real,\n"
+    schema_sql += "  round_completed timestamp\n"
     schema_sql += ");\n\n"
 
     # Add inferences table with name based on the rounds table
