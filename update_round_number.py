@@ -17,12 +17,15 @@ def main() -> None:
     conn.autocommit = True
     cur = conn.cursor()
 
-    cur.execute("SELECT round_tracking_file FROM investigations WHERE id=%s", (args.investigation_id,))
+    cur.execute(
+        "SELECT round_tracking_file, dataset FROM investigations WHERE id=%s",
+        (args.investigation_id,),
+    )
     row = cur.fetchone()
     if row is None:
         raise SystemExit(f"investigation {args.investigation_id} not found")
 
-    filename = row[0]
+    filename, dataset = row
     round_no = None
     if filename and os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as f:
@@ -33,9 +36,16 @@ def main() -> None:
     if round_no is None:
         print("No round number found; nothing updated")
     else:
+        rounds_table = f"{dataset}_rounds"
         cur.execute(
-            "UPDATE investigations SET round_number=%s WHERE id=%s",
-            (round_no, args.investigation_id),
+            f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s",
+            (round_no,),
+        )
+        uuid_row = cur.fetchone()
+        round_uuid = uuid_row[0] if uuid_row else None
+        cur.execute(
+            "UPDATE investigations SET round_number=%s, round_uuid=%s WHERE id=%s",
+            (round_no, round_uuid, args.investigation_id),
         )
         print(f"Updated investigation {args.investigation_id} to round {round_no}")
 

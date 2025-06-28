@@ -48,11 +48,17 @@ def main() -> None:
             correct = max_round or None
             if correct == round_no:
                 continue
+            cur.execute(
+                f"SELECT round_uuid FROM {table} WHERE round_id=%s",
+                (correct,),
+            )
+            uuid_row = cur.fetchone()
+            round_uuid = uuid_row[0] if uuid_row else None
             print(
                 f"-- investigation {inv_id}: found max round {correct} (currently {round_no})"
             )
             print(
-                f"UPDATE investigations SET round_number={correct} WHERE id={inv_id};"
+                f"UPDATE investigations SET round_number={correct}, round_uuid='{round_uuid}' WHERE id={inv_id};"
             )
 
     cur.close()
