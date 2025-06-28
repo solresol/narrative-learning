@@ -25,8 +25,6 @@ def main() -> None:
     cur.execute(
         """
         SELECT i.round_number,
-               i.sqlite_database,
-               i.round_tracking_file,
                d.dataset,
                d.config_file,
                m.model,
@@ -47,8 +45,6 @@ def main() -> None:
 
     (
         round_no,
-        sqlite_db,
-        round_file,
         dataset,
         config_file,
         model,
@@ -67,8 +63,6 @@ def main() -> None:
     print(f"  Example count: {example_count}")
     print(f"  Patience: {patience}")
     print(f"  Current round: {round_no}")
-    print(f"  SQLite DB: {sqlite_db}")
-    print(f"  Round tracking file: {round_file}")
 
     cfg = DatasetConfig(conn, config_file, dataset, args.investigation_id)
     try:

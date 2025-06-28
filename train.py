@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import sqlite3
 import sys
 import json
 import os
@@ -115,12 +114,10 @@ def run_reprompt(config, prompting_creation_prompt, old_round_id, model, verbose
 
 
 def main():
-    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
     default_model = os.environ.get('NARRATIVE_LEARNING_TRAINING_MODEL', None)
     default_example_count = int(os.environ.get('NARRATIVE_LEARNING_EXAMPLE_COUNT', '3'))
     default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
     parser = argparse.ArgumentParser(description="Show confusion matrix for a round")
-    parser.add_argument('--database', default=default_database, help="Path to the SQLite database file")
     parser.add_argument('--dsn', help='PostgreSQL DSN')
     parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
     parser.add_argument('--investigation-id', type=int, help='ID from investigations table')
@@ -130,7 +127,6 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--model", default=default_model, help="Model to do the retraining, not the model that does the inference")
-    parser.add_argument("--round-tracking-file", help="A file that will have the new round ID written to it")
     parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
@@ -139,17 +135,14 @@ def main():
         dataset, config_file = get_investigation_settings(conn, args.investigation_id)
         config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
     else:
-        if not (args.database or args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
-            sys.exit("Must specify --database or --dsn/--pg-config for PostgreSQL")
+        if not (args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
+            sys.exit("Must specify --dsn/--pg-config for PostgreSQL")
         if args.model is None:
             sys.exit("Must specify a model via --model or NARRATIVE_LEARNING_TRAINING_MODEL env")
         if args.config is None:
             sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
 
-        if args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN'):
-            conn = get_connection(args.dsn, args.pg_config)
-        else:
-            conn = sqlite3.connect(args.database)
+        conn = get_connection(args.dsn, args.pg_config)
         config = datasetconfig.DatasetConfig(conn, args.config)
 
     prompting_creation_prompt = get_prompt_for_updating_model(config, args.round_id, args.example_count, args.show_history)
@@ -164,9 +157,6 @@ def main():
         print(f"NEW PROMPT: {details['updated_prompt']}")
         print()
         print(f"NEW ROUND ID: {new_round_id}")
-    if args.round_tracking_file:
-        with open(args.round_tracking_file, 'w') as f:
-            f.write(f"{new_round_id}")
 
 if __name__ == '__main__':
     main()

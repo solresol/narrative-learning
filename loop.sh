@@ -1,28 +1,7 @@
 #!/bin/bash
 
-if [ "$ROUND_TRACKING_FILE" = "" ]
-then
-    echo "ROUND_TRACKING_FILE is not defined"
-    exit 1
-fi
-
-echo "Using $ROUND_TRACKING_FILE to track the current round"
-
-if [ "$NARRATIVE_LEARNING_DATABASE" = "" ]
-then
-    echo "NARRATIVE_LEARNING_DATABASE is not defined"
-    exit 1
-fi
-
-echo "Storing rounds and prompts in $NARRATIVE_LEARNING_DATABASE"
-
-if [ ! -e $ROUND_TRACKING_FILE ]
-then
-    ROUND=1
-    echo "Using a default of 1"
-else
-    ROUND=$(< $ROUND_TRACKING_FILE)
-fi
+ROUND=1
+echo "Starting at round $ROUND"
 
 echo "Starting at round $ROUND"
 
@@ -38,20 +17,13 @@ while uv run report-script.py --metric accuracy --validation --patience $NARRATI
 do
     uv run process_round.py --round $ROUND --loop --progress-bar || exit 1
     # This runs train one more time than is actually necessary
-    uv run train.py --round-id $ROUND --round-tracking-file $ROUND_TRACKING_FILE --verbose || exit 1
-    ROUND=$(< $ROUND_TRACKING_FILE)
+    uv run train.py --round-id $ROUND --verbose || exit 1
+    ROUND=$((ROUND + 1))
 done
 
 BEST_ROUND=$(uv run report-script.py --best)
 
 if [ "$BEST_ROUND" != "" ]
 then
-    OUTFILE="${NARRATIVE_LEARNING_DATABASE%.sqlite}.best-round.txt"
-    echo $BEST_ROUND > $OUTFILE
-fi
-
-if [ "$NARRATIVE_LEARNING_DUMP" != "" ]
-then
-    echo "Dumping database to $NARRATIVE_LEARNING_DUMP"
-    sqlite3 "$NARRATIVE_LEARNING_DATABASE" .dump > "$NARRATIVE_LEARNING_DUMP"
+    echo "Best round: $BEST_ROUND"
 fi

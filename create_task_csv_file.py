@@ -4,7 +4,6 @@ import argparse
 import json
 import csv
 import sys
-import sqlite3
 import math
 import sys
 import re
@@ -13,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import datasetconfig
 from statsmodels.stats.proportion import proportion_confint
 from env_settings import EnvSettings
+from modules.postgres import get_connection
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create CSV file from env files')
@@ -40,9 +40,10 @@ def get_model_data(env_file_path: str, task: str, model_details: Dict) -> Option
         sys.stderr.write(f"Skipping {env_file_path} - {error_message}\n")
         return None
 
-    # Connect to database
-    conn = sqlite3.connect(f"file:{settings.database}?mode=ro", uri=True)
-    config = datasetconfig.DatasetConfig(conn, settings.config)
+    # Connect to PostgreSQL using libpq environment defaults
+    conn = get_connection()
+    dataset = os.path.basename(os.path.dirname(env_file_path))
+    config = datasetconfig.DatasetConfig(conn, settings.config, dataset)
 
     # Get the latest split ID
     split_id = config.get_latest_split_id()

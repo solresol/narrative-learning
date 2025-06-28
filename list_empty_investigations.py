@@ -6,8 +6,7 @@ create a temporary view for use with other scripts.
 """
 
 import argparse
-import os
-import sqlite3
+from psycopg2 import sql
 import sys
 import fnmatch
 
@@ -31,17 +30,15 @@ OLLAMA_TRAINING_MODELS: list[str] = [
 ]
 
 
-def has_inferences(db_path: str) -> bool:
-    """Return True if the SQLite file has any inferences."""
-    if not db_path or not os.path.exists(db_path):
-        return False
+def has_inferences(conn, dataset: str, inv_id: int) -> bool:
+    """Return True if PostgreSQL contains any inferences for the investigation."""
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        cur = conn.execute("SELECT COUNT(*) FROM inferences")
-        count = cur.fetchone()[0]
-        conn.close()
-        return count > 0
-    except sqlite3.Error:
+        cur = conn.cursor()
+        table = sql.Identifier(f"{dataset}_inferences")
+        query = sql.SQL("SELECT 1 FROM {} WHERE investigation_id = %s LIMIT 1")
+        cur.execute(query.format(table), (inv_id,))
+        return cur.fetchone() is not None
+    except Exception:
         return False
 
 
@@ -77,21 +74,21 @@ def main() -> None:
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT i.id, i.sqlite_database, m.training_model, i.dataset, i.model
+        SELECT i.id, m.training_model, i.dataset, i.model
           FROM investigations i
           JOIN models m ON i.model = m.model
          ORDER BY i.id
         """
     )
     missing: list[tuple[int, str]] = []
-    for inv_id, db_path, training_model, dataset, model in cur.fetchall():
+    for inv_id, training_model, dataset, model in cur.fetchall():
         if args.dataset and not any(fnmatch.fnmatch(dataset, pat) for pat in args.dataset):
             continue
         if args.model and not any(fnmatch.fnmatch(model, pat) for pat in args.model):
             continue
         if args.skip_ollama and training_model in OLLAMA_TRAINING_MODELS:
             continue
-        if not has_inferences(db_path):
+        if not has_inferences(conn, dataset, inv_id):
             missing.append((inv_id, training_model))
 
     conn.close()

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Update the round number for an investigation based on its tracking file."""
+"""Update the round number for an investigation using database records."""
 import argparse
-import os
 
 from modules.postgres import get_connection
 
@@ -18,28 +17,28 @@ def main() -> None:
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT round_tracking_file, dataset FROM investigations WHERE id=%s",
+        "SELECT dataset FROM investigations WHERE id=%s",
         (args.investigation_id,),
     )
     row = cur.fetchone()
     if row is None:
         raise SystemExit(f"investigation {args.investigation_id} not found")
 
-    filename, dataset = row
-    round_no = None
-    if filename and os.path.exists(filename):
-        with open(filename, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if content.isdigit():
-                round_no = int(content)
+    dataset = row[0]
+    rounds_table = f"{dataset}_rounds"
+    cur.execute(
+        f"SELECT MAX(round_id) FROM {rounds_table} WHERE investigation_id=%s",
+        (args.investigation_id,),
+    )
+    round_row = cur.fetchone()
+    round_no = round_row[0] if round_row else None
 
     if round_no is None:
         print("No round number found; nothing updated")
     else:
-        rounds_table = f"{dataset}_rounds"
         cur.execute(
-            f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s",
-            (round_no,),
+            f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s AND investigation_id=%s",
+            (round_no, args.investigation_id),
         )
         uuid_row = cur.fetchone()
         round_uuid = uuid_row[0] if uuid_row else None
