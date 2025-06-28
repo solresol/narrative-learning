@@ -191,8 +191,14 @@ def main() -> None:
             round_no = int(content) if content else round_no + 1
 
         cur.execute(
-            "UPDATE investigations SET round_number=%s WHERE id=%s",
-            (round_no, args.investigation_id),
+            f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s",
+            (round_no,),
+        )
+        uuid_row = cur.fetchone()
+        round_uuid = uuid_row[0] if uuid_row else None
+        cur.execute(
+            "UPDATE investigations SET round_number=%s, round_uuid=%s WHERE id=%s",
+            (round_no, round_uuid, args.investigation_id),
         )
 
     ret, best = capture_cmd([

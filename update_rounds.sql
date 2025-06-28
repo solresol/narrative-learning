@@ -14,6 +14,7 @@ BEGIN
              WHERE table_schema NOT IN ('pg_catalog','information_schema')
                AND table_name LIKE '%_rounds'
     LOOP
+        EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS round_uuid UUID DEFAULT gen_random_uuid();', r.table_schema, r.table_name);
         EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS train_accuracy DOUBLE PRECISION;', r.table_schema, r.table_name);
         EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS validation_accuracy DOUBLE PRECISION;', r.table_schema, r.table_name);
         EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS test_accuracy DOUBLE PRECISION;', r.table_schema, r.table_name);

@@ -73,6 +73,7 @@ def create_tables(conn, args):
         f'''
       CREATE TABLE {rounds_table} (
          round_id integer primary key autoincrement,
+         round_uuid text default gen_random_uuid(),
          round_start datetime default current_timestamp,
          split_id integer references splits(split_id),
          prompt text,
