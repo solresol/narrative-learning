@@ -57,12 +57,10 @@ def main() -> None:
         SELECT i.round_number,
                i.dataset,
                d.config_file,
-               i.sqlite_database,
                m.training_model,
                m.inference_model,
                m.example_count,
                m.patience,
-               i.round_tracking_file,
                i.dump_file
         FROM investigations i
         JOIN datasets d ON i.dataset = d.dataset
@@ -79,12 +77,10 @@ def main() -> None:
         round_no,
         dataset,
         config,
-        sqlite_db,
         training_model,
         inference_model,
         example_count,
         patience,
-        round_file,
         dump_path,
     ) = row
 
@@ -96,10 +92,8 @@ def main() -> None:
 
     env = {
         "NARRATIVE_LEARNING_CONFIG": config,
-        "NARRATIVE_LEARNING_DATABASE": sqlite_db,
         "NARRATIVE_LEARNING_TRAINING_MODEL": training_model,
         "NARRATIVE_LEARNING_INFERENCE_MODEL": inference_model,
-        "ROUND_TRACKING_FILE": round_file,
     }
     if example_count:
         env["NARRATIVE_LEARNING_EXAMPLE_COUNT"] = str(example_count)

@@ -9,7 +9,6 @@ class TestEnvSettings(unittest.TestCase):
     def test_from_file(self):
         # Create a temporary env file
         content = """
-        NARRATIVE_LEARNING_DATABASE=/path/to/db.sqlite
         NARRATIVE_LEARNING_CONFIG=/path/to/config.json
         NARRATIVE_LEARNING_TRAINING_MODEL=gpt-4o
         NARRATIVE_LEARNING_EXAMPLE_COUNT=10
@@ -24,7 +23,6 @@ class TestEnvSettings(unittest.TestCase):
             settings = EnvSettings.from_file(temp_path)
             
             # Check values
-            self.assertEqual(settings.database, '/path/to/db.sqlite')
             self.assertEqual(settings.config, '/path/to/config.json')
             self.assertEqual(settings.model, 'gpt-4o')
             self.assertEqual(settings.sampler, 10)
@@ -42,14 +40,13 @@ class TestEnvSettings(unittest.TestCase):
         # Test with empty settings
         settings = EnvSettings()
         self.assertFalse(settings.is_valid())
-        
+
         # Test with partial settings
-        settings = EnvSettings(database='/path/to/db.sqlite')
+        settings = EnvSettings(config='/path/to/config.json')
         self.assertFalse(settings.is_valid())
-        
+
         # Test with complete settings
         settings = EnvSettings(
-            database='/path/to/db.sqlite',
             config='/path/to/config.json',
             model='gpt-4o'
         )

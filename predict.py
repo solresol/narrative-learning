@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import sqlite3
 import sys
 import os
 import json
@@ -105,15 +104,12 @@ Entity Data:
 
 
 if __name__ == '__main__':
-    default_database = os.environ.get('NARRATIVE_LEARNING_DATABASE', None)
     default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', None)
     default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
 
     parser = argparse.ArgumentParser(
         description="Make predictions for an entity based on the round prompt"
     )
-    parser.add_argument('--database', default=default_database,
-                        help="Path to the SQLite database file")
     parser.add_argument('--dsn', help='PostgreSQL DSN')
     parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
     parser.add_argument('--round-id', type=int, required=True,
@@ -134,14 +130,11 @@ if __name__ == '__main__':
         dataset, config_file = get_investigation_settings(conn, args.investigation_id)
         config = datasetconfig.DatasetConfig(conn, config_file, dataset, args.investigation_id)
     else:
-        if not (args.database or args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
-            sys.exit("Must specify --database or --dsn/--pg-config for PostgreSQL")
+        if not (args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN')):
+            sys.exit("Must specify --dsn/--pg-config for PostgreSQL")
         if args.config is None:
             sys.exit("Must specify --config or set the env variable NARRATIVE_LEARNING_CONFIG")
-        if args.dsn or args.pg_config or os.environ.get('POSTGRES_DSN'):
-            conn = get_connection(args.dsn, args.pg_config)
-        else:
-            conn = sqlite3.connect(args.database)
+        conn = get_connection(args.dsn, args.pg_config)
         config = datasetconfig.DatasetConfig(conn, args.config)
 
     predict(config, args.round_id, args.entity_id, args.model, args.dry_run, args.investigation_id)

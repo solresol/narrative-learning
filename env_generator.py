@@ -23,9 +23,6 @@ def generate_env_files(datasets, models, base_dir):
             # Determine example count (10 if model ends with '10', otherwise 3)
             example_count = "10" if model.endswith("10") else "3"
             
-            # Set model names according to pattern
-            database_path = f"results/{dataset}-{model}.sqlite"
-            
             # Use gpt-4o-mini for inference across all models
             inference_model = "gpt-4o-mini"
             
@@ -75,18 +72,13 @@ def generate_env_files(datasets, models, base_dir):
             # Get the training model from the mapping, with fallback to gpt-4o-mini
             training_model = model_mapping.get(model, "gpt-4o-mini")
             
-            # Round tracking file follows the pattern
-            round_tracking_file = f".round-tracking-file.{dataset}.{model}"
-            
-            # Dump file is similar to database but with different extension and directory
+            # Dump file is similar to the old database name but with a .sql extension
             dump_file = f"dumps/{dataset}-{model}.sql"
-            
+
             # Generate the content for the .env file
             env_content = f"""export NARRATIVE_LEARNING_CONFIG={config_file}
-export NARRATIVE_LEARNING_DATABASE={database_path}
 export NARRATIVE_LEARNING_TRAINING_MODEL={training_model}
 export NARRATIVE_LEARNING_INFERENCE_MODEL={inference_model}
-export ROUND_TRACKING_FILE={round_tracking_file}
 export NARRATIVE_LEARNING_EXAMPLE_COUNT={example_count}
 export NARRATIVE_LEARNING_DUMP={dump_file}
 """

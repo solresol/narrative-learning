@@ -53,12 +53,8 @@ class EnvSettings:
             return cls()
     
     def is_valid(self) -> bool:
-        """Check if all required settings are present."""
-        return all(getattr(self, key) is not None for key in ['database', 'config', 'model'])
-    
-    def database_exists(self) -> bool:
-        """Check if the database file exists."""
-        return self.database is not None and os.path.exists(self.database)
+        """Check if required settings are present."""
+        return all(getattr(self, key) is not None for key in ['config', 'model'])
     
     def config_exists(self) -> bool:
         """Check if the config file exists."""
@@ -71,12 +67,9 @@ class EnvSettings:
             tuple: (is_valid, error_message)
         """
         if not self.is_valid():
-            missing = [key for key in ['database', 'config', 'model'] 
+            missing = [key for key in ['config', 'model']
                       if getattr(self, key) is None]
             return False, f"Missing required settings: {', '.join(missing)}"
-        
-        if not self.database_exists():
-            return False, f"Database file not found: {self.database}"
             
         if not self.config_exists():
             return False, f"Config file not found: {self.config}"
