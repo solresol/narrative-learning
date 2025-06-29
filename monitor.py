@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import json
 import shutil
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Tuple
 
+from datasetconfig import DatasetConfig
 from modules.postgres import get_connection
 
 
@@ -17,50 +18,65 @@ def check_investigation_status(
     investigation_id: int,
     dataset: str,
     model: str,
-    rounds_table: str,
+    config_path: str,
+    patience: int,
     terminal_width: int = 80,
     use_color: bool = True,
 ) -> str:
     """Return a one-line status summary for an investigation."""
+
+    cfg = DatasetConfig(conn, config_path, dataset, investigation_id)
     inf_table = f"{dataset}_inferences"
     cur = conn.cursor()
+
+    # Determine if any rounds exist
+    try:
+        split_id = cfg.get_latest_split_id()
+    except SystemExit:
+        return f"{dataset}/{model}: no rounds"
+
+    all_rounds = cfg.get_rounds_for_split(split_id)
+    if not all_rounds:
+        return f"{dataset}/{model}: no rounds"
+
+    # If only one round and the prompt is "Choose randomly"
+    if len(all_rounds) == 1:
+        cur.execute(
+            f"SELECT prompt FROM {cfg.rounds_table} WHERE round_id = %s AND investigation_id = %s",
+            (all_rounds[0], investigation_id),
+        )
+        row = cur.fetchone()
+        prompt = row[0] if row else ""
+        if prompt.strip() == "Choose randomly":
+            return f"{dataset}/{model}: only 'Choose randomly' round"
+
+    processed_rounds = cfg.get_processed_rounds_for_split(split_id)
+
+    # Early stopping check if we have any processed rounds
+    if processed_rounds and cfg.check_early_stopping(split_id, "accuracy", patience):
+        try:
+            test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
+            return f"{dataset}/{model}: complete ({test_acc:.3f} test accuracy)"
+        except Exception:
+            return f"{dataset}/{model}: complete"
+
+    # Not complete - show progress
     cur.execute(
-        f"""
-        SELECT round_id, count(*),
-               EXTRACT(EPOCH FROM NOW() - MIN(creation_time)) AS seconds_ago
-          FROM {inf_table}
-         WHERE investigation_id = %s
-         GROUP BY round_id
-         ORDER BY round_id DESC
-        """,
+        f"SELECT MAX(creation_time) FROM {inf_table} WHERE investigation_id = %s",
         (investigation_id,),
     )
-    rounds = cur.fetchall()
-    rounds = [r for r in rounds if r[1] > 0]
-    if not rounds:
-        return f"{dataset}/{model}: no inferences found"
-
-    latest_round, inference_count, seconds_ago = rounds[0]
-    is_recent = seconds_ago is not None and seconds_ago < 1800
-
-    cur.execute(
-        f"SELECT prompt FROM {rounds_table} WHERE round_id = %s AND investigation_id = %s",
-        (latest_round, investigation_id),
-    )
     row = cur.fetchone()
-    prompt = row[0] if row else "N/A"
-    prompt = prompt.replace("\n", " ")
+    last_time = row[0]
+    seconds_ago = None
+    if last_time is not None:
+        seconds_ago = (datetime.now(timezone.utc) - last_time).total_seconds()
+    is_recent = seconds_ago is not None and seconds_ago < 1800
+    time_str = last_time.strftime("%Y-%m-%d %H:%M:%S") if last_time else "never"
 
-    base_output = (
-        f"{dataset}/{model}: {inference_count} inferences, round #{latest_round}, prompt: \""
+    result = (
+        f"{dataset}/{model}: {len(processed_rounds)} rounds so far, "
+        f"last inference {time_str}"
     )
-    remaining_width = terminal_width - len(base_output) - 1
-    if remaining_width < 10:
-        remaining_width = 40
-    prompt_preview = (
-        prompt[: remaining_width - 3] + "..." if len(prompt) > remaining_width else prompt
-    )
-    result = f"{dataset}/{model}: {inference_count} inferences, round #{latest_round}, prompt: \"{prompt_preview}\""
     if use_color and is_recent:
         return f"\033[1;32m{result}\033[0m"
     return result
@@ -102,7 +118,7 @@ def main() -> None:
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT i.id, i.dataset, i.model, d.config_file
+        SELECT i.id, i.dataset, i.model, d.config_file, m.patience
           FROM investigations i
           JOIN datasets d ON i.dataset = d.dataset
           JOIN models m ON i.model = m.model
@@ -111,13 +127,13 @@ def main() -> None:
     )
     rows = cur.fetchall()
 
-    grouped: Dict[str, Tuple[str, list[Tuple[int, str]]]] = {}
-    for inv_id, dataset, model, cfg in rows:
+    grouped: Dict[str, Tuple[str, list[Tuple[int, str, int]]]] = {}
+    for inv_id, dataset, model, cfg, patience in rows:
         if not matches(dataset, args.dataset):
             continue
         if not matches(model, args.model):
             continue
-        grouped.setdefault(dataset, (cfg, []) )[1].append((inv_id, model))
+        grouped.setdefault(dataset, (cfg, []) )[1].append((inv_id, model, patience))
 
     if not grouped:
         print("No matching investigations found")
@@ -125,19 +141,14 @@ def main() -> None:
 
     for dataset in sorted(grouped):
         cfg_path, investigations = grouped[dataset]
-        try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                rounds_table = json.load(f)["rounds_table"]
-        except Exception as exc:
-            print(f"{dataset}: error reading config ({exc})")
-            continue
-        for inv_id, model in sorted(investigations, key=lambda x: x[1]):
+        for inv_id, model, patience in sorted(investigations, key=lambda x: x[1]):
             status = check_investigation_status(
                 conn,
                 inv_id,
                 dataset,
                 model,
-                rounds_table,
+                cfg_path,
+                patience,
                 width,
                 not args.no_color,
             )
