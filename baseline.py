@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import sqlite3
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegressionCV
@@ -22,7 +21,6 @@ def parse_arguments():
         description='Train baseline models using dataset configuration.'
     )
     parser.add_argument('--config', help='Path to the dataset configuration JSON file')
-    parser.add_argument('--database', help='Path to the SQLite database file')
     parser.add_argument('--dsn', help='PostgreSQL DSN for connecting to the database')
     parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
     parser.add_argument('--investigation-id', type=int, help='Investigation ID when using PostgreSQL')
@@ -182,15 +180,10 @@ def main():
         dataset, config_path = get_investigation_settings(conn, args.investigation_id)
         config = DatasetConfig(conn, config_path, dataset, args.investigation_id)
     else:
-        if args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN"):
-            conn = get_connection(args.dsn, args.pg_config)
-            dataset = args.dataset
-        else:
-            if not args.database:
-                sys.exit("Must specify --database or --dsn/--pg-config")
-            conn = sqlite3.connect(f"file:{args.database}?mode=ro", uri=True)
-            dataset = ""
-
+        if not (args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN")):
+            sys.exit("Must specify --dsn/--pg-config for PostgreSQL")
+        conn = get_connection(args.dsn, args.pg_config)
+        dataset = args.dataset
         if not args.config:
             sys.exit("Must specify --config")
         config = DatasetConfig(conn, args.config, dataset)
@@ -212,7 +205,7 @@ def main():
         with open(args.output, 'w') as f:
             json.dump(results, f, indent=2)
 
-    if not isinstance(conn, sqlite3.Connection) and dataset:
+    if dataset:
         cur = conn.cursor()
         cur.execute(
             """
