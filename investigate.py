@@ -104,12 +104,14 @@ def main() -> None:
 
     os.environ.update(env)
 
-    # Ensure there is at least one round for this investigation.
+    # Ensure there is at least one round for this investigation and that
+    # ``round_no`` references a valid round.
     cur.execute(
-        f"SELECT 1 FROM {rounds_table} WHERE investigation_id=%s LIMIT 1",
+        f"SELECT round_id FROM {rounds_table} WHERE investigation_id=%s ORDER BY round_id LIMIT 1",
         (args.investigation_id,),
     )
-    if cur.fetchone() is None:
+    first_round = cur.fetchone()
+    if first_round is None:
         cur.execute(f"SELECT MIN(split_id) FROM {splits_table}")
         default_split = cur.fetchone()[0] or 0
         cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {rounds_table}")
@@ -121,6 +123,17 @@ def main() -> None:
         cur.execute(
             f"INSERT INTO {rounds_table} (round_id, split_id, prompt, investigation_id) VALUES (%s, %s, 'Choose randomly', %s)",
             (next_id, default_split, args.investigation_id),
+        )
+        round_no = next_id
+        cur.execute(
+            "UPDATE investigations SET round_number=%s WHERE id=%s",
+            (round_no, args.investigation_id),
+        )
+    elif round_no is None:
+        round_no = first_round[0]
+        cur.execute(
+            "UPDATE investigations SET round_number=%s WHERE id=%s",
+            (round_no, args.investigation_id),
         )
 
     while True:
