@@ -14,7 +14,6 @@ import argparse
 import os
 import subprocess
 import sys
-import tempfile
 import json
 
 import datasetconfig
@@ -174,28 +173,27 @@ def main() -> None:
 
         update_round_statistics(config_obj, round_no)
 
-        with tempfile.NamedTemporaryFile() as tmp:
-            if (
-                run_cmd(
-                    [
-                        "uv",
-                        "run",
-                        "train.py",
-                        "--round-id",
-                        str(round_no),
-                        "--investigation-id",
-                        str(args.investigation_id),
-                        "--round-tracking-file",
-                        tmp.name,
-                        "--verbose",
-                    ]
-                )
-                != 0
-            ):
-                sys.exit(1)
-            tmp.seek(0)
-            content = tmp.read().decode().strip()
-            round_no = int(content) if content else round_no + 1
+        if (
+            run_cmd(
+                [
+                    "uv",
+                    "run",
+                    "train.py",
+                    "--round-id",
+                    str(round_no),
+                    "--investigation-id",
+                    str(args.investigation_id),
+                    "--verbose",
+                ]
+            )
+            != 0
+        ):
+            sys.exit(1)
+        cur.execute(
+            f"SELECT max(round_id) FROM {rounds_table} WHERE investigation_id=%s",
+            (args.investigation_id,),
+        )
+        round_no = cur.fetchone()[0]
 
         cur.execute(
             f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s",
