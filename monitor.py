@@ -6,7 +6,10 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+SYDNEY_TZ = ZoneInfo("Australia/Sydney")
 from typing import Any, Dict, Iterable, Tuple
 
 from datasetconfig import DatasetConfig
@@ -67,11 +70,17 @@ def check_investigation_status(
     )
     row = cur.fetchone()
     last_time = row[0]
+    local_time = None
     seconds_ago = None
     if last_time is not None:
-        seconds_ago = (datetime.now(timezone.utc) - last_time).total_seconds()
+        local_time = (
+            last_time.replace(tzinfo=SYDNEY_TZ)
+            if last_time.tzinfo is None
+            else last_time.astimezone(SYDNEY_TZ)
+        )
+        seconds_ago = (datetime.now(SYDNEY_TZ) - local_time).total_seconds()
     is_recent = seconds_ago is not None and seconds_ago < 1800
-    time_str = last_time.strftime("%Y-%m-%d %H:%M:%S") if last_time else "never"
+    time_str = local_time.strftime("%Y-%m-%d %H:%M:%S") if local_time else "never"
 
     result = (
         f"{dataset}/{model}: {len(processed_rounds)} rounds so far, "
