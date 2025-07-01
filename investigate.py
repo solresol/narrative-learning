@@ -3,8 +3,7 @@
 
 The script expects an investigation ID which references a row in the
 ``investigations`` table defined in ``postgres-schemas/investigations_schema.sql``.
-All required
-environment variables are read from that row. Progress is written back by
+All configuration settings are read from that row. Progress is written back by
 updating the ``round_number`` column.
 """
 
@@ -89,19 +88,6 @@ def main() -> None:
     splits_table = config_json.get("splits_table", f"{dataset}_splits")
     config_obj = datasetconfig.DatasetConfig(conn, config, dataset, args.investigation_id)
 
-    env = {
-        "NARRATIVE_LEARNING_CONFIG": config,
-        "NARRATIVE_LEARNING_TRAINING_MODEL": training_model,
-        "NARRATIVE_LEARNING_INFERENCE_MODEL": inference_model,
-    }
-    if example_count:
-        env["NARRATIVE_LEARNING_EXAMPLE_COUNT"] = str(example_count)
-    if patience:
-        env["NARRATIVE_LEARNING_PATIENCE"] = str(patience)
-    if dump_path:
-        env["NARRATIVE_LEARNING_DUMP"] = dump_path
-
-    os.environ.update(env)
 
     # Ensure there is at least one round for this investigation and that
     # ``round_no`` references a valid round.
@@ -147,7 +133,7 @@ def main() -> None:
                 "accuracy",
                 "--validation",
                 "--patience",
-                os.environ.get("NARRATIVE_LEARNING_PATIENCE", "3"),
+                str(patience if patience is not None else 3),
             ]
         )
         if ret != 0:
@@ -183,6 +169,9 @@ def main() -> None:
                     str(round_no),
                     "--investigation-id",
                     str(args.investigation_id),
+                    "--model",
+                    training_model,
+                    *(["--example-count", str(example_count)] if example_count else []),
                     "--verbose",
                 ]
             )
