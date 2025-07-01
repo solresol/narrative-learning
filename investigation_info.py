@@ -71,13 +71,29 @@ def main() -> None:
         processed = cfg.get_processed_rounds_for_split(split_id)
         print(f"  Total rounds in DB: {len(rounds)}")
         print(f"  Rounds with data: {len(processed)}")
-        try:
-            best = cfg.get_best_round_id(split_id, "accuracy")
-            print(f"  Best round: {best}")
-        except NoProcessedRoundsException:
+
+        if processed:
+            try:
+                best_round = cfg.get_best_round_id(split_id, "accuracy")
+                print(f"  Best round: {best_round}")
+
+                val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+                val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+                print(f"  Best validation accuracy: {val_acc:.3f}")
+
+                try:
+                    test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
+                    print(f"  Best test accuracy: {test_acc:.3f}")
+                except Exception as exc:
+                    print(f"  Best test accuracy: error ({exc})")
+
+                if cfg.check_early_stopping(split_id, "accuracy", patience):
+                    print(f"  Final validation accuracy: {val_acc:.3f}")
+                    print(f"  Final test accuracy: {test_acc:.3f}")
+            except NoProcessedRoundsException:
+                print("  Best round: none (no processed rounds)")
+        else:
             print("  Best round: none (no processed rounds)")
-        except Exception as exc:
-            print(f"  Best round: error ({exc})")
     except SystemExit:
         print("  No rounds found in database")
     except Exception as exc:
