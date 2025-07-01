@@ -137,12 +137,44 @@ def main() -> None:
             cols, rows = fetch_all(conn_sq, dataset_table)
             if reference_rows != rows or reference_cols != cols:
                 raise SystemExit(f"Data mismatch in {dataset_table} for {path}")
-        for table in ("rounds", "inferences"):
-            cols, rows = fetch_all(conn_sq, table)
+        # Insert rounds individually so PostgreSQL can generate new IDs and
+        # we can remap them for the inferences table.  Each SQLite file starts
+        # numbering rounds from 1 which means many files have duplicate IDs.
+        # If we inserted them directly, they would conflict with the primary
+        # key and be skipped.  Instead we omit ``round_id`` from the insert so
+        # the database assigns a unique identifier and remember the mapping.
+
+        cols, rows = fetch_all(conn_sq, "rounds")
+        if not rows:
+            id_map = {}
+        else:
+            round_id_idx = cols.index("round_id")
+            insert_cols = [c for c in cols if c != "round_id"] + ["investigation_id"]
+            id_map = {}
+            for r in rows:
+                old_id = r[round_id_idx]
+                values = [v for i, v in enumerate(r) if i != round_id_idx]
+                values.append(args.investigation_id)
+                placeholders = ", ".join(["%s"] * len(values))
+                cur_pg.execute(
+                    f"INSERT INTO {dataset}_rounds ({', '.join(insert_cols)}) "
+                    f"VALUES ({placeholders}) RETURNING round_id"
+                , values)
+                new_id = cur_pg.fetchone()[0]
+                id_map[old_id] = new_id
+
+        # Insert inferences using the newly generated round IDs
+        cols, rows = fetch_all(conn_sq, "inferences")
+        if rows:
+            round_idx = cols.index("round_id")
             cols.append("investigation_id")
-            rows = [tuple(list(r) + [args.investigation_id]) for r in rows]
-            dest = f"{dataset}_{table}"
-            insert_rows(cur_pg, dest, cols, rows)
+            new_rows = []
+            for r in rows:
+                r = list(r)
+                r[round_idx] = id_map.get(r[round_idx])
+                r.append(args.investigation_id)
+                new_rows.append(tuple(r))
+            insert_rows(cur_pg, f"{dataset}_inferences", cols, new_rows)
         conn_sq.close()
 
     cur_pg.close()
