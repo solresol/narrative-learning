@@ -106,7 +106,7 @@ def main() -> None:
             table = cfg.rounds_table
             cfg._execute(
                 cur,
-                f"SELECT round_id, round_start, round_completed, validation_accuracy, test_accuracy "
+                f"SELECT round_id, round_uuid, round_start, round_completed, validation_accuracy, test_accuracy "
                 f"FROM {table} WHERE investigation_id = ? ORDER BY round_start",
                 (args.investigation_id,),
             )
@@ -114,7 +114,7 @@ def main() -> None:
             prev_start = None
             from datetime import timedelta
 
-            for r_id, r_start, r_completed, v_acc, t_acc in rows:
+            for r_id, r_uuid, r_start, r_completed, v_acc, t_acc in rows:
                 tags = []
                 if best_round is not None and r_id == best_round:
                     tags.append("best")
@@ -123,7 +123,7 @@ def main() -> None:
                 tag_str = f" ({', '.join(tags)})" if tags else ""
                 c_str = r_completed.strftime('%Y-%m-%d') if r_completed else 'in progress'
                 print(
-                    f"  Round {r_id}: {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}"
+                    f"  Round {r_id} ({r_uuid}): {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}"
                     f", test={t_acc if t_acc is not None else 'n/a'}{tag_str}"
                 )
                 prev_start = r_start
