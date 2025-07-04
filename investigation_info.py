@@ -17,6 +17,11 @@ def main() -> None:
     parser.add_argument("investigation_id", type=int, help="ID from investigations table")
     parser.add_argument("--dsn", help="PostgreSQL connection string")
     parser.add_argument("--config", help="Path to PostgreSQL config JSON")
+    parser.add_argument(
+        "--round-details",
+        action="store_true",
+        help="Show information about all rounds for this investigation",
+    )
     args = parser.parse_args()
 
     # Connect to PostgreSQL and fetch investigation settings
@@ -65,6 +70,7 @@ def main() -> None:
     print(f"  Current round: {round_no}")
 
     cfg = DatasetConfig(conn, config_file, dataset, args.investigation_id)
+    best_round = None
     try:
         split_id = cfg.get_latest_split_id()
         rounds = cfg.get_rounds_for_split(split_id)
@@ -94,6 +100,33 @@ def main() -> None:
                 print("  Best round: none (no processed rounds)")
         else:
             print("  Best round: none (no processed rounds)")
+
+        if args.round_details:
+            cur = conn.cursor()
+            table = cfg.rounds_table
+            cfg._execute(
+                cur,
+                f"SELECT round_id, round_start, round_completed, validation_accuracy, test_accuracy "
+                f"FROM {table} WHERE investigation_id = ? ORDER BY round_start",
+                (args.investigation_id,),
+            )
+            rows = cur.fetchall()
+            prev_start = None
+            from datetime import timedelta
+
+            for r_id, r_start, r_completed, v_acc, t_acc in rows:
+                tags = []
+                if best_round is not None and r_id == best_round:
+                    tags.append("best")
+                if prev_start and r_start and r_start - prev_start > timedelta(days=31):
+                    tags.append(">1 month gap")
+                tag_str = f" ({', '.join(tags)})" if tags else ""
+                c_str = r_completed.strftime('%Y-%m-%d') if r_completed else 'in progress'
+                print(
+                    f"  Round {r_id}: {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}"
+                    f", test={t_acc if t_acc is not None else 'n/a'}{tag_str}"
+                )
+                prev_start = r_start
     except SystemExit:
         print("  No rounds found in database")
     except Exception as exc:
