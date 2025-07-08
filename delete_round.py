@@ -19,7 +19,7 @@ def fetch_all_dict(cur) -> list[dict[str, Any]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Delete a round after exporting")
     parser.add_argument("round_uuid", help="Round UUID to remove")
-    parser.add_argument("--output", required=True, help="File to write round data")
+    parser.add_argument("--output", help="File to write round data")
     parser.add_argument("--dsn", help="PostgreSQL DSN")
     parser.add_argument("--config", help="PostgreSQL config JSON")
     args = parser.parse_args()
@@ -64,13 +64,17 @@ def main() -> None:
     )
     inferences = fetch_all_dict(cur)
 
-    with open(args.output, "w", encoding="utf-8") as f:
+    if args.output:
+      with open(args.output, "w", encoding="utf-8") as f:
         json.dump({"round": round_data, "inferences": inferences}, f, indent=2, default=str)
 
     cur.execute(f"DELETE FROM {inf_table} WHERE round_id = %s", (round_id,))
     cur.execute(f"DELETE FROM {cfg.rounds_table} WHERE round_id = %s", (round_id,))
 
-    print(f"Round {round_id} exported to {args.output} and deleted")
+    if args.output:
+       print(f"Round {round_id} exported to {args.output} and deleted")
+    else:
+       print(f"Round {round_id} deleted")
 
     cur.close()
     conn.close()
