@@ -18,6 +18,9 @@ Migration utilities:
   `postgres-schemas/`. Dataset-specific tables (the core data and split
   assignments) are checked for consistency across all SQLite files. Only the
   `rounds` and `inferences` tables receive an extra `investigation_id` column
-  when imported.
+  when imported. Because each SQLite database numbers rounds starting from 1,
+  the import script lets PostgreSQL assign new ``round_id`` values and updates
+  the corresponding ``inferences`` rows so that duplicates do not cause
+  conflicts.
 
 

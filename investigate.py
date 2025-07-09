@@ -3,8 +3,7 @@
 
 The script expects an investigation ID which references a row in the
 ``investigations`` table defined in ``postgres-schemas/investigations_schema.sql``.
-All required
-environment variables are read from that row. Progress is written back by
+All configuration settings are read from that row. Progress is written back by
 updating the ``round_number`` column.
 """
 
@@ -14,7 +13,6 @@ import argparse
 import os
 import subprocess
 import sys
-import tempfile
 import json
 
 import datasetconfig
@@ -90,26 +88,15 @@ def main() -> None:
     splits_table = config_json.get("splits_table", f"{dataset}_splits")
     config_obj = datasetconfig.DatasetConfig(conn, config, dataset, args.investigation_id)
 
-    env = {
-        "NARRATIVE_LEARNING_CONFIG": config,
-        "NARRATIVE_LEARNING_TRAINING_MODEL": training_model,
-        "NARRATIVE_LEARNING_INFERENCE_MODEL": inference_model,
-    }
-    if example_count:
-        env["NARRATIVE_LEARNING_EXAMPLE_COUNT"] = str(example_count)
-    if patience:
-        env["NARRATIVE_LEARNING_PATIENCE"] = str(patience)
-    if dump_path:
-        env["NARRATIVE_LEARNING_DUMP"] = dump_path
 
-    os.environ.update(env)
-
-    # Ensure there is at least one round for this investigation.
+    # Ensure there is at least one round for this investigation and that
+    # ``round_no`` references a valid round.
     cur.execute(
-        f"SELECT 1 FROM {rounds_table} WHERE investigation_id=%s LIMIT 1",
+        f"SELECT round_id FROM {rounds_table} WHERE investigation_id=%s ORDER BY round_id LIMIT 1",
         (args.investigation_id,),
     )
-    if cur.fetchone() is None:
+    first_round = cur.fetchone()
+    if first_round is None:
         cur.execute(f"SELECT MIN(split_id) FROM {splits_table}")
         default_split = cur.fetchone()[0] or 0
         cur.execute(f"SELECT COALESCE(max(round_id), 0) + 1 FROM {rounds_table}")
@@ -121,6 +108,17 @@ def main() -> None:
         cur.execute(
             f"INSERT INTO {rounds_table} (round_id, split_id, prompt, investigation_id) VALUES (%s, %s, 'Choose randomly', %s)",
             (next_id, default_split, args.investigation_id),
+        )
+        round_no = next_id
+        cur.execute(
+            "UPDATE investigations SET round_number=%s WHERE id=%s",
+            (round_no, args.investigation_id),
+        )
+    elif round_no is None:
+        round_no = first_round[0]
+        cur.execute(
+            "UPDATE investigations SET round_number=%s WHERE id=%s",
+            (round_no, args.investigation_id),
         )
 
     while True:
@@ -135,7 +133,7 @@ def main() -> None:
                 "accuracy",
                 "--validation",
                 "--patience",
-                os.environ.get("NARRATIVE_LEARNING_PATIENCE", "3"),
+                str(patience if patience is not None else 3),
             ]
         )
         if ret != 0:
@@ -161,28 +159,30 @@ def main() -> None:
 
         update_round_statistics(config_obj, round_no)
 
-        with tempfile.NamedTemporaryFile() as tmp:
-            if (
-                run_cmd(
-                    [
-                        "uv",
-                        "run",
-                        "train.py",
-                        "--round-id",
-                        str(round_no),
-                        "--investigation-id",
-                        str(args.investigation_id),
-                        "--round-tracking-file",
-                        tmp.name,
-                        "--verbose",
-                    ]
-                )
-                != 0
-            ):
-                sys.exit(1)
-            tmp.seek(0)
-            content = tmp.read().decode().strip()
-            round_no = int(content) if content else round_no + 1
+        if (
+            run_cmd(
+                [
+                    "uv",
+                    "run",
+                    "train.py",
+                    "--round-id",
+                    str(round_no),
+                    "--investigation-id",
+                    str(args.investigation_id),
+                    "--model",
+                    training_model,
+                    *(["--example-count", str(example_count)] if example_count else []),
+                    "--verbose",
+                ]
+            )
+            != 0
+        ):
+            sys.exit(1)
+        cur.execute(
+            f"SELECT max(round_id) FROM {rounds_table} WHERE investigation_id=%s",
+            (args.investigation_id,),
+        )
+        round_no = cur.fetchone()[0]
 
         cur.execute(
             f"SELECT round_uuid FROM {rounds_table} WHERE round_id=%s",
