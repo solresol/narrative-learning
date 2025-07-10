@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Display details about an investigation.
 
-This is useful to check investigation settings and progress while the
-system is migrating between SQLite and PostgreSQL.
+This utility reports configuration and round status for a single
+investigation.  When invoked with ``--round-details`` it lists each
+round and highlights "trailing" rounds that occurred after training was
+interrupted.  A trailing section is printed when the script encounters
+an incomplete round with zero inferences followed by a long (>1 month)
+gap.  All rounds after that aborted round are shown so the operator can
+decide whether to keep or discard them.
 """
 from __future__ import annotations
 import argparse
@@ -156,21 +161,29 @@ def main() -> None:
                 )
                 prev_start = r_start
 
-            # Detect trailing rounds after a 0-inference incomplete round
+            # Detect rounds that appear *after* a round which started but
+            # produced zero inferences.  In practice this indicates training
+            # was interrupted mid-round and later resumed.  Subsequent rounds
+            # start much later (" >1 month gap") and may no longer be relevant
+            # to the earlier portion of the investigation.  We therefore mark
+            # every round after the abort so that the operator can decide
+            # whether to discard them.
+
             trailing = []
             for idx, d in enumerate(details):
-                if not d["completed"] and d["inf_count"] == 0:
-                    if all(p["completed"] for p in details[:idx]):
-                        j = idx + 1
-                        flagged = []
-                        while j < len(details) and details[j]["completed"] and details[j]["gap"]:
-                            flagged.append(details[j])
-                            j += 1
-                        if flagged:
-                            trailing = [r["uuid"] for r in details[idx + 1 : j]]
-                            if j < len(details) and not details[j]["completed"]:
-                                trailing.append(details[j]["uuid"])
-                            break
+                if not d["completed"] and d["inf_count"] == 0 and all(p["completed"] for p in details[:idx]):
+                    j = idx + 1
+                    gap_found = False
+                    # Look for at least one completed round marked with a
+                    # ">1 month gap" immediately after the aborted round.
+                    while j < len(details) and details[j]["completed"] and details[j]["gap"]:
+                        gap_found = True
+                        j += 1
+                    if gap_found:
+                        # Include every round after the 0-inference round,
+                        # not just the gap-flagged ones.
+                        trailing = [r["uuid"] for r in details[idx + 1 :]]
+                        break
 
             if trailing:
                 print("  Trailing Rounds:", " ".join(trailing))
