@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Generate a static HTML representation of the investigations database."""
+from __future__ import annotations
+import os
+import html
+from typing import List, Tuple
+
+import pandas as pd
+
+from modules.postgres import get_connection, get_investigation_settings
+from datasetconfig import DatasetConfig
+
+
+def write_page(path: str, title: str, body: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("<!doctype html><html><head><meta charset='utf-8'>")
+        f.write(f"<title>{html.escape(title)}</title>")
+        f.write("</head><body>")
+        f.write(f"<h1>{html.escape(title)}</h1>\n")
+        f.write(body)
+        f.write("</body></html>")
+
+
+def get_split_id(cfg: DatasetConfig) -> int:
+    cur = cfg.conn.cursor()
+    cfg._execute(cur, f"SELECT MIN(split_id) FROM {cfg.splits_table}")
+    row = cur.fetchone()
+    return row[0]
+
+
+def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int, out_dir: str) -> None:
+    cur = cfg.conn.cursor()
+    rounds_table = cfg.rounds_table
+    inf_table = f"{cfg.dataset}_inferences" if cfg.dataset else "inferences"
+    cfg._execute(
+        cur,
+        f"""
+        SELECT round_uuid, prompt, train_accuracy, validation_accuracy,
+               test_accuracy, round_completed, round_start
+          FROM {rounds_table}
+         WHERE round_id = ? AND investigation_id = ?
+        """,
+        (round_id, investigation_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return
+    (uuid, prompt, train_acc, val_acc, test_acc, completed, created) = row
+    cfg._execute(
+        cur,
+        f"SELECT COUNT(*), MIN(creation_time), MAX(creation_time) FROM {inf_table} WHERE round_id = ? AND investigation_id = ?",
+        (round_id, investigation_id),
+    )
+    inf_count, first_inf, last_inf = cur.fetchone()
+    body = []
+    body.append(f"<p><b>Round UUID:</b> {uuid}</p>")
+    body.append(f"<p><b>Prompt:</b><br><pre>{html.escape(prompt)}</pre></p>")
+    body.append("<ul>")
+    body.append(f"<li>Inferences: {inf_count}</li>")
+    body.append(f"<li>Created: {created}</li>")
+    body.append(f"<li>First inference: {first_inf if first_inf else 'n/a'}</li>")
+    body.append(f"<li>Last inference: {last_inf if last_inf else 'n/a'}</li>")
+    body.append(f"<li>Completed: {'yes' if completed else 'no'}</li>")
+    body.append(f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}</li>")
+    body.append(f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}</li>")
+    body.append(f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}</li>")
+    body.append("</ul>")
+    write_page(os.path.join(out_dir, "index.html"), f"Round {round_id}", "\n".join(body))
+
+
+def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, base_dir: str) -> None:
+    inv_dir = os.path.join(base_dir, "investigation", str(inv_id))
+    os.makedirs(inv_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT i.round_number, m.model, m.training_model, m.inference_model,
+               m.example_count, m.patience
+          FROM investigations i
+          JOIN models m ON i.model = m.model
+         WHERE i.id = %s
+        """,
+        (inv_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return
+    round_no, model, training_model, inference_model, example_count, patience = row
+
+    cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
+    split_id = cfg.get_latest_split_id()
+    try:
+        best_round = cfg.get_best_round_id(split_id, "accuracy")
+    except Exception:
+        best_round = None
+    cur.execute(
+        f"SELECT round_id, round_uuid, round_start, round_completed, validation_accuracy, test_accuracy FROM {cfg.rounds_table} WHERE investigation_id = %s ORDER BY round_id",
+        (inv_id,),
+    )
+    rounds = cur.fetchall()
+    body = ["<ul>"]
+    body.append(f"<li>Model: {model}</li>")
+    body.append(f"<li>Training model: {training_model}</li>")
+    body.append(f"<li>Inference model: {inference_model}</li>")
+    body.append(f"<li>Example count: {example_count}</li>")
+    body.append(f"<li>Patience: {patience}</li>")
+    body.append(f"<li>Current round: {round_no}</li>")
+    if best_round is not None:
+        body.append(f"<li>Best round: {best_round}</li>")
+    body.append("</ul>")
+
+    body.append("<h2>Rounds</h2>")
+    body.append("<table border='1'>")
+    body.append("<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed</th><th>Val acc</th><th>Test acc</th></tr>")
+    for r_id, r_uuid, r_start, r_completed, v_acc, t_acc in rounds:
+        link = f"round/{r_id}/index.html"
+        body.append(
+            f"<tr><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc if v_acc is not None else 'n/a'}</td><td>{t_acc if t_acc is not None else 'n/a'}</td></tr>"
+        )
+        generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
+    body.append("</table>")
+
+    write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
+
+
+def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute("SELECT id, model FROM investigations WHERE dataset = %s ORDER BY id", (dataset,))
+    investigations = cur.fetchall()
+    cfg = DatasetConfig(conn, cfg_file, dataset)
+    split_id = get_split_id(cfg)
+    cur.execute(f"SELECT {cfg.primary_key}, holdout, validation FROM {cfg.splits_table} WHERE split_id = %s", (split_id,))
+    split_map = {row[0]: (row[1], row[2]) for row in cur.fetchall()}
+    cur.execute(f"SELECT {', '.join(cfg.columns)} FROM {cfg.table_name} ORDER BY {cfg.primary_key}")
+    data_rows = cur.fetchall()
+    df = pd.DataFrame(data_rows, columns=cfg.columns)
+    def split_label(pk):
+        holdout, validation = split_map.get(pk, (False, False))
+        if holdout:
+            return "validation" if validation else "test"
+        return "train"
+    df["split"] = [split_label(row[cfg.columns.index(cfg.primary_key)]) for row in data_rows]
+
+    body = ["<h2>Investigations</h2><ul>"]
+    for inv_id, model in investigations:
+        body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
+        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
+    body.append("</ul>")
+
+    body.append("<h2>Data</h2>")
+    body.append(df.to_html(index=False))
+    write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
+
+
+def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str, str]) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute("SELECT training_model, inference_model FROM models WHERE model = %s", (model,))
+    row = cur.fetchone()
+    if not row:
+        return
+    training_model, inference_model = row
+    cur.execute("SELECT id, dataset FROM investigations WHERE model = %s ORDER BY id", (model,))
+    investigations = cur.fetchall()
+    perf_rows: List[Tuple[str, str, str]] = []
+    for inv_id, dataset in investigations:
+        cfg = DatasetConfig(conn, dataset_lookup[dataset], dataset, inv_id)
+        split_id = cfg.get_latest_split_id()
+        try:
+            best_round = cfg.get_best_round_id(split_id, "accuracy")
+            val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+            val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+            try:
+                test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
+            except Exception:
+                test_acc = "n/a"
+        except Exception:
+            val_acc = "n/a"
+            test_acc = "n/a"
+        perf_rows.append((dataset, str(val_acc), str(test_acc)))
+    body = ["<p>", f"Training model: {training_model}<br>", f"Inference model: {inference_model}", "</p>"]
+    body.append("<h2>Investigations</h2><ul>")
+    for inv_id, dataset in investigations:
+        body.append(f"<li><a href='../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>")
+    body.append("</ul>")
+    if perf_rows:
+        body.append("<h2>Performance</h2><table border='1'>")
+        body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
+        for d, v, t in perf_rows:
+            body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
+        body.append("</table>")
+    write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
+
+
+def main() -> None:
+    base_dir = "website"
+    os.makedirs(base_dir, exist_ok=True)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT dataset, config_file FROM datasets ORDER BY dataset")
+    datasets = cur.fetchall()
+    dataset_lookup = {d: c for d, c in datasets}
+    dataset_links = []
+    for dataset, cfg_file in datasets:
+        dataset_dir = os.path.join(base_dir, "dataset", dataset)
+        generate_dataset_page(conn, dataset, cfg_file, dataset_dir)
+        dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
+
+    cur.execute("SELECT model FROM models ORDER BY model")
+    models = [row[0] for row in cur.fetchall()]
+    model_links = []
+    for m in models:
+        model_dir = os.path.join(base_dir, "model", m)
+        generate_model_page(conn, m, model_dir, dataset_lookup)
+        model_links.append(f"<li><a href='model/{m}/index.html'>{m}</a></li>")
+
+    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
+    index_body += "<h2>Models</h2><ul>" + "".join(model_links) + "</ul>"
+    write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

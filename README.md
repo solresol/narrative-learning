@@ -126,3 +126,14 @@ Run it with libpq environment variables set, for example:
 ```bash
 PGUSER=root PGDATABASE=narrative ./check_round_consistency.py
 ```
+
+## Website export
+
+Run `./export_website.py` to generate static HTML pages in the `website/` directory. You can publish the site with:
+
+```bash
+rsync -av website/ merah.cassia.ifost.org.au:/var/www/vhosts/narrative-learning.symmachus.org/htdocs/
+```
+
+which will make it appear at <http://narrative-learning.symmachus.org/>.
+
