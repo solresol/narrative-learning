@@ -5,6 +5,8 @@ import os
 import html
 from typing import List, Tuple
 
+import matplotlib.pyplot as plt
+
 import pandas as pd
 
 from modules.postgres import get_connection, get_investigation_settings
@@ -94,11 +96,40 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         best_round = cfg.get_best_round_id(split_id, "accuracy")
     except Exception:
         best_round = None
+    inf_table = f"{cfg.dataset}_inferences" if cfg.dataset else "inferences"
     cur.execute(
-        f"SELECT round_id, round_uuid, round_start, round_completed, validation_accuracy, test_accuracy FROM {cfg.rounds_table} WHERE investigation_id = %s ORDER BY round_id",
+        f"""
+        SELECT r.round_id, r.round_uuid, r.round_start, r.round_completed,
+               r.train_accuracy, r.validation_accuracy, r.test_accuracy,
+               COUNT(i.*) AS inf_count
+          FROM {cfg.rounds_table} r
+          LEFT JOIN {inf_table} i ON (
+                r.round_id = i.round_id AND
+                r.investigation_id = i.investigation_id)
+         WHERE r.investigation_id = %s
+         GROUP BY r.round_id, r.round_uuid, r.round_start, r.round_completed,
+                  r.train_accuracy, r.validation_accuracy, r.test_accuracy
+         ORDER BY r.round_id
+        """,
         (inv_id,),
     )
     rounds = cur.fetchall()
+    if rounds and rounds[-1][-1] == 0:
+        rounds = rounds[:-1]
+
+    df_rounds = pd.DataFrame(
+        rounds,
+        columns=[
+            "round_id",
+            "round_uuid",
+            "round_start",
+            "round_completed",
+            "train_acc",
+            "val_acc",
+            "test_acc",
+            "inf_count",
+        ],
+    )
     body = ["<ul>"]
     body.append(f"<li>Model: {model}</li>")
     body.append(f"<li>Training model: {training_model}</li>")
@@ -113,13 +144,32 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
     body.append("<h2>Rounds</h2>")
     body.append("<table border='1'>")
     body.append("<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed</th><th>Val acc</th><th>Test acc</th></tr>")
-    for r_id, r_uuid, r_start, r_completed, v_acc, t_acc in rounds:
+    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
         link = f"round/{r_id}/index.html"
+        highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
         body.append(
-            f"<tr><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc if v_acc is not None else 'n/a'}</td><td>{t_acc if t_acc is not None else 'n/a'}</td></tr>"
+            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc if v_acc is not None else 'n/a'}</td><td>{t_acc if t_acc is not None else 'n/a'}</td></tr>"
         )
         generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
     body.append("</table>")
+
+    if not df_rounds.empty:
+        plot_df = df_rounds.dropna(subset=["val_acc"]).sort_values("val_acc", ascending=False).reset_index(drop=True)
+        plot_df["rank"] = plot_df.index + 1
+        plt.figure(figsize=(8,4))
+        plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
+        plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
+        plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
+        plt.xticks(plot_df["rank"], plot_df["round_id"])
+        plt.xlabel("Round")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.tight_layout()
+        chart_path = os.path.join(inv_dir, "scores.png")
+        plt.savefig(chart_path)
+        plt.close()
+        body.append("<h2>Scores</h2>")
+        body.append(f"<img src='scores.png' alt='round scores'>")
 
     write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
 
@@ -127,30 +177,29 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
 def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
-    cur.execute("SELECT id, model FROM investigations WHERE dataset = %s ORDER BY id", (dataset,))
+    cur.execute(
+        """
+        SELECT i.id, i.model, m.training_model
+          FROM investigations i
+          JOIN models m ON i.model = m.model
+         WHERE i.dataset = %s
+         ORDER BY i.id
+        """,
+        (dataset,),
+    )
     investigations = cur.fetchall()
     cfg = DatasetConfig(conn, cfg_file, dataset)
-    split_id = get_split_id(cfg)
-    cur.execute(f"SELECT {cfg.primary_key}, holdout, validation FROM {cfg.splits_table} WHERE split_id = %s", (split_id,))
-    split_map = {row[0]: (row[1], row[2]) for row in cur.fetchall()}
-    cur.execute(f"SELECT {', '.join(cfg.columns)} FROM {cfg.table_name} ORDER BY {cfg.primary_key}")
-    data_rows = cur.fetchall()
-    df = pd.DataFrame(data_rows, columns=cfg.columns)
-    def split_label(pk):
-        holdout, validation = split_map.get(pk, (False, False))
-        if holdout:
-            return "validation" if validation else "test"
-        return "train"
-    df["split"] = [split_label(row[cfg.columns.index(cfg.primary_key)]) for row in data_rows]
-
-    body = ["<h2>Investigations</h2><ul>"]
-    for inv_id, model in investigations:
-        body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
+    body = ["<h2>Investigations</h2>"]
+    groups: dict[str, list[tuple[int, str]]] = {}
+    for inv_id, model, training_model in investigations:
+        groups.setdefault(training_model, []).append((inv_id, model))
         generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
-    body.append("</ul>")
 
-    body.append("<h2>Data</h2>")
-    body.append(df.to_html(index=False))
+    for tm, rows in groups.items():
+        body.append(f"<h3>{tm}</h3><ul>")
+        for inv_id, model in rows:
+            body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
+        body.append("</ul>")
     write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
 
 
@@ -208,16 +257,25 @@ def main() -> None:
         generate_dataset_page(conn, dataset, cfg_file, dataset_dir)
         dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
 
-    cur.execute("SELECT model FROM models ORDER BY model")
-    models = [row[0] for row in cur.fetchall()]
-    model_links = []
-    for m in models:
+    cur.execute(
+        "SELECT model, training_model FROM models ORDER BY training_model, model"
+    )
+    model_rows = cur.fetchall()
+    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
+    index_body += "<h2>Models</h2>"
+    groups: dict[str, list[str]] = {}
+    for m, tm in model_rows:
+        groups.setdefault(tm, []).append(m)
         model_dir = os.path.join(base_dir, "model", m)
         generate_model_page(conn, m, model_dir, dataset_lookup)
-        model_links.append(f"<li><a href='model/{m}/index.html'>{m}</a></li>")
 
-    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
-    index_body += "<h2>Models</h2><ul>" + "".join(model_links) + "</ul>"
+    for tm, models in groups.items():
+        index_body += f"<h3>{tm}</h3><ul>"
+        for m in models:
+            index_body += f"<li><a href='model/{m}/index.html'>{m}</a></li>"
+        index_body += "</ul>"
+
+    
     write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
     conn.close()
 
