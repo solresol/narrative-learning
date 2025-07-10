@@ -114,6 +114,9 @@ def main() -> None:
             prev_start = None
             from datetime import timedelta
 
+            inf_table = f"{cfg.dataset}_inferences"
+            total_points = cfg.get_data_point_count()
+
             for r_id, r_uuid, r_start, r_completed, v_acc, t_acc in rows:
                 tags = []
                 if best_round is not None and r_id == best_round:
@@ -121,7 +124,19 @@ def main() -> None:
                 if prev_start and r_start and r_start - prev_start > timedelta(days=31):
                     tags.append(">1 month gap")
                 tag_str = f" ({', '.join(tags)})" if tags else ""
-                c_str = r_completed.strftime('%Y-%m-%d') if r_completed else 'in progress'
+
+                if r_completed:
+                    c_str = r_completed.strftime('%Y-%m-%d')
+                else:
+                    cur2 = conn.cursor()
+                    cfg._execute(
+                        cur2,
+                        f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND investigation_id = ?",
+                        (r_id, args.investigation_id),
+                    )
+                    inf_count = cur2.fetchone()[0]
+                    c_str = f"in progress ({inf_count} of {total_points})"
+
                 print(
                     f"  Round {r_id} ({r_uuid}): {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}"
                     f", test={t_acc if t_acc is not None else 'n/a'}{tag_str}"
