@@ -117,16 +117,20 @@ def main() -> None:
             inf_table = f"{cfg.dataset}_inferences"
             total_points = cfg.get_data_point_count()
 
+            details = []
             for r_id, r_uuid, r_start, r_completed, v_acc, t_acc in rows:
                 tags = []
+                gap = False
                 if best_round is not None and r_id == best_round:
                     tags.append("best")
                 if prev_start and r_start and r_start - prev_start > timedelta(days=31):
                     tags.append(">1 month gap")
+                    gap = True
                 tag_str = f" ({', '.join(tags)})" if tags else ""
 
                 if r_completed:
                     c_str = r_completed.strftime('%Y-%m-%d')
+                    inf_count = total_points
                 else:
                     cur2 = conn.cursor()
                     cfg._execute(
@@ -138,10 +142,38 @@ def main() -> None:
                     c_str = f"in progress ({inf_count} of {total_points})"
 
                 print(
-                    f"  Round {r_id} ({r_uuid}): {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}"
+                    f"  Round {r_id} ({r_uuid}): {r_start:%Y-%m-%d} -> {c_str}, val={v_acc if v_acc is not None else 'n/a'}",
                     f", test={t_acc if t_acc is not None else 'n/a'}{tag_str}"
                 )
+
+                details.append(
+                    {
+                        "completed": bool(r_completed),
+                        "inf_count": inf_count,
+                        "gap": gap,
+                        "uuid": r_uuid,
+                    }
+                )
                 prev_start = r_start
+
+            # Detect trailing rounds after a 0-inference incomplete round
+            trailing = []
+            for idx, d in enumerate(details):
+                if not d["completed"] and d["inf_count"] == 0:
+                    if all(p["completed"] for p in details[:idx]):
+                        j = idx + 1
+                        flagged = []
+                        while j < len(details) and details[j]["completed"] and details[j]["gap"]:
+                            flagged.append(details[j])
+                            j += 1
+                        if flagged:
+                            trailing = [r["uuid"] for r in details[idx + 1 : j]]
+                            if j < len(details) and not details[j]["completed"]:
+                                trailing.append(details[j]["uuid"])
+                            break
+
+            if trailing:
+                print("  Trailing Rounds:", " ".join(trailing))
     except SystemExit:
         print("  No rounds found in database")
     except Exception as exc:
