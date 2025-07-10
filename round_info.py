@@ -75,7 +75,7 @@ def main() -> None:
         cur,
         f"""
         SELECT prompt, investigation_id, train_accuracy, validation_accuracy,
-               test_accuracy, round_completed
+               test_accuracy, round_completed, round_start
           FROM {rounds_table}
          WHERE round_id = ? AND investigation_id = ?
         """,
@@ -85,20 +85,24 @@ def main() -> None:
     if not round_row:
         raise SystemExit("Round information not found")
 
-    prompt, inv_id, train_acc, val_acc, test_acc, completed = round_row
+    prompt, inv_id, train_acc, val_acc, test_acc, completed, created = round_row
 
     cfg._execute(
         cur,
-        f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND investigation_id = ?",
+        f"SELECT COUNT(*), MIN(creation_time), MAX(creation_time) FROM {inf_table} "
+        "WHERE round_id = ? AND investigation_id = ?",
         (round_id, investigation_id),
     )
-    inf_count = cur.fetchone()[0]
+    inf_count, first_inf, last_inf = cur.fetchone()
 
     print(f"Round ID: {round_id}")
     print(f"Round UUID: {round_uuid}")
     print(f"Investigation ID: {inv_id}")
     print(f"Prompt:\n{prompt}")
     print(f"Inferences: {inf_count}")
+    print(f"Created: {created}")
+    print(f"First inference: {first_inf if first_inf is not None else 'n/a'}")
+    print(f"Last inference: {last_inf if last_inf is not None else 'n/a'}")
     print(f"Completed: {'yes' if completed else 'no'}")
     print(f"Train accuracy: {train_acc if train_acc is not None else 'n/a'}")
     print(f"Validation accuracy: {val_acc if val_acc is not None else 'n/a'}")
