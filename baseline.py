@@ -91,6 +91,8 @@ def preprocess_data(train_df, test_df, config):
     X_train_parts = []
     X_test_parts = []
     feature_names = []
+    # Track indices of numeric features that are not already binary.
+    numeric_continuous_indices = []
 
     # Process each feature column
     for col in feature_cols:
@@ -107,6 +109,13 @@ def preprocess_data(train_df, test_df, config):
             X_train_parts.append(train_numeric.reshape(-1, 1))
             X_test_parts.append(test_numeric.reshape(-1, 1))
             feature_names.append(col)
+
+            # If the numeric column is not already binary (0/1), mark it for
+            # discretization when training models that require categorical
+            # features, such as BayesianRuleList and CORELS.
+            unique_values = pd.unique(train_numeric)
+            if not set(unique_values).issubset({0, 1}):
+                numeric_continuous_indices.append(len(feature_names) - 1)
 
         except (ValueError, TypeError):
             # Not numeric, handle as categorical
@@ -136,10 +145,10 @@ def preprocess_data(train_df, test_df, config):
     y_train = train_df[target_field]
     y_test = test_df[target_field]
 
-    return X_train, y_train, X_test, y_test, feature_names
+    return X_train, y_train, X_test, y_test, feature_names, numeric_continuous_indices
 
 
-def train_and_evaluate_models(X_train, y_train, X_test, y_test):
+def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuous_indices):
     """Train multiple baseline models and return accuracy metrics."""
     from statsmodels.stats.proportion import proportion_confint
 
@@ -156,10 +165,38 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test):
         'EBM': ExplainableBoostingClassifier(interactions=10),
     }
 
+    # Discretize continuous numeric features for classifiers that require
+    # categorical inputs (BayesianRuleList and CORELS).
+    if numeric_continuous_indices:
+        from sklearn.preprocessing import KBinsDiscretizer
+
+        def discretize(Xtr, Xte):
+            parts_tr, parts_te = [], []
+            for i in range(Xtr.shape[1]):
+                col_tr = Xtr[:, i].reshape(-1, 1)
+                col_te = Xte[:, i].reshape(-1, 1)
+                if i in numeric_continuous_indices:
+                    enc = KBinsDiscretizer(n_bins=5, encode='onehot-dense', strategy='quantile')
+                    enc.fit(col_tr)
+                    parts_tr.append(enc.transform(col_tr))
+                    parts_te.append(enc.transform(col_te))
+                else:
+                    parts_tr.append(col_tr)
+                    parts_te.append(col_te)
+            return np.hstack(parts_tr), np.hstack(parts_te)
+
+        X_train_discrete, X_test_discrete = discretize(X_train, X_test)
+    else:
+        X_train_discrete, X_test_discrete = X_train, X_test
+
     accuracies = {}
     for name, clf in models.items():
-        clf.fit(X_train, y_train)
-        accuracies[name] = clf.score(X_test, y_test)
+        if name in {'BayesianRuleList', 'CORELS'}:
+            clf.fit(X_train_discrete, y_train)
+            accuracies[name] = clf.score(X_test_discrete, y_test)
+        else:
+            clf.fit(X_train, y_train)
+            accuracies[name] = clf.score(X_test, y_test)
 
     n_test = len(y_test)
     correct_counts = {name: round(acc * n_test) for name, acc in accuracies.items()}
@@ -212,13 +249,13 @@ def main():
     if train_df.empty or test_df.empty:
         sys.exit("Error: Training or test dataset is empty")
 
-    X_train, y_train, X_test, y_test, feature_names = preprocess_data(train_df, test_df, config)
+    X_train, y_train, X_test, y_test, feature_names, numeric_continuous_indices = preprocess_data(train_df, test_df, config)
 
     if X_train.size == 0 or X_test.size == 0:
         sys.exit("Error: No usable features found after preprocessing")
 
     # Train and evaluate models
-    results = train_and_evaluate_models(X_train, y_train, X_test, y_test)
+    results = train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuous_indices)
 
     if args.output:
         with open(args.output, 'w') as f:
