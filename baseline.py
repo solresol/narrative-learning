@@ -3,9 +3,9 @@
 import argparse
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LogisticRegressionCV
+from sklearn.linear_model import LogisticRegressionCV, LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.dummy import DummyClassifier
 from imodels import RuleFitClassifier, BayesianRuleListClassifier, OptimalRuleListClassifier
 from interpret.glassbox import ExplainableBoostingClassifier
@@ -145,6 +145,14 @@ def preprocess_data(train_df, test_df, config):
     y_train = train_df[target_field]
     y_test = test_df[target_field]
 
+    # Convert categorical target labels to numeric form so classifiers that
+    # expect integer targets (like BayesianRuleList) can be used without errors.
+    if y_train.dtype == object or y_test.dtype == object:
+        encoder = LabelEncoder()
+        encoder.fit(pd.concat([y_train, y_test], ignore_index=True))
+        y_train = encoder.transform(y_train)
+        y_test = encoder.transform(y_test)
+
     return X_train, y_train, X_test, y_test, feature_names, numeric_continuous_indices
 
 
@@ -153,11 +161,11 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuo
     from statsmodels.stats.proportion import proportion_confint
 
     models = {
-        'logistic regression': LogisticRegressionCV(max_iter=10000),
+        'logistic regression': LogisticRegression(max_iter=1000),
         'decision trees': DecisionTreeClassifier(),
         'dummy': DummyClassifier(),
         'RuleFit': RuleFitClassifier(),
-        'BayesianRuleList': BayesianRuleListClassifier(),
+        'BayesianRuleList': BayesianRuleListClassifier(max_iter=500, n_chains=2),
         # imodels 2.x does not support the ``max_depth`` or ``lambda_``
         # parameters used in earlier versions. Use available arguments
         # to get a comparable small model.
