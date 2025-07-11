@@ -1,0 +1,21 @@
+-- Schema for storing ensemble evaluation results
+CREATE TABLE IF NOT EXISTS ensemble_results (
+    dataset TEXT REFERENCES datasets(dataset),
+    k INTEGER,
+    models TEXT,
+    model_names TEXT,
+    model_rounds TEXT,
+    release_date DATE,
+    validation_accuracy DOUBLE PRECISION,
+    validation_lower_bound DOUBLE PRECISION,
+    validation_upper_bound DOUBLE PRECISION,
+    validation_total INTEGER,
+    validation_correct INTEGER,
+    test_accuracy DOUBLE PRECISION,
+    test_lower_bound DOUBLE PRECISION,
+    test_upper_bound DOUBLE PRECISION,
+    test_total INTEGER,
+    test_correct INTEGER,
+    created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (dataset, k, models)
+);

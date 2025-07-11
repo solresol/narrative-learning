@@ -50,15 +50,17 @@ Then, run the ensemble analysis:
 
 ```bash
 # Generate ensemble results for each dataset stored in PostgreSQL
-python results_ensembling.py titanic --output outputs/titanic_ensemble.csv --summary outputs/titanic_ensemble_summary.txt
-python results_ensembling.py wisconsin --output outputs/wisconsin_ensemble.csv --summary outputs/wisconsin_ensemble_summary.txt
-python results_ensembling.py southgermancredit --output outputs/southgermancredit_ensemble.csv --summary outputs/southgermancredit_ensemble_summary.txt
-python results_ensembling.py potions --output outputs/potions_ensemble.csv --summary outputs/potions_ensemble_summary.txt
-python results_ensembling.py timetravel_insurance --output outputs/timetravel_insurance_ensemble.csv --summary outputs/timetravel_insurance_ensemble_summary.txt
-python results_ensembling.py espionage --output outputs/espionage_ensemble.csv --summary outputs/espionage_ensemble_summary.txt
+python results_ensembling.py titanic --summary outputs/titanic_ensemble_summary.txt
+python results_ensembling.py wisconsin --summary outputs/wisconsin_ensemble_summary.txt
+python results_ensembling.py southgermancredit --summary outputs/southgermancredit_ensemble_summary.txt
+python results_ensembling.py potions --summary outputs/potions_ensemble_summary.txt
+python results_ensembling.py timetravel_insurance --summary outputs/timetravel_insurance_ensemble_summary.txt
+python results_ensembling.py espionage --summary outputs/espionage_ensemble_summary.txt
 ```
 
-The ensemble script will automatically organize results by model release dates from the `release-dates.csv` file.
+The detailed results for each combination are stored in the `ensemble_results` table.
+
+The ensemble script will automatically organize results by model release dates from the `model_release_dates` table.
 
 Copy these into the `papers/narrative-learning` directory.
 

@@ -280,8 +280,8 @@ def get_model_release_date(model_name, release_dates_df):
     if model_name not in release_dates_df['Model Name'].values:
         return None
     
-    date_str = release_dates_df.loc[release_dates_df['Model Name'] == model_name, 'Release Date'].iloc[0]
-    return datetime.strptime(date_str, '%d %b %Y')
+    date_val = release_dates_df.loc[release_dates_df['Model Name'] == model_name, 'Release Date'].iloc[0]
+    return pd.to_datetime(date_val).to_pydatetime()
 
 
 def find_best_combinations_by_date(results, release_dates_df):
@@ -600,8 +600,92 @@ def export_best_by_date_to_csv(validation_results, test_results, output_path, re
     df = pd.DataFrame(flat_results)
     df.sort_values('release_date', ascending=False, inplace=True)
     df.to_csv(output_path, index=False)
-    
+
     return df
+
+
+def store_results_in_db(conn, dataset: str, k: int, validation_results, test_results, release_dates_df):
+    """Insert ensemble results into PostgreSQL."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ensemble_results (
+            dataset TEXT REFERENCES datasets(dataset),
+            k INTEGER,
+            models TEXT,
+            model_names TEXT,
+            model_rounds TEXT,
+            release_date DATE,
+            validation_accuracy DOUBLE PRECISION,
+            validation_lower_bound DOUBLE PRECISION,
+            validation_upper_bound DOUBLE PRECISION,
+            validation_total INTEGER,
+            validation_correct INTEGER,
+            test_accuracy DOUBLE PRECISION,
+            test_lower_bound DOUBLE PRECISION,
+            test_upper_bound DOUBLE PRECISION,
+            test_total INTEGER,
+            test_correct INTEGER,
+            created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (dataset, k, models)
+        )
+        """
+    )
+
+    for val_res, test_res in zip(validation_results, test_results):
+        max_date = None
+        if release_dates_df is not None:
+            for model in val_res.get('model_names', []):
+                date = get_model_release_date(model, release_dates_df)
+                if date is not None and (max_date is None or date > max_date):
+                    max_date = date
+
+        cur.execute(
+            """
+            INSERT INTO ensemble_results (
+                dataset, k, models, model_names, model_rounds, release_date,
+                validation_accuracy, validation_lower_bound, validation_upper_bound,
+                validation_total, validation_correct,
+                test_accuracy, test_lower_bound, test_upper_bound,
+                test_total, test_correct
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (dataset, k, models) DO UPDATE SET
+                model_names=EXCLUDED.model_names,
+                model_rounds=EXCLUDED.model_rounds,
+                release_date=EXCLUDED.release_date,
+                validation_accuracy=EXCLUDED.validation_accuracy,
+                validation_lower_bound=EXCLUDED.validation_lower_bound,
+                validation_upper_bound=EXCLUDED.validation_upper_bound,
+                validation_total=EXCLUDED.validation_total,
+                validation_correct=EXCLUDED.validation_correct,
+                test_accuracy=EXCLUDED.test_accuracy,
+                test_lower_bound=EXCLUDED.test_lower_bound,
+                test_upper_bound=EXCLUDED.test_upper_bound,
+                test_total=EXCLUDED.test_total,
+                test_correct=EXCLUDED.test_correct,
+                created=CURRENT_TIMESTAMP
+            """,
+            (
+                dataset,
+                k,
+                ','.join(val_res['models']),
+                ','.join(val_res.get('model_names', [])),
+                ','.join(map(str, val_res['model_rounds'])),
+                max_date.strftime('%Y-%m-%d') if max_date else None,
+                val_res['accuracy'],
+                val_res['lower_bound'],
+                val_res['upper_bound'],
+                val_res['total'],
+                val_res['correct'],
+                test_res['accuracy'],
+                test_res['lower_bound'],
+                test_res['upper_bound'],
+                test_res['total'],
+                test_res['correct'],
+            )
+        )
+
+    conn.commit()
 
 
 if __name__ == '__main__':
@@ -615,7 +699,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', help='Print detailed progress')
     parser.add_argument('--progress-bar', action='store_true', help='Show progress bar')
     parser.add_argument('--no-decodex', action='store_false', dest='use_decodex', help='Normally we use the decodex column, but for synthetic data there is no decodex')
-    parser.add_argument('--release-dates', default='release-dates.csv', help='Path to CSV file containing model release dates')
 
     args = parser.parse_args()
 
@@ -646,13 +729,15 @@ if __name__ == '__main__':
     model_names = [r[1] for r in rows]
 
     release_dates_df = None
-    if args.release_dates:
-        try:
-            release_dates_df = pd.read_csv(args.release_dates)
+    try:
+        cur.execute('SELECT training_model, release_date FROM model_release_dates')
+        date_rows = cur.fetchall()
+        if date_rows:
+            release_dates_df = pd.DataFrame(date_rows, columns=['Model Name', 'Release Date'])
             if args.verbose:
-                print(f"Loaded {len(release_dates_df)} release dates from {args.release_dates}")
-        except Exception as e:
-            print(f"Warning: Failed to load release dates from {args.release_dates}: {e}")
+                print(f"Loaded {len(release_dates_df)} release dates from database")
+    except Exception as e:
+        print(f"Warning: Failed to load release dates from database: {e}")
 
     if release_dates_df is not None:
         valid_invs = []
@@ -711,5 +796,8 @@ if __name__ == '__main__':
             # Export traditional results
             export_validation_test_results_to_csv(validation_results, test_results, args.output)
         print(f"Detailed results saved to {args.output}")
+
+    # Persist results to PostgreSQL
+    store_results_in_db(conn, args.dataset, args.k, validation_results, test_results, release_dates_df)
 
     conn.close()
