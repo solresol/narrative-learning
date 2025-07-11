@@ -247,10 +247,17 @@ def main():
         conn = get_connection(args.dsn, args.pg_config)
         if not args.dataset:
             sys.exit("Must specify --dataset")
-        if not args.config:
-            sys.exit("Must specify --config")
         dataset = args.dataset
-        config = DatasetConfig(conn, args.config, dataset)
+        if args.config:
+            config_path = args.config
+        else:
+            cur = conn.cursor()
+            cur.execute('SELECT config_file FROM datasets WHERE dataset = %s', (dataset,))
+            row = cur.fetchone()
+            if row is None:
+                sys.exit(f"Dataset {dataset} not found")
+            config_path = row[0]
+        config = DatasetConfig(conn, config_path, dataset)
     # Load and preprocess data
     train_df, test_df = load_data(conn, config)
 

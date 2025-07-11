@@ -51,6 +51,9 @@ After the tables are created, calculate baseline metrics with:
 PGUSER=root uv run baseline.py --dataset <dataset>
 ```
 
+`baseline.py` will look up the configuration path for the given dataset from
+the `datasets` table if `--config` is not supplied.
+
 Run this once per dataset to fill the `baseline_results` table.
 
 Then copy everything from `outputs/*_results.csv`
