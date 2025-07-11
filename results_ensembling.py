@@ -35,8 +35,8 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
             FROM inferences i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
-            WHERE i.round_id = ?
-            AND s.split_id = ?
+            WHERE i.round_id = %s
+            AND s.split_id = %s
             AND s.validation = 1
         """
     else:
@@ -45,8 +45,8 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
             FROM inferences i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
-            WHERE i.round_id = ?
-            AND s.split_id = ?
+            WHERE i.round_id = %s
+            AND s.split_id = %s
             AND s.holdout = 1
             AND s.validation = 0
         """
