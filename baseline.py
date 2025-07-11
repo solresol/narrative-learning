@@ -37,8 +37,8 @@ def load_data(conn, config):
     Return training and test datasets.
     """
     table_name = config.table_name
-    primary_key = config.primary_key
-    target_field = config.target_field
+    primary_key = config.primary_key.lower()
+    target_field = config.target_field.lower()
     splits_table = config.splits_table
 
     # Query to get all data with their holdout and validation status
@@ -48,8 +48,13 @@ def load_data(conn, config):
     JOIN {splits_table} s ON t.{primary_key} = s.{primary_key}
     """
 
-    # Load data into pandas DataFrame
-    df = pd.read_sql_query(query, conn)
+    # Load data into pandas DataFrame without relying on SQLAlchemy
+    cur = conn.cursor()
+    cur.execute(query)
+    rows = cur.fetchall()
+    columns = [desc[0] for desc in cur.description]
+    df = pd.DataFrame(rows, columns=columns)
+    df.columns = [c.lower() for c in df.columns]
 
     # Drop 'decodex' column if it exists
     if 'decodex' in df.columns:
@@ -67,12 +72,20 @@ def preprocess_data(train_df, test_df, config):
     - Handle categorical features with one-hot encoding if needed
     - Prepare feature matrices and target vectors
     """
-    primary_key = config.primary_key
-    target_field = config.target_field
+    # Work with lower-case column names for robustness across PostgreSQL
+    train_df = train_df.copy()
+    test_df = test_df.copy()
+    train_df.columns = [c.lower() for c in train_df.columns]
+    test_df.columns = [c.lower() for c in test_df.columns]
 
-    # Remove non-feature columns
+    primary_key = config.primary_key.lower()
+    target_field = config.target_field.lower()
+
+    # Remove non-feature columns, ignoring case to avoid issues with
+    # configuration mismatches
     non_feature_cols = [primary_key, target_field, 'holdout', 'validation']
-    feature_cols = [col for col in train_df.columns if col not in non_feature_cols]
+    non_feature_lower = {c.lower() for c in non_feature_cols}
+    feature_cols = [col for col in train_df.columns if col not in non_feature_lower]
 
     # Initialize lists to store processed feature data
     X_train_parts = []
@@ -136,7 +149,10 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test):
         'dummy': DummyClassifier(),
         'RuleFit': RuleFitClassifier(),
         'BayesianRuleList': BayesianRuleListClassifier(),
-        'CORELS': OptimalRuleListClassifier(max_depth=3, n_iter=5000, lambda_=0.05),
+        # imodels 2.x does not support the ``max_depth`` or ``lambda_``
+        # parameters used in earlier versions. Use available arguments
+        # to get a comparable small model.
+        'CORELS': OptimalRuleListClassifier(max_card=3, n_iter=5000, c=0.05),
         'EBM': ExplainableBoostingClassifier(interactions=10),
     }
 
