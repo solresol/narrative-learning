@@ -6,6 +6,7 @@ import itertools
 import pandas as pd
 import datasetconfig
 from modules.postgres import get_connection
+from modules.exceptions import NoProcessedRoundsException
 from typing import List, Dict, Tuple, Optional
 import sys
 from datetime import datetime
@@ -29,26 +30,28 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
     # Query to get predictions for the specified round_id
     # When validation=True, get validation set data (validation=1)
     # When validation=False, get test set data (holdout=1, validation=0)
+    inf_table = f"{config.dataset}_inferences" if config.dataset else "inferences"
+
     if validation:
         query = f"""
             SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
-            FROM inferences i
+            FROM {inf_table} i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
             WHERE i.round_id = %s
             AND s.split_id = %s
-            AND s.validation = 1
+            AND s.validation = TRUE
         """
     else:
         query = f"""
             SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
-            FROM inferences i
+            FROM {inf_table} i
             JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
             JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
             WHERE i.round_id = %s
             AND s.split_id = %s
-            AND s.holdout = 1
-            AND s.validation = 0
+            AND s.holdout = TRUE
+            AND s.validation = FALSE
         """
     
     cur.execute(query, (int(round_id), int(split_id)))
@@ -171,7 +174,12 @@ def process_investigation_combinations(conn, dataset, config_path, investigation
 
             # Get the best round ID
             split_id = config.get_latest_split_id()
-            best_round_id = config.get_best_round_id(split_id)
+            try:
+                best_round_id = config.get_best_round_id(split_id)
+            except NoProcessedRoundsException:
+                if verbose:
+                    print(f"  Skipping investigation {inv_id} - no processed rounds")
+                continue
 
             # Investigation/model identifier
             model_name_from_env = combo_models[i]
