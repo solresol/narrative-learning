@@ -69,7 +69,7 @@ python results_ensembling.py espionage --summary outputs/espionage_ensemble_summ
 
 The detailed results for each combination are stored in the `ensemble_results` table.
 
-The ensemble script will automatically organize results by model release dates from the `model_release_dates` table.
+The ensemble script will automatically organize results by model release dates from the `language_models` table.
 
 Copy these into the `papers/narrative-learning` directory.
 

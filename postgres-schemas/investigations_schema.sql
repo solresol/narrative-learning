@@ -6,7 +6,7 @@ CREATE TABLE datasets (
 
 CREATE TABLE models (
     model TEXT PRIMARY KEY,
-    training_model TEXT,
+    training_model TEXT REFERENCES language_models(training_model),
     inference_model TEXT,
     example_count INTEGER DEFAULT 3,
     patience INTEGER DEFAULT 3

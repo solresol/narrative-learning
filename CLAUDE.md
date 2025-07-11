@@ -31,7 +31,7 @@ The project evaluates various LLMs including:
 - `results_error_rate_by_herdan.py`: Analyze error rates relative to lexical complexity
 - `results_ensembling.py`: Create ensemble models from multiple base models
   - Uses PostgreSQL to read investigations for a dataset
-  - Integrates with the `model_release_dates` table to track model release dates
+  - Integrates with the `language_models` table to track model release dates
   - Stores results in the `ensemble_results` table for later analysis
   - Example: `python results_ensembling.py titanic --summary outputs/titanic_ensemble_summary.txt`
 - `resultssampleimpact.py`: Measure the impact of sample count on model performance
@@ -53,7 +53,7 @@ The project evaluates various LLMs including:
 - `outputs/`: Generated charts, tables, and CSV results
 - `obfuscations/`: Dataset obfuscation plans
 - `conversions/`: Dataset conversion/encoding guidelines
-- `postgres-schemas/model_release_dates.sql`: Table definition and data for model release dates used in chronological ensembling
+- `postgres-schemas/model_release_dates.sql`: Table definition and data for language models used in chronological ensembling
 - `postgres-schemas/ensemble_results.sql`: Schema for storing ensemble evaluation results
 
 ## Key Scripts

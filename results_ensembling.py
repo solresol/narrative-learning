@@ -730,7 +730,7 @@ if __name__ == '__main__':
 
     release_dates_df = None
     try:
-        cur.execute('SELECT training_model, release_date FROM model_release_dates')
+        cur.execute('SELECT training_model, release_date FROM language_models')
         date_rows = cur.fetchall()
         if date_rows:
             release_dates_df = pd.DataFrame(date_rows, columns=['Model Name', 'Release Date'])

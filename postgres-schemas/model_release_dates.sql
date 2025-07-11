@@ -1,21 +1,33 @@
--- Schema and data for model release dates
+-- Schema and data for language model metadata
 
-CREATE TABLE IF NOT EXISTS model_release_dates (
+CREATE TABLE IF NOT EXISTS language_models (
     training_model TEXT PRIMARY KEY,
-    release_date DATE
+    release_date DATE,
+    ollama_hosted BOOLEAN,
+    vendor TEXT
 );
 
-
 -- Initial data
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gemini-2.0-flash', '2024-12-12') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gpt-4o', '2024-05-13') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('o3', '2025-04-16') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gpt-4.5-preview', '2025-02-27') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gpt-4o-mini', '2024-07-18') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gemini-2.5-pro-exp-03-25', '2025-03-25') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gemini-2.0-pro-exp', '2025-02-05') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('claude-3-7-sonnet-20250219', '2025-02-19') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gpt-4.1', '2025-04-14') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('claude-3-5-haiku-20241022', '2024-10-22') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('o1', '2024-12-05') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO model_release_dates(training_model, release_date) VALUES ('gpt-3.5-turbo', '2023-03-01') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('qwq:32b','2025-06-25',TRUE,'Qwen') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('random','2024-01-01',TRUE,'Random') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('claude-sonnet-4-20250514','2025-05-14',FALSE,'Anthropic') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('deepseek-r1:70b','2025-01-20',TRUE,'DeepSeek AI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-4o-mini','2024-07-18',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('falcon3:10b','2024-12-17',TRUE,'TII (UAE)') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gemini-2.0-pro-exp','2025-02-05',FALSE,'Google DeepMind') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('cogito:70b','2025-04-15',TRUE,'Deep Cogito') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('claude-3-5-haiku-20241022','2024-10-22',FALSE,'Anthropic') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-4.1','2025-04-14',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('o1','2024-12-05',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gemma3:27b','2025-03-12',TRUE,'Google DeepMind') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-3.5-turbo-0125','2024-01-25',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('llama3.3:latest','2024-12-06',TRUE,'Meta') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('o3','2025-04-16',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('claude-opus-4-20250514','2025-05-14',FALSE,'Anthropic') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-4o-2025-03-26','2025-03-27',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-4.5-preview','2025-02-27',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gemini-2.0-flash','2025-01-30',FALSE,'Google DeepMind') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gemini-2.5-pro-exp-03-25','2025-03-25',FALSE,'Google DeepMind') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('gpt-4o-2025-01-29','2025-01-29',FALSE,'OpenAI') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('phi4:latest','2024-12-12',TRUE,'Microsoft') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
+INSERT INTO language_models(training_model, release_date, ollama_hosted, vendor) VALUES ('claude-3-7-sonnet-20250219','2025-02-19',FALSE,'Anthropic') ON CONFLICT (training_model) DO UPDATE SET release_date = EXCLUDED.release_date, ollama_hosted = EXCLUDED.ollama_hosted, vendor = EXCLUDED.vendor;
