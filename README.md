@@ -42,7 +42,16 @@ In practice, I'm not sure it all works. I tend to do this:
 
 `make potions-databases potions-baseline potions-best outputs/potions_results.csv`
 
+
 (for each of `titanic`, `southgermancredit`, `wisconsin`, `timetravel` and `espionage`)
+
+After the tables are created, calculate baseline metrics with:
+
+```bash
+PGUSER=root uv run baseline.py --dataset <dataset>
+```
+
+Run this once per dataset to fill the `baseline_results` table.
 
 Then copy everything from `outputs/*_results.csv`
 
