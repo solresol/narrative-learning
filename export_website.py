@@ -232,7 +232,9 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
     body = ["<p>", f"Training model: {training_model}<br>", f"Inference model: {inference_model}", "</p>"]
     body.append("<h2>Investigations</h2><ul>")
     for inv_id, dataset in investigations:
-        body.append(f"<li><a href='../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>")
+        body.append(
+            f"<li><a href='../../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>"
+        )
     body.append("</ul>")
     if perf_rows:
         body.append("<h2>Performance</h2><table border='1'>")
