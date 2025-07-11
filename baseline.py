@@ -21,7 +21,10 @@ def parse_arguments():
         description='Train baseline models using dataset configuration.'
     )
     parser.add_argument('--config', help='Path to the dataset configuration JSON file')
-    parser.add_argument('--dsn', help='PostgreSQL DSN for connecting to the database')
+    parser.add_argument(
+        '--dsn',
+        help='PostgreSQL DSN (defaults to libpq environment variables)'
+    )
     parser.add_argument('--pg-config', help='JSON file containing postgres_dsn')
     parser.add_argument('--investigation-id', type=int, help='Investigation ID when using PostgreSQL')
     parser.add_argument('--dataset', help='Dataset name when using PostgreSQL without investigation ID')
@@ -180,12 +183,12 @@ def main():
         dataset, config_path = get_investigation_settings(conn, args.investigation_id)
         config = DatasetConfig(conn, config_path, dataset, args.investigation_id)
     else:
-        if not (args.dsn or args.pg_config or os.environ.get("POSTGRES_DSN")):
-            sys.exit("Must specify --dsn/--pg-config for PostgreSQL")
         conn = get_connection(args.dsn, args.pg_config)
-        dataset = args.dataset
+        if not args.dataset:
+            sys.exit("Must specify --dataset")
         if not args.config:
             sys.exit("Must specify --config")
+        dataset = args.dataset
         config = DatasetConfig(conn, args.config, dataset)
     # Load and preprocess data
     train_df, test_df = load_data(conn, config)
