@@ -200,6 +200,34 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         for inv_id, model in rows:
             body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
         body.append("</ul>")
+
+    cur.execute(
+        """
+        SELECT logistic_regression, decision_trees, dummy, rulefit,
+               bayesian_rule_list, corels, ebm
+          FROM baseline_results
+         WHERE dataset = %s
+        """,
+        (dataset,),
+    )
+    row = cur.fetchone()
+    if row:
+        names = [
+            "Logistic regression",
+            "Decision trees",
+            "Dummy",
+            "RuleFit",
+            "BayesianRuleList",
+            "CORELS",
+            "EBM",
+        ]
+        body.append("<h2>Baseline</h2><table border='1'>")
+        body.append("<tr><th>Model</th><th>Accuracy</th></tr>")
+        for name, val in zip(names, row):
+            display = val if val is not None else "n/a"
+            body.append(f"<tr><td>{name}</td><td>{display}</td></tr>")
+        body.append("</table>")
+
     write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
 
 
