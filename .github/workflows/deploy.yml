@@ -1,0 +1,36 @@
+name: Deploy Website
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - export_website.py
+      - .github/workflows/deploy.yml
+      - web.sh
+      - outputs/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client rsync python3-psycopg2
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          ./envsetup.sh
+      - name: Build website
+        env:
+          PGUSER: root
+        run: |
+          uv run python export_website.py
+      - name: Deploy
+        env:
+          SSH_KEY: ${{ secrets.DEPLOYMENT_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan merah.cassia.ifost.org.au >> ~/.ssh/known_hosts
+          rsync -av website/ narrative@merah.cassia.ifost.org.au:/var/www/vhosts/narrative-learning.symmachus.org/htdocs/

@@ -11,6 +11,7 @@ import pandas as pd
 
 from modules.postgres import get_connection, get_investigation_settings
 from datasetconfig import DatasetConfig
+from chartutils import draw_baselines
 
 
 def write_page(path: str, title: str, body: str) -> None:
@@ -29,6 +30,49 @@ def get_split_id(cfg: DatasetConfig) -> int:
     cfg._execute(cur, f"SELECT MIN(split_id) FROM {cfg.splits_table}")
     row = cur.fetchone()
     return row[0]
+
+
+def plot_release_chart(conn, dataset: str, csv_path: str, out_path: str) -> None:
+    """Plot test scores by model release date for a dataset."""
+    if not os.path.exists(csv_path):
+        return
+
+    df = pd.read_csv(csv_path)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT training_model, release_date, ollama_hosted FROM language_models"
+    )
+    info = pd.DataFrame(cur.fetchall(), columns=["Model", "Release Date", "ollama"])
+    df = df.merge(info, on="Model", how="left")
+    df = df[~df["ollama"]]
+    df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
+    if df.empty:
+        return
+
+    df["Release Date"] = pd.to_datetime(df["Release Date"])
+    df.sort_values("Release Date", inplace=True)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(df["Release Date"], df["Neg Log Error"], marker="o", linestyle="-")
+    ax.set_xlabel("Model release date")
+    ax.set_ylabel("Negative Log10 Error Rate")
+    draw_baselines(ax, df, xpos=df["Release Date"].max())
+
+    ax2 = ax.twinx()
+
+    def neg_log_error_to_accuracy(y: float) -> float:
+        return (1 - 10 ** (-y)) * 100
+
+    y1_ticks = ax.get_yticks()
+    y2_ticks = [neg_log_error_to_accuracy(y) for y in y1_ticks]
+    ax2.set_yticks(y1_ticks)
+    ax2.set_yticklabels([f"{y:.0f}%" for y in y2_ticks])
+    ax2.set_ylim(ax.get_ylim())
+    ax2.set_ylabel("Accuracy (%)")
+
+    fig.tight_layout()
+    plt.savefig(out_path)
+    plt.close(fig)
 
 
 def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int, out_dir: str) -> None:
@@ -201,6 +245,14 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
         body.append("</ul>")
 
+    # Plot test results by model release date
+    results_csv = os.path.join("outputs", f"{dataset}_results.csv")
+    chart_file = os.path.join(out_dir, "release_scores.png")
+    plot_release_chart(conn, dataset, results_csv, chart_file)
+    if os.path.exists(chart_file):
+        body.append("<h2>Test scores by release date</h2>")
+        body.append(f"<img src='release_scores.png' alt='scores by release date'>")
+
     cur.execute(
         """
         SELECT logistic_regression, decision_trees, dummy, rulefit,
@@ -288,22 +340,27 @@ def main() -> None:
         dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
 
     cur.execute(
-        "SELECT model, training_model FROM models ORDER BY training_model, model"
+        """
+        SELECT m.model, lm.vendor
+          FROM models m
+          JOIN language_models lm ON m.training_model = lm.training_model
+         ORDER BY lm.vendor, m.model
+        """
     )
     model_rows = cur.fetchall()
     index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
     index_body += "<h2>Models</h2>"
     groups: dict[str, list[str]] = {}
-    for m, tm in model_rows:
-        groups.setdefault(tm, []).append(m)
+    for m, vendor in model_rows:
+        groups.setdefault(vendor, []).append(m)
         model_dir = os.path.join(base_dir, "model", m)
         generate_model_page(conn, m, model_dir, dataset_lookup)
 
-    for tm, models in groups.items():
-        index_body += f"<h3>{tm}</h3><ul>"
+    index_body += "<table border='1'>\n<tr><th>Vendor</th><th>Model</th></tr>"
+    for vendor, models in groups.items():
         for m in models:
-            index_body += f"<li><a href='model/{m}/index.html'>{m}</a></li>"
-        index_body += "</ul>"
+            index_body += f"<tr><td>{vendor}</td><td><a href='model/{m}/index.html'>{m}</a></td></tr>"
+    index_body += "</table>"
 
     
     write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
