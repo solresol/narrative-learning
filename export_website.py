@@ -3,6 +3,7 @@
 from __future__ import annotations
 import os
 import html
+from datetime import datetime
 from typing import List, Tuple, Optional
 
 import matplotlib.pyplot as plt
@@ -483,11 +484,33 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         df["Release Date"] = pd.to_datetime(df["Release Date"])
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.scatter(df["Release Date"], df["Herdan"], marker="o")
+        ax.set_title("Herdan's Law Coefficients over Time")
         x = mdates.date2num(df["Release Date"])
         y = df["Herdan"]
         slope, intercept, r, pval, std = linregress(x, y)
-        xs = np.linspace(x.min(), x.max(), 100)
+        end_date = datetime(2028, 12, 31)
+        x_end = mdates.date2num(end_date)
+        xs = np.linspace(x.min(), x_end, 100)
         ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+        ax.set_xlim(df["Release Date"].min(), end_date)
+        herdan_lines = {
+            0.5: "Children's speech (~0.5–0.6)",
+            0.6: "High-school essays (~0.6–0.7)",
+            0.7: "General fiction/technical (~0.7–0.8)",
+            0.8: "Shakespeare plays (~0.8–0.9)",
+            0.9: "Highly rich vocabulary"
+        }
+        for y_line, label in herdan_lines.items():
+            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+            ax.text(
+                end_date,
+                y_line,
+                f" {label}",
+                va="bottom",
+                ha="left",
+                fontsize=8,
+                color="gray",
+            )
         ax.set_xlabel("Release date")
         ax.set_ylabel("Herdan coefficient")
         fig.tight_layout()
@@ -495,18 +518,41 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         plt.savefig(chart_path)
         plt.close(fig)
         body.append("<h2>Herdan Coefficient</h2>")
-        body.append(f"<img src='herdan.png' alt='Herdan vs release date'>")
+        body.append(f"<img src='herdan.png' alt='Herdan\'s Law over time'>")
         body.append(
             f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
         )
 
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.scatter(df["Release Date"], df["Zipf"], marker="o")
+        ax.set_title("Zipf's Law Coefficients over Time")
         x = mdates.date2num(df["Release Date"])
         y = df["Zipf"]
         slope, intercept, r, pval, std = linregress(x, y)
-        xs = np.linspace(x.min(), x.max(), 100)
+        end_date = datetime(2028, 12, 31)
+        x_end = mdates.date2num(end_date)
+        xs = np.linspace(x.min(), x_end, 100)
         ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+        ax.set_xlim(df["Release Date"].min(), end_date)
+        zipf_lines = {
+            0.7: "Academic texts (~0.7–0.9)",
+            0.8: "Shakespeare/poetry (~0.8–0.9)",
+            0.9: "Fiction/chat (~0.9–1.1)",
+            0.95: "High-school writing (~0.95–1.1)",
+            1.0: "Upper fiction bound (~1.0)",
+            1.1: "Conversation upper (~1.1)"
+        }
+        for y_line, label in zipf_lines.items():
+            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+            ax.text(
+                end_date,
+                y_line,
+                f" {label}",
+                va="bottom",
+                ha="left",
+                fontsize=8,
+                color="gray",
+            )
         ax.set_xlabel("Release date")
         ax.set_ylabel("Zipf coefficient")
         fig.tight_layout()
@@ -514,7 +560,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         plt.savefig(chart_path)
         plt.close(fig)
         body.append("<h2>Zipf Coefficient</h2>")
-        body.append(f"<img src='zipf.png' alt='Zipf vs release date'>")
+        body.append(f"<img src='zipf.png' alt='Zipf\'s Law over time'>")
         body.append(
             f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
         )
@@ -556,11 +602,44 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
             ]:
                 fig, ax = plt.subplots(figsize=(8, 4))
                 ax.scatter(ens_df["Release Date"], ens_df[col], marker="o")
+                law_title = "Herdan's" if title == "Herdan" else "Zipf's"
+                ax.set_title(f"{law_title} Law Coefficients over Time")
                 x = mdates.date2num(ens_df["Release Date"])
                 y = ens_df[col]
                 slope, intercept, r, pval, std = linregress(x, y)
-                xs = np.linspace(x.min(), x.max(), 100)
+                end_date = datetime(2028, 12, 31)
+                x_end = mdates.date2num(end_date)
+                xs = np.linspace(x.min(), x_end, 100)
                 ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+                ax.set_xlim(ens_df["Release Date"].min(), end_date)
+                if title == "Herdan":
+                    lines = {
+                        0.5: "Children's speech (~0.5–0.6)",
+                        0.6: "High-school essays (~0.6–0.7)",
+                        0.7: "General fiction/technical (~0.7–0.8)",
+                        0.8: "Shakespeare plays (~0.8–0.9)",
+                        0.9: "Highly rich vocabulary",
+                    }
+                else:
+                    lines = {
+                        0.7: "Academic texts (~0.7–0.9)",
+                        0.8: "Shakespeare/poetry (~0.8–0.9)",
+                        0.9: "Fiction/chat (~0.9–1.1)",
+                        0.95: "High-school writing (~0.95–1.1)",
+                        1.0: "Upper fiction bound (~1.0)",
+                        1.1: "Conversation upper (~1.1)",
+                    }
+                for y_line, label in lines.items():
+                    ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+                    ax.text(
+                        end_date,
+                        y_line,
+                        f" {label}",
+                        va="bottom",
+                        ha="left",
+                        fontsize=8,
+                        color="gray",
+                    )
                 ax.set_xlabel("Release date")
                 ax.set_ylabel(f"{title} coefficient")
                 fig.tight_layout()
@@ -568,7 +647,8 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
                 plt.savefig(chart_path)
                 plt.close(fig)
                 body.append(f"<h2>{title} Coefficient (Ensembles)</h2>")
-                body.append(f"<img src='{fname}' alt='{title} vs release date'>")
+                alt_title = "Herdan's Law" if title == "Herdan" else "Zipf's Law"
+                body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
                 body.append(
                     f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
                 )
