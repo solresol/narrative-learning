@@ -16,6 +16,8 @@ import pandas as pd
 from modules.postgres import get_connection, get_investigation_settings
 from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
+from modules.ensemble_selection import get_interesting_ensembles
+import math
 
 
 def write_page(path: str, title: str, body: str) -> None:
@@ -37,7 +39,7 @@ def get_split_id(cfg: DatasetConfig) -> int:
 
 
 def plot_release_chart(
-    conn, dataset: str, csv_path: str, out_path: str
+    conn, dataset: str, csv_path: str, out_path: str, dataset_size: int
 ) -> Optional[tuple[float, float, float]]:
     """Plot test scores by model release date for a dataset.
 
@@ -57,12 +59,13 @@ def plot_release_chart(
     # ``ollama`` is True for models hosted on Ollama. These rows should be
     # excluded from the plot, treating missing values as False.
     df = df[~df["ollama"].fillna(False).astype(bool)]
-    df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
+    df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
     if df.empty:
         return None
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
+    df["KT"] = -np.log10((df["Accuracy"] * dataset_size + 0.5) / (dataset_size + 1))
 
     cur.execute(
         """
@@ -96,39 +99,28 @@ def plot_release_chart(
         for col_db, col_df, val in zip(cols_db, cols_df, row):
             df[col_df] = val
 
-    cur.execute(
-        """
-        SELECT DISTINCT ON (release_date) release_date, test_accuracy, model_names
-          FROM ensemble_results
-         WHERE dataset = %s
-         ORDER BY release_date, test_accuracy DESC
-        """,
-        (dataset,),
-    )
-    ensemble_rows = cur.fetchall()
+    ens_df = get_interesting_ensembles(conn, dataset)
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.scatter(df["Release Date"], df["Neg Log Error"], marker="o", label="model")
+    ax.scatter(df["Release Date"], df["KT"], marker="o", label="model")
     ax.set_xlabel("Model release date")
-    ax.set_ylabel("Negative Log10 Error Rate")
-    draw_baselines(ax, df, xpos=df["Release Date"].max())
+    ax.set_ylabel("-log10 KT accuracy")
+    draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
 
-    ens_df = pd.DataFrame(
-        ensemble_rows, columns=["Release Date", "Accuracy", "Models"]
-    )
     if not ens_df.empty:
-        ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+        ens_df = ens_df.copy()
+        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
         ens_df.sort_values("Release Date", inplace=True)
-        ens_df["Neg Log Error"] = -np.log10(1 - ens_df["Accuracy"])
+        ens_df["KT"] = -np.log10((ens_df["test_correct"] + 0.5) / (ens_df["test_total"] + 1))
         ax.scatter(
             ens_df["Release Date"],
-            ens_df["Neg Log Error"],
+            ens_df["KT"],
             marker="x",
             c="red",
             label="ensemble",
         )
         x = mdates.date2num(ens_df["Release Date"])
-        y = ens_df["Neg Log Error"]
+        y = ens_df["KT"]
         if len(ens_df) > 1:
             slope, intercept, r, pval, std = linregress(x, y)
             xs = np.linspace(x.min(), x.max(), 100)
@@ -140,11 +132,11 @@ def plot_release_chart(
 
     ax2 = ax.twinx()
 
-    def neg_log_error_to_accuracy(y: float) -> float:
-        return (1 - 10 ** (-y)) * 100
+    def kt_to_accuracy(y: float) -> float:
+        return 10 ** (-y) * 100
 
     y1_ticks = ax.get_yticks()
-    y2_ticks = [neg_log_error_to_accuracy(y) for y in y1_ticks]
+    y2_ticks = [kt_to_accuracy(y) for y in y1_ticks]
     ax2.set_yticks(y1_ticks)
     ax2.set_yticklabels([f"{y:.0f}%" for y in y2_ticks])
     ax2.set_ylim(ax.get_ylim())
@@ -268,13 +260,22 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
     body.append("</ul>")
 
     body.append("<h2>Rounds</h2>")
+    dataset_size = cfg.get_data_point_count()
     body.append("<table border='1'>")
-    body.append("<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed</th><th>Val acc</th><th>Test acc</th></tr>")
+    body.append("<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed</th><th>Val KT</th><th>Test KT</th></tr>")
     for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
+        if v_acc is not None:
+            v_disp = f"{-math.log10((v_acc * dataset_size + 0.5) / (dataset_size + 1)):.3f}"
+        else:
+            v_disp = "n/a"
+        if t_acc is not None:
+            t_disp = f"{-math.log10((t_acc * dataset_size + 0.5) / (dataset_size + 1)):.3f}"
+        else:
+            t_disp = "n/a"
         body.append(
-            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc if v_acc is not None else 'n/a'}</td><td>{t_acc if t_acc is not None else 'n/a'}</td></tr>"
+            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_disp}</td><td>{t_disp}</td></tr>"
         )
         generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
     body.append("</table>")
@@ -282,13 +283,15 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
     if not df_rounds.empty:
         plot_df = df_rounds.dropna(subset=["val_acc"]).sort_values("val_acc", ascending=False).reset_index(drop=True)
         plot_df["rank"] = plot_df.index + 1
+        for col in ["train_acc", "val_acc", "test_acc"]:
+            plot_df[col] = -np.log10((plot_df[col] * dataset_size + 0.5) / (dataset_size + 1))
         plt.figure(figsize=(8,4))
         plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
         plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
         plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
         plt.xticks(plot_df["rank"], plot_df["round_id"])
         plt.xlabel("Round")
-        plt.ylabel("Accuracy")
+        plt.ylabel("-log10 KT accuracy")
         plt.legend()
         plt.tight_layout()
         chart_path = os.path.join(inv_dir, "scores.png")
@@ -315,6 +318,7 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
     )
     investigations = cur.fetchall()
     cfg = DatasetConfig(conn, cfg_file, dataset)
+    dataset_size = cfg.get_data_point_count()
     body = ["<h2>Investigations</h2>"]
     groups: dict[str, list[tuple[int, str]]] = {}
     for inv_id, model, training_model in investigations:
@@ -330,7 +334,7 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
     # Plot test results by model release date
     results_csv = os.path.join("outputs", f"{dataset}_results.csv")
     chart_file = os.path.join(out_dir, "release_scores.png")
-    stats = plot_release_chart(conn, dataset, results_csv, chart_file)
+    stats = plot_release_chart(conn, dataset, results_csv, chart_file, dataset_size)
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
         body.append(f"<img src='release_scores.png' alt='scores by release date'>")
@@ -348,33 +352,27 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         info = pd.DataFrame(cur.fetchall(), columns=["Model", "Release Date", "ollama"])
         df = df.merge(info, on="Model", how="left")
         df = df[~df["ollama"].fillna(False).astype(bool)]
-        df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
+        df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
         df["Release Date"] = pd.to_datetime(df["Release Date"])
         df.sort_values("Release Date", inplace=True)
+        df["KT"] = -np.log10((df["Accuracy"] * dataset_size + 0.5) / (dataset_size + 1))
         body.append("<h2>Model Scores</h2><table border='1'>")
-        body.append("<tr><th>Model</th><th>Release Date</th><th>Neg Log Error</th></tr>")
-        for m, d_, s in df[["Model", "Release Date", "Neg Log Error"]].itertuples(index=False):
+        body.append("<tr><th>Model</th><th>Release Date</th><th>KT</th></tr>")
+        for m, d_, s in df[["Model", "Release Date", "KT"]].itertuples(index=False):
             body.append(f"<tr><td>{m}</td><td>{d_.date()}</td><td>{s:.3f}</td></tr>")
         body.append("</table>")
 
-        cur.execute(
-            """
-            SELECT DISTINCT ON (release_date) release_date, test_accuracy, model_names
-              FROM ensemble_results
-             WHERE dataset = %s
-             ORDER BY release_date, test_accuracy DESC
-            """,
-            (dataset,),
-        )
-        ens_rows = cur.fetchall()
-        if ens_rows:
-            ens_df = pd.DataFrame(ens_rows, columns=["Release Date", "Accuracy", "Models"])
-            ens_df["Neg Log Error"] = -np.log10(1 - ens_df["Accuracy"])
+        ens_df = get_interesting_ensembles(conn, dataset)
+        if not ens_df.empty:
+            ens_df = ens_df.copy()
+            ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+            ens_df.sort_values("Release Date", inplace=True)
+            ens_df["KT"] = -np.log10((ens_df["test_correct"] + 0.5) / (ens_df["test_total"] + 1))
             body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
-            body.append("<tr><th>Release Date</th><th>Neg Log Error</th><th>Ensemble</th></tr>")
-            for d_, score, names in ens_df[["Release Date", "Neg Log Error", "Models"]].itertuples(index=False):
+            body.append("<tr><th>Release Date</th><th>KT</th><th>Ensemble</th></tr>")
+            for d_, score, names in ens_df[["Release Date", "KT", "model_names"]].itertuples(index=False):
                 body.append(
-                    f"<tr><td>{d_}</td><td>{score:.3f}</td><td>{html.escape(names)}</td></tr>"
+                    f"<tr><td>{d_.date()}</td><td>{score:.3f}</td><td>{html.escape(names)}</td></tr>"
                 )
             body.append("</table>")
 
@@ -399,9 +397,13 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             "EBM",
         ]
         body.append("<h2>Baseline</h2><table border='1'>")
-        body.append("<tr><th>Model</th><th>Accuracy</th></tr>")
+        body.append("<tr><th>Model</th><th>KT</th></tr>")
         for name, val in zip(names, row):
-            display = val if val is not None else "n/a"
+            if val is not None:
+                kt = -math.log10((val * dataset_size + 0.5) / (dataset_size + 1))
+                display = f"{kt:.3f}"
+            else:
+                display = "n/a"
             body.append(f"<tr><td>{name}</td><td>{display}</td></tr>")
         body.append("</table>")
 
