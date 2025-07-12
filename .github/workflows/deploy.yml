@@ -22,9 +22,11 @@ jobs:
           sudo apt-get install -y postgresql postgresql-client rsync python3-psycopg2
           curl -LsSf https://astral.sh/uv/install.sh | sh
           ./envsetup.sh
+          sudo -u postgres createuser --superuser $(whoami)
       - name: Build website
         run: |
-          sudo -u postgres -E .venv/bin/python export_website.py
+          export PGUSER=$(whoami)
+          uv run export_website.py
       - name: Deploy
         env:
           SSH_KEY: ${{ secrets.DEPLOYMENT_SSH_KEY }}
