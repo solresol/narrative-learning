@@ -3,6 +3,8 @@ name: Deploy Website
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - export_website.py
       - .github/workflows/deploy.yml
