@@ -87,11 +87,15 @@ def ensemble_predictions(predictions_list, ensemble_name="ensemble"):
 def calculate_metrics(predictions_df, ensemble_name="ensemble"):
     """Calculate accuracy and other metrics for the ensemble."""
     total = len(predictions_df)
-    correct = (predictions_df['ground_truth'] == predictions_df[ensemble_name]).sum()
+    # pandas returns numpy integer types from sum(); cast to built-in int so the
+    # values are easily serialised (e.g. by psycopg2)
+    correct = int((predictions_df['ground_truth'] == predictions_df[ensemble_name]).sum())
     accuracy = correct / total if total > 0 else 0
     
     # Calculate 95% confidence interval
     lower_bound, upper_bound = proportion_confint(count=correct, nobs=total, alpha=0.05, method='beta')
+    lower_bound = float(lower_bound)
+    upper_bound = float(upper_bound)
     
     # Calculate confusion matrix
     unique_classes = sorted(set(predictions_df['ground_truth'].unique()))
@@ -675,21 +679,21 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
             """,
             (
                 dataset,
-                k,
+                int(k),
                 ','.join(val_res['models']),
                 ','.join(val_res.get('model_names', [])),
                 ','.join(map(str, val_res['model_rounds'])),
                 max_date.strftime('%Y-%m-%d') if max_date else None,
-                val_res['accuracy'],
-                val_res['lower_bound'],
-                val_res['upper_bound'],
-                val_res['total'],
-                val_res['correct'],
-                test_res['accuracy'],
-                test_res['lower_bound'],
-                test_res['upper_bound'],
-                test_res['total'],
-                test_res['correct'],
+                float(val_res['accuracy']),
+                float(val_res['lower_bound']),
+                float(val_res['upper_bound']),
+                int(val_res['total']),
+                int(val_res['correct']),
+                float(test_res['accuracy']),
+                float(test_res['lower_bound']),
+                float(test_res['upper_bound']),
+                int(test_res['total']),
+                int(test_res['correct']),
             )
         )
 
