@@ -23,10 +23,8 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           ./envsetup.sh
       - name: Build website
-        env:
-          PGUSER: root
         run: |
-          uv run python export_website.py
+          sudo -u postgres -E .venv/bin/python export_website.py
       - name: Deploy
         env:
           SSH_KEY: ${{ secrets.DEPLOYMENT_SSH_KEY }}
