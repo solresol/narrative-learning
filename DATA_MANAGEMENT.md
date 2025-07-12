@@ -61,6 +61,8 @@ programs and some ideas for improving the layout.
   the environment file and optionally dumping it to `dumps/`.
 - `create_task_csv_file.py` scans the env files and their databases to
   produce consolidated CSV files in `outputs/`.
+- `lexicostatistics.py` should be run after all investigations to store
+  Herdan and Zipf statistics for each language model in the database.
 - A collection of `results_*.py` scripts and the Makefile read those CSV
   files to generate charts and LaTeX tables also stored in `outputs/`.
 
