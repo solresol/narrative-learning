@@ -1,6 +1,6 @@
 -- Schema for aggregated lexical statistics per language model
 CREATE TABLE IF NOT EXISTS lexicostatistics (
-    training_model TEXT PRIMARY KEY REFERENCES language_models(training_model),
+    training_model TEXT PRIMARY KEY,
     prompt_zipf DOUBLE PRECISION,
     prompt_zipf_r2 DOUBLE PRECISION,
     prompt_herdan DOUBLE PRECISION,

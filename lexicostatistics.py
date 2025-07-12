@@ -9,7 +9,11 @@ from modules.text_analysis import calculate_zipfs_law, calculate_herdans_law
 
 
 def compute_for_models(
-    conn, training_models: list[str], sample_size: int, overwrite: bool
+    conn,
+    training_models: list[str],
+    ensemble_name: str,
+    sample_size: int,
+    overwrite: bool,
 ) -> None:
     """Compute statistics for one or more training models as an ensemble."""
     cur = conn.cursor()
@@ -65,48 +69,47 @@ def compute_for_models(
     reasoning_zipf = calculate_zipfs_law(all_reasoning)
     reasoning_herdan = calculate_herdans_law(all_reasoning)
 
-    for tm in training_models:
-        if not overwrite:
-            cur.execute(
-                "SELECT 1 FROM lexicostatistics WHERE training_model = %s",
-                (tm,),
-            )
-            if cur.fetchone():
-                raise SystemExit(
-                    f"results already exist for {tm}; use --overwrite"
-                )
-
+    if not overwrite:
         cur.execute(
-            """
-            INSERT INTO lexicostatistics(
-                training_model, prompt_zipf, prompt_zipf_r2,
-                prompt_herdan, prompt_herdan_r2,
-                reasoning_zipf, reasoning_zipf_r2,
-                reasoning_herdan, reasoning_herdan_r2
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (training_model) DO UPDATE SET
-                prompt_zipf = EXCLUDED.prompt_zipf,
-                prompt_zipf_r2 = EXCLUDED.prompt_zipf_r2,
-                prompt_herdan = EXCLUDED.prompt_herdan,
-                prompt_herdan_r2 = EXCLUDED.prompt_herdan_r2,
-                reasoning_zipf = EXCLUDED.reasoning_zipf,
-                reasoning_zipf_r2 = EXCLUDED.reasoning_zipf_r2,
-                reasoning_herdan = EXCLUDED.reasoning_herdan,
-                reasoning_herdan_r2 = EXCLUDED.reasoning_herdan_r2,
-                created = CURRENT_TIMESTAMP
-            """,
-            (
-                tm,
-                float(prompt_zipf["coefficient"]),
-                float(prompt_zipf["r_squared"]),
-                float(prompt_herdan["coefficient"]),
-                float(prompt_herdan["r_squared"]),
-                float(reasoning_zipf["coefficient"]),
-                float(reasoning_zipf["r_squared"]),
-                float(reasoning_herdan["coefficient"]),
-                float(reasoning_herdan["r_squared"]),
-            ),
+            "SELECT 1 FROM lexicostatistics WHERE training_model = %s",
+            (ensemble_name,),
         )
+        if cur.fetchone():
+            raise SystemExit(
+                f"results already exist for {ensemble_name}; use --overwrite"
+            )
+
+    cur.execute(
+        """
+        INSERT INTO lexicostatistics(
+            training_model, prompt_zipf, prompt_zipf_r2,
+            prompt_herdan, prompt_herdan_r2,
+            reasoning_zipf, reasoning_zipf_r2,
+            reasoning_herdan, reasoning_herdan_r2
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (training_model) DO UPDATE SET
+            prompt_zipf = EXCLUDED.prompt_zipf,
+            prompt_zipf_r2 = EXCLUDED.prompt_zipf_r2,
+            prompt_herdan = EXCLUDED.prompt_herdan,
+            prompt_herdan_r2 = EXCLUDED.prompt_herdan_r2,
+            reasoning_zipf = EXCLUDED.reasoning_zipf,
+            reasoning_zipf_r2 = EXCLUDED.reasoning_zipf_r2,
+            reasoning_herdan = EXCLUDED.reasoning_herdan,
+            reasoning_herdan_r2 = EXCLUDED.reasoning_herdan_r2,
+            created = CURRENT_TIMESTAMP
+        """,
+        (
+            ensemble_name,
+            float(prompt_zipf["coefficient"]),
+            float(prompt_zipf["r_squared"]),
+            float(prompt_herdan["coefficient"]),
+            float(prompt_herdan["r_squared"]),
+            float(reasoning_zipf["coefficient"]),
+            float(reasoning_zipf["r_squared"]),
+            float(reasoning_herdan["coefficient"]),
+            float(reasoning_herdan["r_squared"]),
+        ),
+    )
 
     conn.commit()
 
@@ -140,7 +143,8 @@ def main() -> None:
     conn = get_connection(args.dsn, args.pg_config)
 
     training_models = [m.strip() for m in args.training_models.split(',') if m.strip()]
-    compute_for_models(conn, training_models, args.sample_size, args.overwrite)
+    ensemble_name = ','.join(training_models)
+    compute_for_models(conn, training_models, ensemble_name, args.sample_size, args.overwrite)
 
     conn.close()
 
