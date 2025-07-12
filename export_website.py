@@ -449,6 +449,133 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
     write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
 
 
+def generate_lexicostatistics_page(conn, out_dir: str) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT lm.vendor, lm.training_model, lm.release_date,
+               l.reasoning_herdan, l.reasoning_zipf
+          FROM lexicostatistics l
+          JOIN language_models lm ON l.training_model = lm.training_model
+         WHERE lm.release_date IS NOT NULL
+         ORDER BY lm.release_date
+        """
+    )
+    rows = cur.fetchall()
+    df = pd.DataFrame(
+        rows,
+        columns=["Vendor", "Model", "Release Date", "Herdan", "Zipf"],
+    )
+
+    body = ["<h2>Language Models</h2>"]
+    body.append("<table border='1'>")
+    body.append(
+        "<tr><th>Release Date</th><th>Vendor</th><th>Model</th><th>Herdan</th><th>Zipf</th></tr>"
+    )
+    for vendor, model, date, herdan, zipf in rows:
+        body.append(
+            f"<tr><td>{date}</td><td>{vendor}</td><td>{model}</td><td>{herdan:.3f}</td><td>{zipf:.3f}</td></tr>"
+        )
+    body.append("</table>")
+
+    if not df.empty:
+        df["Release Date"] = pd.to_datetime(df["Release Date"])
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.scatter(df["Release Date"], df["Herdan"], marker="o")
+        x = mdates.date2num(df["Release Date"])
+        y = df["Herdan"]
+        slope, intercept, r, pval, std = linregress(x, y)
+        xs = np.linspace(x.min(), x.max(), 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+        ax.set_xlabel("Release date")
+        ax.set_ylabel("Herdan coefficient")
+        fig.tight_layout()
+        chart_path = os.path.join(out_dir, "herdan.png")
+        plt.savefig(chart_path)
+        plt.close(fig)
+        body.append("<h2>Herdan Coefficient</h2>")
+        body.append(f"<img src='herdan.png' alt='Herdan vs release date'>")
+        body.append(
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+        )
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.scatter(df["Release Date"], df["Zipf"], marker="o")
+        x = mdates.date2num(df["Release Date"])
+        y = df["Zipf"]
+        slope, intercept, r, pval, std = linregress(x, y)
+        xs = np.linspace(x.min(), x.max(), 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+        ax.set_xlabel("Release date")
+        ax.set_ylabel("Zipf coefficient")
+        fig.tight_layout()
+        chart_path = os.path.join(out_dir, "zipf.png")
+        plt.savefig(chart_path)
+        plt.close(fig)
+        body.append("<h2>Zipf Coefficient</h2>")
+        body.append(f"<img src='zipf.png' alt='Zipf vs release date'>")
+        body.append(
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+        )
+
+    # Ensemble trends
+    cur.execute(
+        """
+        SELECT DISTINCT ON (release_date) release_date, models
+          FROM ensemble_results
+         ORDER BY release_date, test_accuracy DESC
+        """
+    )
+    ens_rows = cur.fetchall()
+    if ens_rows:
+        cur.execute(
+            "SELECT training_model, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
+            ([r[1] for r in ens_rows],),
+        )
+        lookup = {m: (h, z) for m, h, z in cur.fetchall()}
+        data = []
+        for date, models in ens_rows:
+            if models in lookup:
+                h, z = lookup[models]
+                data.append((date, models, h, z))
+        if data:
+            ens_df = pd.DataFrame(data, columns=["Release Date", "Models", "Herdan", "Zipf"])
+            body.append("<h2>Best Ensembles</h2><table border='1'>")
+            body.append("<tr><th>Date</th><th>Ensemble</th><th>Herdan</th><th>Zipf</th></tr>")
+            for d_, m_, h, z in data:
+                body.append(
+                    f"<tr><td>{d_}</td><td>{html.escape(m_)}</td><td>{h:.3f}</td><td>{z:.3f}</td></tr>"
+                )
+            body.append("</table>")
+
+            ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+            for col, fname, title in [
+                ("Herdan", "ensemble_herdan.png", "Herdan"),
+                ("Zipf", "ensemble_zipf.png", "Zipf"),
+            ]:
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.scatter(ens_df["Release Date"], ens_df[col], marker="o")
+                x = mdates.date2num(ens_df["Release Date"])
+                y = ens_df[col]
+                slope, intercept, r, pval, std = linregress(x, y)
+                xs = np.linspace(x.min(), x.max(), 100)
+                ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+                ax.set_xlabel("Release date")
+                ax.set_ylabel(f"{title} coefficient")
+                fig.tight_layout()
+                chart_path = os.path.join(out_dir, fname)
+                plt.savefig(chart_path)
+                plt.close(fig)
+                body.append(f"<h2>{title} Coefficient (Ensembles)</h2>")
+                body.append(f"<img src='{fname}' alt='{title} vs release date'>")
+                body.append(
+                    f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+                )
+
+    write_page(os.path.join(out_dir, "index.html"), "Lexicostatistics", "\n".join(body))
+
+
 def main() -> None:
     base_dir = "website"
     os.makedirs(base_dir, exist_ok=True)
@@ -465,28 +592,50 @@ def main() -> None:
 
     cur.execute(
         """
-        SELECT m.model, lm.vendor
+        SELECT lm.vendor, m.training_model, m.model, m.example_count
           FROM models m
           JOIN language_models lm ON m.training_model = lm.training_model
-         ORDER BY lm.vendor, m.model
+         ORDER BY lm.vendor, m.training_model, m.example_count, m.model
         """
     )
-    model_rows = cur.fetchall()
-    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
-    index_body += "<h2>Models</h2>"
-    groups: dict[str, list[str]] = {}
-    for m, vendor in model_rows:
-        groups.setdefault(vendor, []).append(m)
-        model_dir = os.path.join(base_dir, "model", m)
-        generate_model_page(conn, m, model_dir, dataset_lookup)
+    rows = cur.fetchall()
 
-    index_body += "<table border='1'>\n<tr><th>Vendor</th><th>Model</th></tr>"
-    for vendor, models in groups.items():
-        for m in models:
-            index_body += f"<tr><td>{vendor}</td><td><a href='model/{m}/index.html'>{m}</a></td></tr>"
+    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
+    index_body += "<p><a href='lexicostatistics/index.html'>Lexicostatistics</a></p>"
+    index_body += "<h2>Models</h2>"
+
+    # group models by (vendor, training_model)
+    table: dict[tuple[str, str], dict[int, list[str]]] = {}
+    for vendor, training_model, model, ex in rows:
+        table.setdefault((vendor, training_model), {3: [], 10: []})
+        if ex in (3, 10):
+            table[(vendor, training_model)][ex].append(model)
+        else:
+            table[(vendor, training_model)].setdefault(ex, []).append(model)
+        model_dir = os.path.join(base_dir, "model", model)
+        generate_model_page(conn, model, model_dir, dataset_lookup)
+
+    index_body += (
+        "<table border='1'>\n"
+        "<tr><th>Vendor</th><th>Language model</th><th>examples=3" +
+        "</th><th>examples=10</th></tr>"
+    )
+    for (vendor, training_model), counts in table.items():
+        ex3 = "<br>".join(
+            f"<a href='model/{m}/index.html'>{m}</a>" for m in counts.get(3, [])
+        )
+        ex10 = "<br>".join(
+            f"<a href='model/{m}/index.html'>{m}</a>" for m in counts.get(10, [])
+        )
+        index_body += (
+            f"<tr><td>{vendor}</td><td>{training_model}</td>"
+            f"<td>{ex3}</td><td>{ex10}</td></tr>"
+        )
     index_body += "</table>"
 
-    
+    # generate lexicostatistics page
+    generate_lexicostatistics_page(conn, os.path.join(base_dir, "lexicostatistics"))
+
     write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
     conn.close()
 
