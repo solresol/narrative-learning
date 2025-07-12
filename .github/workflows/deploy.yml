@@ -26,6 +26,7 @@ jobs:
       - name: Build website
         run: |
           export PGUSER=$(whoami)
+          export PGDATABASE=narrative
           uv run export_website.py
       - name: Deploy
         env:
