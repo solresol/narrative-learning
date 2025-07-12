@@ -63,6 +63,8 @@ The project evaluates various LLMs including:
 - `report-script.py`: Generate performance reports
 - `make_result_charts.py`: Create visualization charts
 - `create_task_csv_file.py`: Generate CSV results from environment files
+- `lexicostatistics.py`: Calculate Herdan and Zipf coefficients for a
+  language model after all investigations have completed
 - `env_settings.py`: Parse and validate model environment settings
 - `resultdistribution.py`: Generate distribution charts for model outputs
 - `baseline.py`: Create baseline model performance metrics
