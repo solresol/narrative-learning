@@ -7,7 +7,7 @@ import math
 import matplotlib.pyplot as plt
 
 
-def draw_baselines(ax, df, xpos=12.5):
+def draw_baselines(ax, df, xpos=12.5, dataset_size=None):
     """Draw baseline model performance as horizontal lines on a plot.
     
     Args:
@@ -32,7 +32,7 @@ def draw_baselines(ax, df, xpos=12.5):
         if model in df.columns:
             # Don't need to take the mean -- they will all be the same value
             score = df[model].mean()
-            # Convert accuracy to negative log mean error
-            #score = -math.log10(1-score)
+            if dataset_size is not None and not math.isnan(score):
+                score = -math.log10((score * dataset_size + 0.5) / (dataset_size + 1))
             ax.axhline(score, linestyle='dotted', c=colours[model])
             ax.annotate(xy=(xpos, score-0.03), text=model.title(), c=colours[model])
