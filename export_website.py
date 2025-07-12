@@ -3,9 +3,12 @@
 from __future__ import annotations
 import os
 import html
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from scipy.stats import linregress
+import numpy as np
 
 import pandas as pd
 
@@ -32,10 +35,16 @@ def get_split_id(cfg: DatasetConfig) -> int:
     return row[0]
 
 
-def plot_release_chart(conn, dataset: str, csv_path: str, out_path: str) -> None:
-    """Plot test scores by model release date for a dataset."""
+def plot_release_chart(
+    conn, dataset: str, csv_path: str, out_path: str
+) -> Optional[tuple[float, float, float]]:
+    """Plot test scores by model release date for a dataset.
+
+    Returns the slope, intercept and p-value of the regression line calculated
+    over the ensemble maximum scores, or ``None`` if no ensemble data exists.
+    """
     if not os.path.exists(csv_path):
-        return
+        return None
 
     df = pd.read_csv(csv_path)
     cur = conn.cursor()
@@ -49,16 +58,84 @@ def plot_release_chart(conn, dataset: str, csv_path: str, out_path: str) -> None
     df = df[~df["ollama"].fillna(False).astype(bool)]
     df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
     if df.empty:
-        return
+        return None
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
 
+    cur.execute(
+        """
+        SELECT logistic_regression, decision_trees, dummy, rulefit,
+               bayesian_rule_list, corels, ebm
+          FROM baseline_results
+         WHERE dataset = %s
+        """,
+        (dataset,),
+    )
+    row = cur.fetchone()
+    if row:
+        cols_db = [
+            "logistic_regression",
+            "decision_trees",
+            "dummy",
+            "rulefit",
+            "bayesian_rule_list",
+            "corels",
+            "ebm",
+        ]
+        cols_df = [
+            "logistic regression",
+            "decision trees",
+            "dummy",
+            "rulefit",
+            "bayesian rule list",
+            "corels",
+            "ebm",
+        ]
+        for col_db, col_df, val in zip(cols_db, cols_df, row):
+            df[col_df] = val
+
+    cur.execute(
+        """
+        SELECT DISTINCT ON (release_date) release_date, test_accuracy, model_names
+          FROM ensemble_results
+         WHERE dataset = %s
+         ORDER BY release_date, test_accuracy DESC
+        """,
+        (dataset,),
+    )
+    ensemble_rows = cur.fetchall()
+
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(df["Release Date"], df["Neg Log Error"], marker="o", linestyle="-")
+    ax.scatter(df["Release Date"], df["Neg Log Error"], marker="o", label="model")
     ax.set_xlabel("Model release date")
     ax.set_ylabel("Negative Log10 Error Rate")
     draw_baselines(ax, df, xpos=df["Release Date"].max())
+
+    ens_df = pd.DataFrame(
+        ensemble_rows, columns=["Release Date", "Accuracy", "Models"]
+    )
+    if not ens_df.empty:
+        ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+        ens_df.sort_values("Release Date", inplace=True)
+        ens_df["Neg Log Error"] = -np.log10(1 - ens_df["Accuracy"])
+        ax.scatter(
+            ens_df["Release Date"],
+            ens_df["Neg Log Error"],
+            marker="x",
+            c="red",
+            label="ensemble",
+        )
+        x = mdates.date2num(ens_df["Release Date"])
+        y = ens_df["Neg Log Error"]
+        if len(ens_df) > 1:
+            slope, intercept, r, pval, std = linregress(x, y)
+            xs = np.linspace(x.min(), x.max(), 100)
+            ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
+        else:
+            slope = intercept = pval = float("nan")
+    else:
+        slope = intercept = pval = float("nan")
 
     ax2 = ax.twinx()
 
@@ -72,9 +149,11 @@ def plot_release_chart(conn, dataset: str, csv_path: str, out_path: str) -> None
     ax2.set_ylim(ax.get_ylim())
     ax2.set_ylabel("Accuracy (%)")
 
+    ax.legend()
     fig.tight_layout()
     plt.savefig(out_path)
     plt.close(fig)
+    return slope, intercept, pval
 
 
 def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int, out_dir: str) -> None:
@@ -250,10 +329,53 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
     # Plot test results by model release date
     results_csv = os.path.join("outputs", f"{dataset}_results.csv")
     chart_file = os.path.join(out_dir, "release_scores.png")
-    plot_release_chart(conn, dataset, results_csv, chart_file)
+    stats = plot_release_chart(conn, dataset, results_csv, chart_file)
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
         body.append(f"<img src='release_scores.png' alt='scores by release date'>")
+        if stats is not None:
+            slope, intercept, pval = stats
+            body.append(
+                f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.3g}</p>"
+            )
+
+    if os.path.exists(results_csv):
+        df = pd.read_csv(results_csv)
+        cur.execute(
+            "SELECT training_model, release_date, ollama_hosted FROM language_models"
+        )
+        info = pd.DataFrame(cur.fetchall(), columns=["Model", "Release Date", "ollama"])
+        df = df.merge(info, on="Model", how="left")
+        df = df[~df["ollama"].fillna(False).astype(bool)]
+        df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
+        df["Release Date"] = pd.to_datetime(df["Release Date"])
+        df.sort_values("Release Date", inplace=True)
+        body.append("<h2>Model Scores</h2><table border='1'>")
+        body.append("<tr><th>Model</th><th>Release Date</th><th>Neg Log Error</th></tr>")
+        for m, d_, s in df[["Model", "Release Date", "Neg Log Error"]].itertuples(index=False):
+            body.append(f"<tr><td>{m}</td><td>{d_.date()}</td><td>{s:.3f}</td></tr>")
+        body.append("</table>")
+
+        cur.execute(
+            """
+            SELECT DISTINCT ON (release_date) release_date, test_accuracy, model_names
+              FROM ensemble_results
+             WHERE dataset = %s
+             ORDER BY release_date, test_accuracy DESC
+            """,
+            (dataset,),
+        )
+        ens_rows = cur.fetchall()
+        if ens_rows:
+            ens_df = pd.DataFrame(ens_rows, columns=["Release Date", "Accuracy", "Models"])
+            ens_df["Neg Log Error"] = -np.log10(1 - ens_df["Accuracy"])
+            body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+            body.append("<tr><th>Release Date</th><th>Neg Log Error</th><th>Ensemble</th></tr>")
+            for d_, score, names in ens_df[["Release Date", "Neg Log Error", "Models"]].itertuples(index=False):
+                body.append(
+                    f"<tr><td>{d_}</td><td>{score:.3f}</td><td>{html.escape(names)}</td></tr>"
+                )
+            body.append("</table>")
 
     cur.execute(
         """

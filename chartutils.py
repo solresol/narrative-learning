@@ -21,7 +21,11 @@ def draw_baselines(ax, df, xpos=12.5):
     colours = {
         'logistic regression': 'teal',
         'decision trees': 'gold',
-        'dummy': 'orange'
+        'dummy': 'orange',
+        'rulefit': 'purple',
+        'bayesian rule list': 'brown',
+        'corels': 'pink',
+        'ebm': 'gray',
     }
     
     for model, colour in colours.items():
