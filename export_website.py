@@ -44,7 +44,9 @@ def plot_release_chart(conn, dataset: str, csv_path: str, out_path: str) -> None
     )
     info = pd.DataFrame(cur.fetchall(), columns=["Model", "Release Date", "ollama"])
     df = df.merge(info, on="Model", how="left")
-    df = df[~df["ollama"]]
+    # ``ollama`` is True for models hosted on Ollama. These rows should be
+    # excluded from the plot, treating missing values as False.
+    df = df[~df["ollama"].fillna(False).astype(bool)]
     df.dropna(subset=["Release Date", "Neg Log Error"], inplace=True)
     if df.empty:
         return
