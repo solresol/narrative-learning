@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from typing import Dict, List, Any, Optional, Tuple, Union
 import pandas as pd
+import math
 
 def calculate_metric(matrix: Dict, metric_name: str) -> float:
     """
@@ -184,3 +185,8 @@ def create_metrics_dataframe(config, split_id: int, metric: str,
             df[column_name] = temp_df['metric']
 
     return df
+
+
+def accuracy_to_kt(accuracy: float, dataset_size: int) -> float:
+    """Convert an accuracy score to a KT value with smoothing."""
+    return -math.log10((accuracy * dataset_size + 0.5) / (dataset_size + 1))
