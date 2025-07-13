@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS ensemble_results (
     test_total INTEGER,
     test_correct INTEGER,
     created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    best_yet BOOLEAN DEFAULT FALSE,
     PRIMARY KEY (dataset, k, models)
 );
