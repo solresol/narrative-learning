@@ -108,6 +108,8 @@ three tables:
   and `patience` values
 * `investigations` – links a dataset and model, records the `sqlite_database`,
   `round_tracking_file`, optional `dump_file` and the current `round_number`.
+* `dataset_provenance` – free-form text describing how each dataset was
+  generated or obfuscated
   New investigations no longer default to round 1 – the value should be set
   explicitly from the associated round tracking file.
 
