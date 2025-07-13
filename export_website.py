@@ -319,7 +319,18 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
     investigations = cur.fetchall()
     cfg = DatasetConfig(conn, cfg_file, dataset)
     dataset_size = cfg.get_data_point_count()
-    body = ["<h2>Investigations</h2>"]
+
+    body = []
+    cur.execute(
+        "SELECT provenance FROM dataset_provenance WHERE dataset = %s",
+        (dataset,),
+    )
+    row = cur.fetchone()
+    if row:
+        body.append("<h2>Provenance</h2>")
+        body.append(f"<pre>{html.escape(row[0])}</pre>")
+
+    body.append("<h2>Investigations</h2>")
     groups: dict[str, list[tuple[int, str]]] = {}
     for inv_id, model, training_model in investigations:
         groups.setdefault(training_model, []).append((inv_id, model))

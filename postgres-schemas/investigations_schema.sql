@@ -33,3 +33,8 @@ CREATE TABLE baseline_results (
     corels DOUBLE PRECISION,
     ebm DOUBLE PRECISION
 );
+
+CREATE TABLE dataset_provenance (
+    dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+    provenance TEXT NOT NULL
+);
