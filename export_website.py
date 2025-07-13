@@ -62,7 +62,7 @@ def plot_release_chart(
     df = df[~df["ollama"].fillna(False).astype(bool)]
     df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
     if df.empty:
-        return None
+        raise RuntimeError("no model results found to plot")
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
@@ -101,6 +101,8 @@ def plot_release_chart(
             df[col_df] = val
 
     ens_df = get_interesting_ensembles(conn, dataset)
+    if ens_df.empty:
+        raise RuntimeError("no interesting ensembles found")
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
@@ -108,28 +110,25 @@ def plot_release_chart(
     ax.set_ylabel("log10 KT accuracy")
     draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
 
-    if not ens_df.empty:
-        ens_df = ens_df.copy()
-        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
-        ens_df.sort_values("Release Date", inplace=True)
-        ens_df["KT"] = (
-            ens_df["test_correct"] / ens_df["test_total"]
-        ).apply(lambda x: accuracy_to_kt(x, dataset_size))
-        ax.scatter(
-            ens_df["Release Date"],
-            -ens_df["KT"],
-            marker="x",
-            c="red",
-            label="ensemble",
-        )
-        x = mdates.date2num(ens_df["Release Date"])
-        y = -ens_df["KT"]
-        if len(ens_df) > 1:
-            slope, intercept, r, pval, std = linregress(x, y)
-            xs = np.linspace(x.min(), x.max(), 100)
-            ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
-        else:
-            slope = intercept = pval = float("nan")
+    ens_df = ens_df.copy()
+    ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+    ens_df.sort_values("Release Date", inplace=True)
+    ens_df["KT"] = (
+        ens_df["test_correct"] / ens_df["test_total"]
+    ).apply(lambda x: accuracy_to_kt(x, dataset_size))
+    ax.scatter(
+        ens_df["Release Date"],
+        -ens_df["KT"],
+        marker="x",
+        c="red",
+        label="ensemble",
+    )
+    x = mdates.date2num(ens_df["Release Date"])
+    y = -ens_df["KT"]
+    if len(ens_df) > 1:
+        slope, intercept, r, pval, std = linregress(x, y)
+        xs = np.linspace(x.min(), x.max(), 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
     else:
         slope = intercept = pval = float("nan")
 
@@ -278,28 +277,29 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
     body.append("</table>")
 
-    if not df_rounds.empty:
-        plot_df = (
-            df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
-        )
-        plot_df["rank"] = plot_df.index + 1
-        for col in ["train_acc", "val_acc", "test_acc"]:
-            plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
-        plt.figure(figsize=(8,4))
-        plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
-        plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
-        plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
-        plt.xticks(plot_df["rank"], plot_df["round_id"])
-        plt.xlabel("Round")
-        plt.ylabel("log10 KT accuracy")
-        plt.title("Round Scores")
-        plt.legend()
-        plt.tight_layout()
-        chart_path = os.path.join(inv_dir, "scores.png")
-        plt.savefig(chart_path)
-        plt.close()
-        body.append("<h2>Scores</h2>")
-        body.append(f"<img src='scores.png' alt='round scores'>")
+    if df_rounds.empty:
+        raise RuntimeError("no rounds data found")
+    plot_df = (
+        df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
+    )
+    plot_df["rank"] = plot_df.index + 1
+    for col in ["train_acc", "val_acc", "test_acc"]:
+        plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
+    plt.figure(figsize=(8,4))
+    plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
+    plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
+    plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
+    plt.xticks(plot_df["rank"], plot_df["round_id"])
+    plt.xlabel("Round")
+    plt.ylabel("log10 KT accuracy")
+    plt.title("Round Scores")
+    plt.legend()
+    plt.tight_layout()
+    chart_path = os.path.join(inv_dir, "scores.png")
+    plt.savefig(chart_path)
+    plt.close()
+    body.append("<h2>Scores</h2>")
+    body.append(f"<img src='scores.png' alt='round scores'>")
 
     write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
 
@@ -402,29 +402,30 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         body.append("</table>")
 
         ens_df = get_interesting_ensembles(conn, dataset)
-        if not ens_df.empty:
-            ens_df = ens_df.copy()
-            ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
-            ens_df.sort_values("Release Date", inplace=True)
-            ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
-            ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        if ens_df.empty:
+            raise RuntimeError("no ensemble data found")
+        ens_df = ens_df.copy()
+        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+        ens_df.sort_values("Release Date", inplace=True)
+        ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
+        ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        body.append(
+            "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+        )
+        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
+            "Release Date",
+            "validation_accuracy",
+            "validation_kt",
+            "test_accuracy",
+            "test_kt",
+            "model_names",
+        ]].itertuples(index=False):
             body.append(
-                "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+                f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
             )
-            for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
-                "Release Date",
-                "validation_accuracy",
-                "validation_kt",
-                "test_accuracy",
-                "test_kt",
-                "model_names",
-            ]].itertuples(index=False):
-                body.append(
-                    f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
-                )
-            body.append("</table>")
+        body.append("</table>")
 
     cur.execute(
         """
@@ -494,12 +495,13 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
             f"<li><a href='../../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>"
         )
     body.append("</ul>")
-    if perf_rows:
-        body.append("<h2>Performance</h2><table border='1'>")
-        body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
-        for d, v, t in perf_rows:
-            body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
-        body.append("</table>")
+    if not perf_rows:
+        raise RuntimeError("no investigation performance data found")
+    body.append("<h2>Performance</h2><table border='1'>")
+    body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
+    for d, v, t in perf_rows:
+        body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
+    body.append("</table>")
     write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
 
 
@@ -546,9 +548,10 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         )
     body.append("</table>")
 
-    if not df.empty:
-        df["Release Date"] = pd.to_datetime(df["Release Date"])
-        for col, fname in [
+    if df.empty:
+        raise RuntimeError("no lexicostatistics data found")
+    df["Release Date"] = pd.to_datetime(df["Release Date"])
+    for col, fname in [
             ("Prompt Herdan", "prompt_herdan.png"),
             ("Prompt Zipf", "prompt_zipf.png"),
             ("Reasoning Herdan", "reasoning_herdan.png"),
@@ -623,43 +626,45 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         """
     )
     ens_rows = cur.fetchall()
-    if ens_rows:
-        cur.execute(
-            "SELECT training_model, prompt_herdan, prompt_zipf, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
-            ([r[1] for r in ens_rows],),
+    if not ens_rows:
+        raise RuntimeError("no ensemble trend data found")
+    cur.execute(
+        "SELECT training_model, prompt_herdan, prompt_zipf, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
+        ([r[1] for r in ens_rows],),
+    )
+    lookup = {m: (ph, pz, rh, rz) for m, ph, pz, rh, rz in cur.fetchall()}
+    data = []
+    for date, models in ens_rows:
+        if models in lookup:
+            ph, pz, rh, rz = lookup[models]
+            data.append((date, models, ph, pz, rh, rz))
+    if not data:
+        raise RuntimeError("no ensemble trend data found")
+    ens_df = pd.DataFrame(
+        data,
+        columns=[
+            "Release Date",
+            "Models",
+            "Prompt Herdan",
+            "Prompt Zipf",
+            "Reasoning Herdan",
+            "Reasoning Zipf",
+        ],
+    )
+    body.append("<h2>Best Ensembles</h2><table border='1'>")
+    body.append(
+        "<tr><th>Date</th><th>Ensemble</th>"
+        "<th>Prompt Herdan</th><th>Prompt Zipf</th>"
+        "<th>Reasoning Herdan</th><th>Reasoning Zipf</th></tr>"
+    )
+    for d_, m_, ph, pz, rh, rz in data:
+        body.append(
+            f"<tr><td>{d_}</td><td>{html.escape(m_)}</td><td>{ph:.3f}</td><td>{pz:.3f}</td><td>{rh:.3f}</td><td>{rz:.3f}</td></tr>"
         )
-        lookup = {m: (ph, pz, rh, rz) for m, ph, pz, rh, rz in cur.fetchall()}
-        data = []
-        for date, models in ens_rows:
-            if models in lookup:
-                ph, pz, rh, rz = lookup[models]
-                data.append((date, models, ph, pz, rh, rz))
-        if data:
-            ens_df = pd.DataFrame(
-                data,
-                columns=[
-                    "Release Date",
-                    "Models",
-                    "Prompt Herdan",
-                    "Prompt Zipf",
-                    "Reasoning Herdan",
-                    "Reasoning Zipf",
-                ],
-            )
-            body.append("<h2>Best Ensembles</h2><table border='1'>")
-            body.append(
-                "<tr><th>Date</th><th>Ensemble</th>"
-                "<th>Prompt Herdan</th><th>Prompt Zipf</th>"
-                "<th>Reasoning Herdan</th><th>Reasoning Zipf</th></tr>"
-            )
-            for d_, m_, ph, pz, rh, rz in data:
-                body.append(
-                    f"<tr><td>{d_}</td><td>{html.escape(m_)}</td><td>{ph:.3f}</td><td>{pz:.3f}</td><td>{rh:.3f}</td><td>{rz:.3f}</td></tr>"
-                )
-            body.append("</table>")
+    body.append("</table>")
 
-            ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
-            for col, fname, title, section in [
+    ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+    for col, fname, title, section in [
                 ("Prompt Herdan", "ensemble_prompt_herdan.png", "Herdan", "prompts"),
                 ("Prompt Zipf", "ensemble_prompt_zipf.png", "Zipf", "prompts"),
                 ("Reasoning Herdan", "ensemble_reasoning_herdan.png", "Herdan", "reasoning"),
