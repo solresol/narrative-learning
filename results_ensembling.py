@@ -619,30 +619,9 @@ def export_best_by_date_to_csv(validation_results, test_results, output_path, re
 def store_results_in_db(conn, dataset: str, k: int, validation_results, test_results, release_dates_df):
     """Insert ensemble results into PostgreSQL."""
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS ensemble_results (
-            dataset TEXT REFERENCES datasets(dataset),
-            k INTEGER,
-            models TEXT,
-            model_names TEXT,
-            model_rounds TEXT,
-            release_date DATE,
-            validation_accuracy DOUBLE PRECISION,
-            validation_lower_bound DOUBLE PRECISION,
-            validation_upper_bound DOUBLE PRECISION,
-            validation_total INTEGER,
-            validation_correct INTEGER,
-            test_accuracy DOUBLE PRECISION,
-            test_lower_bound DOUBLE PRECISION,
-            test_upper_bound DOUBLE PRECISION,
-            test_total INTEGER,
-            test_correct INTEGER,
-            created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (dataset, k, models)
-        )
-        """
-    )
+    # We expect the ensemble_results table to already exist from the schema
+    # migration. If it's missing, that's a deployment problem, so we don't try
+    # to create it here.
 
     for val_res, test_res in zip(validation_results, test_results):
         max_date = None
@@ -659,8 +638,8 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
                 validation_accuracy, validation_lower_bound, validation_upper_bound,
                 validation_total, validation_correct,
                 test_accuracy, test_lower_bound, test_upper_bound,
-                test_total, test_correct
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                test_total, test_correct, best_yet
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (dataset, k, models) DO UPDATE SET
                 model_names=EXCLUDED.model_names,
                 model_rounds=EXCLUDED.model_rounds,
@@ -675,6 +654,7 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
                 test_upper_bound=EXCLUDED.test_upper_bound,
                 test_total=EXCLUDED.test_total,
                 test_correct=EXCLUDED.test_correct,
+                best_yet=EXCLUDED.best_yet,
                 created=CURRENT_TIMESTAMP
             """,
             (
@@ -694,8 +674,35 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
                 float(test_res['upper_bound']),
                 int(test_res['total']),
                 int(test_res['correct']),
+                False,
             )
         )
+
+    conn.commit()
+
+    # Mark ensembles that improve on previous validation accuracy
+    cur.execute(
+        "UPDATE ensemble_results SET best_yet = FALSE WHERE dataset = %s",
+        (dataset,)
+    )
+    cur.execute(
+        """
+        SELECT k, models, release_date, validation_accuracy
+          FROM ensemble_results
+         WHERE dataset = %s AND release_date IS NOT NULL
+         ORDER BY release_date
+        """,
+        (dataset,)
+    )
+    rows = cur.fetchall()
+    best_val = None
+    for k_val, models_val, rel_date, val_acc in rows:
+        if best_val is None or val_acc > best_val:
+            cur.execute(
+                "UPDATE ensemble_results SET best_yet = TRUE WHERE dataset=%s AND k=%s AND models=%s",
+                (dataset, k_val, models_val),
+            )
+            best_val = val_acc
 
     conn.commit()
 
@@ -725,7 +732,7 @@ if __name__ == '__main__':
 
     cur.execute(
         """
-        SELECT i.id, m.training_model
+        SELECT i.id, m.name
           FROM investigations i
           JOIN models m ON i.model = m.model
          WHERE i.dataset = %s
