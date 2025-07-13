@@ -2,6 +2,8 @@
 import pandas as pd
 import argparse
 import numpy as np
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
 def format_accuracy(value):
     """Format accuracy values with proper decimal places and escaped percentage"""
@@ -10,20 +12,26 @@ def format_accuracy(value):
     # Use \% to escape the percentage sign in LaTeX
     return f"{value:.2f}\\%"
 
-def csv_to_latex_tabular(input_file, output_file=None):
+def csv_to_latex_tabular(conn, dataset: str, output_file=None):
     """
     Convert a CSV file to a LaTeX tabular format without the surrounding table environment.
     Properly escapes percentage signs.
     
     Parameters:
     -----------
-    input_file : str
-        Path to input CSV file
+    conn : psycopg2 connection
+        Database connection
+    dataset : str
+        Dataset name
     output_file : str, optional
         Path to output LaTeX file. If None, prints to console.
     """
-    # Read the CSV file
-    df = pd.read_csv(input_file)
+    cur = conn.cursor()
+    cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (dataset,))
+    cfg_row = cur.fetchone()
+    if not cfg_row:
+        raise SystemExit(f"dataset {dataset} not found")
+    df = load_results_dataframe(conn, dataset, cfg_row[0])
     
     # Convert accuracy to numeric and format special for the table
     df['Accuracy'] = pd.to_numeric(df['Accuracy'], errors='coerce')
@@ -80,17 +88,15 @@ def csv_to_latex_tabular(input_file, output_file=None):
 
 def main():
     # Set up command line argument parser
-    parser = argparse.ArgumentParser(description='Convert CSV to LaTeX tabular format')
-    parser.add_argument('--input', required=True, help='Path to input CSV file')
+    parser = argparse.ArgumentParser(description='Convert database results to LaTeX tabular format')
+    parser.add_argument('--dataset', required=True, help='Dataset name')
     parser.add_argument('--output', help='Path to output LaTeX file (optional)')
     
     args = parser.parse_args()
     
     # Generate the LaTeX tabular
-    csv_to_latex_tabular(
-        args.input, 
-        args.output
-    )
+    conn = get_connection()
+    csv_to_latex_tabular(conn, args.dataset, args.output)
     
     print("Conversion completed successfully.")
 

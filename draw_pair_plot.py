@@ -3,10 +3,12 @@ import argparse
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Create pairplot visualization from CSV data')
-    parser.add_argument('--input', required=True, help='Input CSV file (from create_task_csv_file.py)')
+    parser = argparse.ArgumentParser(description='Create pairplot visualization from database results')
+    parser.add_argument('--dataset', required=True, help='Dataset name')
     parser.add_argument('--output', default='pairplot.png', help='Output image file')
     parser.add_argument('--hue', default='Model', help='Column to use for color coding')
     parser.add_argument('--size', type=int, default=15, help='Figure size')
@@ -16,8 +18,13 @@ def main():
     # Parse arguments
     args = parse_args()
     
-    # Load data
-    data = pd.read_csv(args.input)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (args.dataset,))
+    cfg_row = cur.fetchone()
+    if not cfg_row:
+        raise SystemExit(f"dataset {args.dataset} not found")
+    data = load_results_dataframe(conn, args.dataset, cfg_row[0])
     
     # Convert string columns that should be numeric
     numeric_columns = ['Accuracy', 'Sampler', 'Rounds', 'Prompt Word Count', 'Model Size', 'Patience']
