@@ -5,6 +5,7 @@ Utility functions for generating and formatting charts in the narrative-learning
 
 import math
 import matplotlib.pyplot as plt
+from modules.metrics import accuracy_to_kt
 
 
 def draw_baselines(ax, df, xpos=12.5, dataset_size=None):
@@ -33,6 +34,6 @@ def draw_baselines(ax, df, xpos=12.5, dataset_size=None):
             # Don't need to take the mean -- they will all be the same value
             score = df[model].mean()
             if dataset_size is not None and not math.isnan(score):
-                score = -math.log10((score * dataset_size + 0.5) / (dataset_size + 1))
+                score = accuracy_to_kt(score, dataset_size)
             ax.axhline(score, linestyle='dotted', c=colours[model])
             ax.annotate(xy=(xpos, score-0.03), text=model.title(), c=colours[model])

@@ -17,6 +17,7 @@ from modules.postgres import get_connection, get_investigation_settings
 from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
+from modules.metrics import accuracy_to_kt
 import math
 
 
@@ -65,7 +66,7 @@ def plot_release_chart(
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
-    df["KT"] = -np.log10((df["Accuracy"] * dataset_size + 0.5) / (dataset_size + 1))
+    df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
 
     cur.execute(
         """
@@ -111,7 +112,9 @@ def plot_release_chart(
         ens_df = ens_df.copy()
         ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
         ens_df.sort_values("Release Date", inplace=True)
-        ens_df["KT"] = -np.log10((ens_df["test_correct"] + 0.5) / (ens_df["test_total"] + 1))
+        ens_df["KT"] = (
+            ens_df["test_correct"] / ens_df["test_total"]
+        ).apply(lambda x: accuracy_to_kt(x, dataset_size))
         ax.scatter(
             ens_df["Release Date"],
             ens_df["KT"],
@@ -130,17 +133,7 @@ def plot_release_chart(
     else:
         slope = intercept = pval = float("nan")
 
-    ax2 = ax.twinx()
-
-    def kt_to_accuracy(y: float) -> float:
-        return 10 ** (-y) * 100
-
-    y1_ticks = ax.get_yticks()
-    y2_ticks = [kt_to_accuracy(y) for y in y1_ticks]
-    ax2.set_yticks(y1_ticks)
-    ax2.set_yticklabels([f"{y:.0f}%" for y in y2_ticks])
-    ax2.set_ylim(ax.get_ylim())
-    ax2.set_ylabel("Accuracy (%)")
+    ax.set_title("Test scores by release date")
 
     ax.legend()
     fig.tight_layout()
@@ -227,7 +220,7 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
          WHERE r.investigation_id = %s
          GROUP BY r.round_id, r.round_uuid, r.round_start, r.round_completed,
                   r.train_accuracy, r.validation_accuracy, r.test_accuracy
-         ORDER BY r.round_id
+         ORDER BY r.round_start
         """,
         (inv_id,),
     )
@@ -262,29 +255,36 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
     body.append("<h2>Rounds</h2>")
     dataset_size = cfg.get_data_point_count()
     body.append("<table border='1'>")
-    body.append("<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed</th><th>Val KT</th><th>Test KT</th></tr>")
+    body.append(
+        "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed" +
+        "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+    )
     for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
         if v_acc is not None:
-            v_disp = f"{-math.log10((v_acc * dataset_size + 0.5) / (dataset_size + 1)):.3f}"
+            v_acc_disp = f"{v_acc:.3f}"
+            v_kt = f"{accuracy_to_kt(v_acc, dataset_size):.3f}"
         else:
-            v_disp = "n/a"
+            v_acc_disp = v_kt = "n/a"
         if t_acc is not None:
-            t_disp = f"{-math.log10((t_acc * dataset_size + 0.5) / (dataset_size + 1)):.3f}"
+            t_acc_disp = f"{t_acc:.3f}"
+            t_kt = f"{accuracy_to_kt(t_acc, dataset_size):.3f}"
         else:
-            t_disp = "n/a"
+            t_acc_disp = t_kt = "n/a"
         body.append(
-            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_disp}</td><td>{t_disp}</td></tr>"
+            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
         )
         generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
     body.append("</table>")
 
     if not df_rounds.empty:
-        plot_df = df_rounds.dropna(subset=["val_acc"]).sort_values("val_acc", ascending=False).reset_index(drop=True)
+        plot_df = (
+            df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
+        )
         plot_df["rank"] = plot_df.index + 1
         for col in ["train_acc", "val_acc", "test_acc"]:
-            plot_df[col] = -np.log10((plot_df[col] * dataset_size + 0.5) / (dataset_size + 1))
+            plot_df[col] = plot_df[col].apply(lambda x: accuracy_to_kt(x, dataset_size))
         plt.figure(figsize=(8,4))
         plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
         plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
@@ -292,6 +292,7 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         plt.xticks(plot_df["rank"], plot_df["round_id"])
         plt.xlabel("Round")
         plt.ylabel("-log10 KT accuracy")
+        plt.title("Round Scores")
         plt.legend()
         plt.tight_layout()
         chart_path = os.path.join(inv_dir, "scores.png")
@@ -355,11 +356,38 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
         df["Release Date"] = pd.to_datetime(df["Release Date"])
         df.sort_values("Release Date", inplace=True)
-        df["KT"] = -np.log10((df["Accuracy"] * dataset_size + 0.5) / (dataset_size + 1))
+        df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
         body.append("<h2>Model Scores</h2><table border='1'>")
-        body.append("<tr><th>Model</th><th>Release Date</th><th>KT</th></tr>")
-        for m, d_, s in df[["Model", "Release Date", "KT"]].itertuples(index=False):
-            body.append(f"<tr><td>{m}</td><td>{d_.date()}</td><td>{s:.3f}</td></tr>")
+        body.append(
+            "<tr><th>Model</th><th>Release Date</th><th>Examples</th><th>Patience" +
+            "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+        )
+        for m, d_, run_name, ex, patience in df[["Model", "Release Date", "Run Name", "Sampler", "Patience"]].itertuples(index=False):
+            cur.execute(
+                "SELECT id FROM investigations WHERE dataset = %s AND model = %s",
+                (dataset, run_name.rstrip(".")),
+            )
+            inv_row = cur.fetchone()
+            if inv_row:
+                cfg = DatasetConfig(conn, cfg_file, dataset, inv_row[0])
+                split_id = cfg.get_latest_split_id()
+                try:
+                    best_round = cfg.get_best_round_id(split_id, "accuracy")
+                    val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+                    val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+                    test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
+                except Exception:
+                    val_acc = test_acc = None
+            else:
+                val_acc = test_acc = None
+            val_acc_disp = f"{val_acc:.3f}" if val_acc is not None else "n/a"
+            val_kt = f"{accuracy_to_kt(val_acc, dataset_size):.3f}" if val_acc is not None else "n/a"
+            test_acc_disp = f"{test_acc:.3f}" if test_acc is not None else "n/a"
+            test_kt = f"{accuracy_to_kt(test_acc, dataset_size):.3f}" if test_acc is not None else "n/a"
+            body.append(
+                f"<tr><td>{m}</td><td>{d_.date()}</td><td>{ex}</td><td>{patience}</td>"
+                f"<td>{val_acc_disp}</td><td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
+            )
         body.append("</table>")
 
         ens_df = get_interesting_ensembles(conn, dataset)
@@ -367,12 +395,23 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             ens_df = ens_df.copy()
             ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
             ens_df.sort_values("Release Date", inplace=True)
-            ens_df["KT"] = -np.log10((ens_df["test_correct"] + 0.5) / (ens_df["test_total"] + 1))
+            ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+            ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
+            ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
             body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
-            body.append("<tr><th>Release Date</th><th>KT</th><th>Ensemble</th></tr>")
-            for d_, score, names in ens_df[["Release Date", "KT", "model_names"]].itertuples(index=False):
+            body.append(
+                "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+            )
+            for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
+                "Release Date",
+                "validation_accuracy",
+                "validation_kt",
+                "test_accuracy",
+                "test_kt",
+                "model_names",
+            ]].itertuples(index=False):
                 body.append(
-                    f"<tr><td>{d_.date()}</td><td>{score:.3f}</td><td>{html.escape(names)}</td></tr>"
+                    f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
                 )
             body.append("</table>")
 
@@ -397,14 +436,15 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             "EBM",
         ]
         body.append("<h2>Baseline</h2><table border='1'>")
-        body.append("<tr><th>Model</th><th>KT</th></tr>")
+        body.append("<tr><th>Model</th><th>Accuracy</th><th>KT</th></tr>")
         for name, val in zip(names, row):
             if val is not None:
-                kt = -math.log10((val * dataset_size + 0.5) / (dataset_size + 1))
-                display = f"{kt:.3f}"
+                kt = accuracy_to_kt(val, dataset_size)
+                display_kt = f"{kt:.3f}"
+                display_acc = f"{val:.3f}"
             else:
-                display = "n/a"
-            body.append(f"<tr><td>{name}</td><td>{display}</td></tr>")
+                display_kt = display_acc = "n/a"
+            body.append(f"<tr><td>{name}</td><td>{display_acc}</td><td>{display_kt}</td></tr>")
         body.append("</table>")
 
     write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
