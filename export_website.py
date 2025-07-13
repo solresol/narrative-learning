@@ -405,27 +405,27 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         if ens_df.empty:
             raise RuntimeError("no ensemble data found")
         ens_df = ens_df.copy()
-            ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
-            ens_df.sort_values("Release Date", inplace=True)
-            ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
-            ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+        ens_df.sort_values("Release Date", inplace=True)
+        ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
+        ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        body.append(
+            "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+        )
+        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
+            "Release Date",
+            "validation_accuracy",
+            "validation_kt",
+            "test_accuracy",
+            "test_kt",
+            "model_names",
+        ]].itertuples(index=False):
             body.append(
-                "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+                f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
             )
-            for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
-                "Release Date",
-                "validation_accuracy",
-                "validation_kt",
-                "test_accuracy",
-                "test_kt",
-                "model_names",
-            ]].itertuples(index=False):
-                body.append(
-                    f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
-                )
-            body.append("</table>")
+        body.append("</table>")
 
     cur.execute(
         """
