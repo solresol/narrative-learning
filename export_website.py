@@ -103,9 +103,9 @@ def plot_release_chart(
     ens_df = get_interesting_ensembles(conn, dataset)
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.scatter(df["Release Date"], df["KT"], marker="o", label="model")
+    ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
     ax.set_xlabel("Model release date")
-    ax.set_ylabel("-log10 KT accuracy")
+    ax.set_ylabel("log10 KT accuracy")
     draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
 
     if not ens_df.empty:
@@ -117,13 +117,13 @@ def plot_release_chart(
         ).apply(lambda x: accuracy_to_kt(x, dataset_size))
         ax.scatter(
             ens_df["Release Date"],
-            ens_df["KT"],
+            -ens_df["KT"],
             marker="x",
             c="red",
             label="ensemble",
         )
         x = mdates.date2num(ens_df["Release Date"])
-        y = ens_df["KT"]
+        y = -ens_df["KT"]
         if len(ens_df) > 1:
             slope, intercept, r, pval, std = linregress(x, y)
             xs = np.linspace(x.min(), x.max(), 100)
@@ -284,14 +284,14 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         )
         plot_df["rank"] = plot_df.index + 1
         for col in ["train_acc", "val_acc", "test_acc"]:
-            plot_df[col] = plot_df[col].apply(lambda x: accuracy_to_kt(x, dataset_size))
+            plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
         plt.figure(figsize=(8,4))
         plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
         plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
         plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
         plt.xticks(plot_df["rank"], plot_df["round_id"])
         plt.xlabel("Round")
-        plt.ylabel("-log10 KT accuracy")
+        plt.ylabel("log10 KT accuracy")
         plt.title("Round Scores")
         plt.legend()
         plt.tight_layout()
