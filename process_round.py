@@ -75,13 +75,24 @@ def main():
             import tqdm
             iterator = tqdm.tqdm(cur.fetchall())
         anything_left = False
+        ids_to_predict = []
         for row in iterator:
             anything_left = True
             if args.list:
                 print(row[0])
                 continue
-            predict.predict(config, args.round_id, row[0], model=args.model, investigation_id=args.investigation_id)
-            predictions_done += 1
+            ids_to_predict.append(row[0])
+            if args.stop_after is not None and predictions_done + len(ids_to_predict) >= args.stop_after:
+                break
+        if ids_to_predict:
+            predict.predict_many(
+                config,
+                args.round_id,
+                ids_to_predict,
+                model=args.model,
+                investigation_id=args.investigation_id,
+            )
+            predictions_done += len(ids_to_predict)
             if args.stop_after is not None and predictions_done >= args.stop_after:
                 sys.exit(0)
         if not anything_left:
