@@ -6,6 +6,8 @@ import html
 import argparse
 from datetime import datetime
 from typing import List, Tuple, Optional
+import subprocess
+import tempfile
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -479,9 +481,22 @@ def generate_dataset_page(
         if rows:
             body.append("<h3>Logistic Regression</h3>")
             body.append("<table border='1'><tr><th>Feature</th><th>Weight</th></tr>")
+            instructions = []
+            intercept = None
             for feat, wt in rows:
                 body.append(f"<tr><td>{html.escape(feat)}</td><td>{wt:.3f}</td></tr>")
+                if feat == "intercept":
+                    intercept = wt
+                else:
+                    instructions.append(f"take the {html.escape(feat)} and multiply by {wt:.3f}")
             body.append("</table>")
+            if intercept is not None and instructions:
+                pos = html.escape(cfg.positive_label())
+                neg = html.escape(cfg.negative_label())
+                instr_text = ", ".join(instructions)
+                body.append(
+                    f"<p>{instr_text}, add those up and if the number is greater than {intercept:.3f} then predict {pos}, otherwise predict {neg}.</p>"
+                )
 
         cur.execute(
             "SELECT dot_data FROM baseline_decision_tree WHERE dataset = %s",
@@ -490,7 +505,27 @@ def generate_dataset_page(
         row = cur.fetchone()
         if row and row[0]:
             body.append("<h3>Decision Tree</h3>")
-            body.append(f"<pre class='graphviz'>{html.escape(row[0])}</pre>")
+            dot_data = row[0]
+            img_name = "decision_tree.png"
+            img_path = os.path.join(out_dir, img_name)
+            dot_path = None
+            try:
+                with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as tf:
+                    tf.write(dot_data)
+                    dot_path = tf.name
+                subprocess.run([
+                    "dot",
+                    "-Tpng",
+                    dot_path,
+                    "-o",
+                    img_path,
+                ], check=True, timeout=30)
+                body.append(f"<img src='{img_name}' alt='decision tree'>")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                body.append(f"<pre class='graphviz'>{html.escape(dot_data)}</pre>")
+            finally:
+                if dot_path and os.path.exists(dot_path):
+                    os.remove(dot_path)
 
         cur.execute(
             "SELECT constant_value FROM baseline_dummy WHERE dataset = %s",
@@ -499,7 +534,7 @@ def generate_dataset_page(
         row = cur.fetchone()
         if row and row[0] is not None:
             body.append("<h3>Dummy</h3>")
-            body.append("<pre>" + html.escape(str(row[0])) + "</pre>")
+            body.append(f"<p>Always predict {html.escape(str(row[0]))}</p>")
 
         cur.execute(
             "SELECT rule_index, rule, weight FROM baseline_rulefit WHERE dataset = %s ORDER BY rule_index",
