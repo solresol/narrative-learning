@@ -34,6 +34,6 @@ def draw_baselines(ax, df, xpos=12.5, dataset_size=None):
             # Don't need to take the mean -- they will all be the same value
             score = df[model].mean()
             if dataset_size is not None and not math.isnan(score):
-                score = accuracy_to_kt(score, dataset_size)
+                score = -accuracy_to_kt(score, dataset_size)
             ax.axhline(score, linestyle='dotted', c=colours[model])
             ax.annotate(xy=(xpos, score-0.03), text=model.title(), c=colours[model])

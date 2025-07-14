@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from modules.postgres import get_connection, get_investigation_settings
+from modules.results_loader import load_results_dataframe
 from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
@@ -40,17 +41,15 @@ def get_split_id(cfg: DatasetConfig) -> int:
 
 
 def plot_release_chart(
-    conn, dataset: str, csv_path: str, out_path: str, dataset_size: int
+    conn, dataset: str, df: pd.DataFrame, out_path: str, dataset_size: int
 ) -> Optional[tuple[float, float, float]]:
     """Plot test scores by model release date for a dataset.
 
     Returns the slope, intercept and p-value of the regression line calculated
     over the ensemble maximum scores, or ``None`` if no ensemble data exists.
     """
-    if not os.path.exists(csv_path):
+    if df.empty:
         return None
-
-    df = pd.read_csv(csv_path)
     cur = conn.cursor()
     cur.execute(
         "SELECT training_model, release_date, ollama_hosted FROM language_models"
@@ -62,7 +61,7 @@ def plot_release_chart(
     df = df[~df["ollama"].fillna(False).astype(bool)]
     df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
     if df.empty:
-        return None
+        raise RuntimeError("no model results found to plot")
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
@@ -101,35 +100,34 @@ def plot_release_chart(
             df[col_df] = val
 
     ens_df = get_interesting_ensembles(conn, dataset)
+    if ens_df.empty:
+        raise RuntimeError("no interesting ensembles found")
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.scatter(df["Release Date"], df["KT"], marker="o", label="model")
+    ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
     ax.set_xlabel("Model release date")
-    ax.set_ylabel("-log10 KT accuracy")
+    ax.set_ylabel("log10 KT accuracy")
     draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
 
-    if not ens_df.empty:
-        ens_df = ens_df.copy()
-        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
-        ens_df.sort_values("Release Date", inplace=True)
-        ens_df["KT"] = (
-            ens_df["test_correct"] / ens_df["test_total"]
-        ).apply(lambda x: accuracy_to_kt(x, dataset_size))
-        ax.scatter(
-            ens_df["Release Date"],
-            ens_df["KT"],
-            marker="x",
-            c="red",
-            label="ensemble",
-        )
-        x = mdates.date2num(ens_df["Release Date"])
-        y = ens_df["KT"]
-        if len(ens_df) > 1:
-            slope, intercept, r, pval, std = linregress(x, y)
-            xs = np.linspace(x.min(), x.max(), 100)
-            ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
-        else:
-            slope = intercept = pval = float("nan")
+    ens_df = ens_df.copy()
+    ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+    ens_df.sort_values("Release Date", inplace=True)
+    ens_df["KT"] = (
+        ens_df["test_correct"] / ens_df["test_total"]
+    ).apply(lambda x: accuracy_to_kt(x, dataset_size))
+    ax.scatter(
+        ens_df["Release Date"],
+        -ens_df["KT"],
+        marker="x",
+        c="red",
+        label="ensemble",
+    )
+    x = mdates.date2num(ens_df["Release Date"])
+    y = -ens_df["KT"]
+    if len(ens_df) > 1:
+        slope, intercept, r, pval, std = linregress(x, y)
+        xs = np.linspace(x.min(), x.max(), 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
     else:
         slope = intercept = pval = float("nan")
 
@@ -278,28 +276,29 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
     body.append("</table>")
 
-    if not df_rounds.empty:
-        plot_df = (
-            df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
-        )
-        plot_df["rank"] = plot_df.index + 1
-        for col in ["train_acc", "val_acc", "test_acc"]:
-            plot_df[col] = plot_df[col].apply(lambda x: accuracy_to_kt(x, dataset_size))
-        plt.figure(figsize=(8,4))
-        plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
-        plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
-        plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
-        plt.xticks(plot_df["rank"], plot_df["round_id"])
-        plt.xlabel("Round")
-        plt.ylabel("-log10 KT accuracy")
-        plt.title("Round Scores")
-        plt.legend()
-        plt.tight_layout()
-        chart_path = os.path.join(inv_dir, "scores.png")
-        plt.savefig(chart_path)
-        plt.close()
-        body.append("<h2>Scores</h2>")
-        body.append(f"<img src='scores.png' alt='round scores'>")
+    if df_rounds.empty:
+        raise RuntimeError("no rounds data found")
+    plot_df = (
+        df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
+    )
+    plot_df["rank"] = plot_df.index + 1
+    for col in ["train_acc", "val_acc", "test_acc"]:
+        plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
+    plt.figure(figsize=(8,4))
+    plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
+    plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
+    plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
+    plt.xticks(plot_df["rank"], plot_df["round_id"])
+    plt.xlabel("Round")
+    plt.ylabel("log10 KT accuracy")
+    plt.title("Round Scores")
+    plt.legend()
+    plt.tight_layout()
+    chart_path = os.path.join(inv_dir, "scores.png")
+    plt.savefig(chart_path)
+    plt.close()
+    body.append("<h2>Scores</h2>")
+    body.append(f"<img src='scores.png' alt='round scores'>")
 
     write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
 
@@ -320,7 +319,18 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
     investigations = cur.fetchall()
     cfg = DatasetConfig(conn, cfg_file, dataset)
     dataset_size = cfg.get_data_point_count()
-    body = ["<h2>Investigations</h2>"]
+
+    body = []
+    cur.execute(
+        "SELECT provenance FROM dataset_provenance WHERE dataset = %s",
+        (dataset,),
+    )
+    row = cur.fetchone()
+    if row:
+        body.append("<h2>Provenance</h2>")
+        body.append(f"<pre>{html.escape(row[0])}</pre>")
+
+    body.append("<h2>Investigations</h2>")
     groups: dict[str, list[tuple[int, str]]] = {}
     for inv_id, model, training_model in investigations:
         groups.setdefault(training_model, []).append((inv_id, model))
@@ -332,10 +342,12 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
         body.append("</ul>")
 
+    # Load results directly from the database
+    df_results = load_results_dataframe(conn, dataset, cfg_file)
+
     # Plot test results by model release date
-    results_csv = os.path.join("outputs", f"{dataset}_results.csv")
     chart_file = os.path.join(out_dir, "release_scores.png")
-    stats = plot_release_chart(conn, dataset, results_csv, chart_file, dataset_size)
+    stats = plot_release_chart(conn, dataset, df_results, chart_file, dataset_size)
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
         body.append(f"<img src='release_scores.png' alt='scores by release date'>")
@@ -345,8 +357,8 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
                 f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.3g}</p>"
             )
 
-    if os.path.exists(results_csv):
-        df = pd.read_csv(results_csv)
+    if not df_results.empty:
+        df = df_results.copy()
         cur.execute(
             "SELECT training_model, release_date, ollama_hosted FROM language_models"
         )
@@ -391,29 +403,30 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
         body.append("</table>")
 
         ens_df = get_interesting_ensembles(conn, dataset)
-        if not ens_df.empty:
-            ens_df = ens_df.copy()
-            ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
-            ens_df.sort_values("Release Date", inplace=True)
-            ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
-            ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-            body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        if ens_df.empty:
+            raise RuntimeError("no ensemble data found")
+        ens_df = ens_df.copy()
+        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+        ens_df.sort_values("Release Date", inplace=True)
+        ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
+        ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
+        body.append(
+            "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+        )
+        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
+            "Release Date",
+            "validation_accuracy",
+            "validation_kt",
+            "test_accuracy",
+            "test_kt",
+            "model_names",
+        ]].itertuples(index=False):
             body.append(
-                "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+                f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
             )
-            for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
-                "Release Date",
-                "validation_accuracy",
-                "validation_kt",
-                "test_accuracy",
-                "test_kt",
-                "model_names",
-            ]].itertuples(index=False):
-                body.append(
-                    f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
-                )
-            body.append("</table>")
+        body.append("</table>")
 
     cur.execute(
         """
@@ -563,12 +576,13 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
             f"<li><a href='../../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>"
         )
     body.append("</ul>")
-    if perf_rows:
-        body.append("<h2>Performance</h2><table border='1'>")
-        body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
-        for d, v, t in perf_rows:
-            body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
-        body.append("</table>")
+    if not perf_rows:
+        raise RuntimeError("no investigation performance data found")
+    body.append("<h2>Performance</h2><table border='1'>")
+    body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
+    for d, v, t in perf_rows:
+        body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
+    body.append("</table>")
     write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
 
 
@@ -578,6 +592,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
     cur.execute(
         """
         SELECT lm.vendor, lm.training_model, lm.release_date,
+               l.prompt_herdan, l.prompt_zipf,
                l.reasoning_herdan, l.reasoning_zipf
           FROM lexicostatistics l
           JOIN language_models lm ON l.training_model = lm.training_model
@@ -588,104 +603,100 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
     rows = cur.fetchall()
     df = pd.DataFrame(
         rows,
-        columns=["Vendor", "Model", "Release Date", "Herdan", "Zipf"],
+        columns=[
+            "Vendor",
+            "Model",
+            "Release Date",
+            "Prompt Herdan",
+            "Prompt Zipf",
+            "Reasoning Herdan",
+            "Reasoning Zipf",
+        ],
     )
 
     body = ["<h2>Language Models</h2>"]
     body.append("<table border='1'>")
     body.append(
-        "<tr><th>Release Date</th><th>Vendor</th><th>Model</th><th>Herdan</th><th>Zipf</th></tr>"
+        "<tr><th>Release Date</th><th>Vendor</th><th>Model</th>"
+        "<th>Prompt Herdan</th><th>Prompt Zipf</th>"
+        "<th>Reasoning Herdan</th><th>Reasoning Zipf</th></tr>"
     )
-    for vendor, model, date, herdan, zipf in rows:
+    for vendor, model, date, p_h, p_z, r_h, r_z in rows:
         body.append(
-            f"<tr><td>{date}</td><td>{vendor}</td><td>{model}</td><td>{herdan:.3f}</td><td>{zipf:.3f}</td></tr>"
+            f"<tr><td>{date}</td><td>{vendor}</td><td>{model}</td>"
+            f"<td>{p_h:.3f}</td><td>{p_z:.3f}</td>"
+            f"<td>{r_h:.3f}</td><td>{r_z:.3f}</td></tr>"
         )
     body.append("</table>")
 
-    if not df.empty:
-        df["Release Date"] = pd.to_datetime(df["Release Date"])
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.scatter(df["Release Date"], df["Herdan"], marker="o")
-        ax.set_title("Herdan's Law Coefficients over Time")
-        x = mdates.date2num(df["Release Date"])
-        y = df["Herdan"]
-        slope, intercept, r, pval, std = linregress(x, y)
-        end_date = datetime(2028, 12, 31)
-        x_end = mdates.date2num(end_date)
-        xs = np.linspace(x.min(), x_end, 100)
-        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
-        ax.set_xlim(df["Release Date"].min(), end_date)
-        herdan_lines = {
-            0.5: "Children's speech (~0.5–0.6)",
-            0.6: "High-school essays (~0.6–0.7)",
-            0.7: "General fiction/technical (~0.7–0.8)",
-            0.8: "Shakespeare plays (~0.8–0.9)",
-            0.9: "Highly rich vocabulary"
-        }
-        for y_line, label in herdan_lines.items():
-            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
-            ax.text(
-                end_date,
-                y_line,
-                f" {label}",
-                va="bottom",
-                ha="left",
-                fontsize=8,
-                color="gray",
+    if df.empty:
+        raise RuntimeError("no lexicostatistics data found")
+    df["Release Date"] = pd.to_datetime(df["Release Date"])
+    for col, fname in [
+            ("Prompt Herdan", "prompt_herdan.png"),
+            ("Prompt Zipf", "prompt_zipf.png"),
+            ("Reasoning Herdan", "reasoning_herdan.png"),
+            ("Reasoning Zipf", "reasoning_zipf.png"),
+        ]:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.scatter(df["Release Date"], df[col], marker="o")
+            law = "Herdan" if "Herdan" in col else "Zipf"
+            section = "prompts" if "Prompt" in col else "reasoning"
+            ax.set_title(f"{law}'s Law Coefficients over Time ({section})")
+            x_num = mdates.date2num(df["Release Date"])
+            y = df[col]
+            x0 = x_num.min()
+            slope, intercept, r, pval, std = linregress(x_num - x0, y)
+            end_date = datetime(2027, 1, 1)
+            x_end = mdates.date2num(end_date)
+            xs = np.linspace(x0, x_end, 100)
+            ax.plot(
+                mdates.num2date(xs),
+                intercept + slope * (xs - x0),
+                "--",
             )
-        ax.set_xlabel("Release date")
-        ax.set_ylabel("Herdan coefficient")
-        fig.tight_layout()
-        chart_path = os.path.join(out_dir, "herdan.png")
-        plt.savefig(chart_path)
-        plt.close(fig)
-        body.append("<h2>Herdan Coefficient</h2>")
-        body.append(f"<img src='herdan.png' alt='Herdan\'s Law over time'>")
-        body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
-        )
-
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.scatter(df["Release Date"], df["Zipf"], marker="o")
-        ax.set_title("Zipf's Law Coefficients over Time")
-        x = mdates.date2num(df["Release Date"])
-        y = df["Zipf"]
-        slope, intercept, r, pval, std = linregress(x, y)
-        end_date = datetime(2028, 12, 31)
-        x_end = mdates.date2num(end_date)
-        xs = np.linspace(x.min(), x_end, 100)
-        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
-        ax.set_xlim(df["Release Date"].min(), end_date)
-        zipf_lines = {
-            0.7: "Academic texts (~0.7–0.9)",
-            0.8: "Shakespeare/poetry (~0.8–0.9)",
-            0.9: "Fiction/chat (~0.9–1.1)",
-            0.95: "High-school writing (~0.95–1.1)",
-            1.0: "Upper fiction bound (~1.0)",
-            1.1: "Conversation upper (~1.1)"
-        }
-        for y_line, label in zipf_lines.items():
-            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
-            ax.text(
-                end_date,
-                y_line,
-                f" {label}",
-                va="bottom",
-                ha="left",
-                fontsize=8,
-                color="gray",
+            ax.set_xlim(df["Release Date"].min(), end_date)
+            if law == "Herdan":
+                lines = {
+                    0.5: "Children's speech (~0.5–0.6)",
+                    0.6: "High-school essays (~0.6–0.7)",
+                    0.7: "General fiction/technical (~0.7–0.8)",
+                    0.8: "Shakespeare plays (~0.8–0.9)",
+                    0.9: "Highly rich vocabulary",
+                }
+            else:
+                lines = {
+                    0.7: "Academic texts (~0.7–0.9)",
+                    0.8: "Shakespeare/poetry (~0.8–0.9)",
+                    0.9: "Fiction/chat (~0.9–1.1)",
+                    0.95: "High-school writing (~0.95–1.1)",
+                    1.0: "Upper fiction bound (~1.0)",
+                    1.1: "Conversation upper (~1.1)",
+                }
+            for y_line, label in lines.items():
+                ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+                ax.text(
+                    end_date,
+                    y_line,
+                    f" {label}",
+                    va="bottom",
+                    ha="left",
+                    fontsize=8,
+                    color="gray",
+                )
+            ax.set_xlabel("Release date")
+            ax.set_ylabel(f"{law} coefficient")
+            plt.xticks(rotation=45)
+            fig.tight_layout()
+            chart_path = os.path.join(out_dir, fname)
+            plt.savefig(chart_path)
+            plt.close(fig)
+            body.append(f"<h2>{law} Coefficient ({section.capitalize()})</h2>")
+            alt_title = f"{law}'s Law ({section})"
+            body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
+            body.append(
+                f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
             )
-        ax.set_xlabel("Release date")
-        ax.set_ylabel("Zipf coefficient")
-        fig.tight_layout()
-        chart_path = os.path.join(out_dir, "zipf.png")
-        plt.savefig(chart_path)
-        plt.close(fig)
-        body.append("<h2>Zipf Coefficient</h2>")
-        body.append(f"<img src='zipf.png' alt='Zipf\'s Law over time'>")
-        body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
-        )
 
     # Ensemble trends
     cur.execute(
@@ -696,43 +707,62 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         """
     )
     ens_rows = cur.fetchall()
-    if ens_rows:
-        cur.execute(
-            "SELECT training_model, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
-            ([r[1] for r in ens_rows],),
+    if not ens_rows:
+        raise RuntimeError("no ensemble trend data found")
+    cur.execute(
+        "SELECT training_model, prompt_herdan, prompt_zipf, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
+        ([r[1] for r in ens_rows],),
+    )
+    lookup = {m: (ph, pz, rh, rz) for m, ph, pz, rh, rz in cur.fetchall()}
+    data = []
+    for date, models in ens_rows:
+        if models in lookup:
+            ph, pz, rh, rz = lookup[models]
+            data.append((date, models, ph, pz, rh, rz))
+    if not data:
+        raise RuntimeError("no ensemble trend data found")
+    ens_df = pd.DataFrame(
+        data,
+        columns=[
+            "Release Date",
+            "Models",
+            "Prompt Herdan",
+            "Prompt Zipf",
+            "Reasoning Herdan",
+            "Reasoning Zipf",
+        ],
+    )
+    body.append("<h2>Best Ensembles</h2><table border='1'>")
+    body.append(
+        "<tr><th>Date</th><th>Ensemble</th>"
+        "<th>Prompt Herdan</th><th>Prompt Zipf</th>"
+        "<th>Reasoning Herdan</th><th>Reasoning Zipf</th></tr>"
+    )
+    for d_, m_, ph, pz, rh, rz in data:
+        body.append(
+            f"<tr><td>{d_}</td><td>{html.escape(m_)}</td><td>{ph:.3f}</td><td>{pz:.3f}</td><td>{rh:.3f}</td><td>{rz:.3f}</td></tr>"
         )
-        lookup = {m: (h, z) for m, h, z in cur.fetchall()}
-        data = []
-        for date, models in ens_rows:
-            if models in lookup:
-                h, z = lookup[models]
-                data.append((date, models, h, z))
-        if data:
-            ens_df = pd.DataFrame(data, columns=["Release Date", "Models", "Herdan", "Zipf"])
-            body.append("<h2>Best Ensembles</h2><table border='1'>")
-            body.append("<tr><th>Date</th><th>Ensemble</th><th>Herdan</th><th>Zipf</th></tr>")
-            for d_, m_, h, z in data:
-                body.append(
-                    f"<tr><td>{d_}</td><td>{html.escape(m_)}</td><td>{h:.3f}</td><td>{z:.3f}</td></tr>"
-                )
-            body.append("</table>")
+    body.append("</table>")
 
-            ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
-            for col, fname, title in [
-                ("Herdan", "ensemble_herdan.png", "Herdan"),
-                ("Zipf", "ensemble_zipf.png", "Zipf"),
+    ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+    for col, fname, title, section in [
+                ("Prompt Herdan", "ensemble_prompt_herdan.png", "Herdan", "prompts"),
+                ("Prompt Zipf", "ensemble_prompt_zipf.png", "Zipf", "prompts"),
+                ("Reasoning Herdan", "ensemble_reasoning_herdan.png", "Herdan", "reasoning"),
+                ("Reasoning Zipf", "ensemble_reasoning_zipf.png", "Zipf", "reasoning"),
             ]:
                 fig, ax = plt.subplots(figsize=(8, 4))
                 ax.scatter(ens_df["Release Date"], ens_df[col], marker="o")
                 law_title = "Herdan's" if title == "Herdan" else "Zipf's"
-                ax.set_title(f"{law_title} Law Coefficients over Time")
-                x = mdates.date2num(ens_df["Release Date"])
+                ax.set_title(f"{law_title} Law Coefficients over Time ({section})")
+                x_num = mdates.date2num(ens_df["Release Date"])
                 y = ens_df[col]
-                slope, intercept, r, pval, std = linregress(x, y)
-                end_date = datetime(2028, 12, 31)
+                x0 = x_num.min()
+                slope, intercept, r, pval, std = linregress(x_num - x0, y)
+                end_date = datetime(2027, 1, 1)
                 x_end = mdates.date2num(end_date)
-                xs = np.linspace(x.min(), x_end, 100)
-                ax.plot(mdates.num2date(xs), intercept + slope * xs, "--")
+                xs = np.linspace(x0, x_end, 100)
+                ax.plot(mdates.num2date(xs), intercept + slope * (xs - x0), "--")
                 ax.set_xlim(ens_df["Release Date"].min(), end_date)
                 if title == "Herdan":
                     lines = {
@@ -764,12 +794,13 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
                     )
                 ax.set_xlabel("Release date")
                 ax.set_ylabel(f"{title} coefficient")
+                plt.xticks(rotation=45)
                 fig.tight_layout()
                 chart_path = os.path.join(out_dir, fname)
                 plt.savefig(chart_path)
                 plt.close(fig)
-                body.append(f"<h2>{title} Coefficient (Ensembles)</h2>")
-                alt_title = "Herdan's Law" if title == "Herdan" else "Zipf's Law"
+                body.append(f"<h2>{title} Coefficient (Ensembles - {section.capitalize()})</h2>")
+                alt_title = f"{law_title} Law ({section})"
                 body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
                 body.append(
                     f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"

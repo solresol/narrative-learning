@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import argparse
 import sys
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures
@@ -13,13 +15,18 @@ from sklearn.metrics import r2_score
 from sklearn.model_selection import cross_validate, KFold
 import matplotlib.pyplot as plt
 
-def load_data(file_paths):
-    """Load and concatenate CSV files into a single DataFrame."""
+def load_data(conn, datasets):
+    """Load and concatenate results from the database for multiple datasets."""
+    cur = conn.cursor()
     dfs = []
-    for file_path in file_paths:
-        df = pd.read_csv(file_path)
+    for ds in datasets:
+        cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (ds,))
+        row = cur.fetchone()
+        if not row:
+            raise SystemExit(f"dataset {ds} not found")
+        df = load_results_dataframe(conn, ds, row[0])
         dfs.append(df)
-    
+
     return pd.concat(dfs, ignore_index=True)
 
 def prepare_data(df):
@@ -137,18 +144,15 @@ def train_models(X, y, n_splits=5):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description='Model Neg Log Error from features in results CSV files')
+    parser = argparse.ArgumentParser(description='Model Neg Log Error from features stored in the database')
     parser.add_argument("--remove-extremely-bad", action="store_true", help="Remove narrative learning results that weren't even a match for the dummy regressor")
     parser.add_argument("--crossval", type=int, default=5, help="Number of cross-validation folds")
-    parser.add_argument('csv_files', nargs='+', help='CSV files containing results data')
+    parser.add_argument('datasets', nargs='+', help='Datasets to include')
     args = parser.parse_args()
     
-    if not args.csv_files:
-        print("Please provide at least one CSV file")
-        sys.exit(1)
-    
+    conn = get_connection()
     # Load and prepare data
-    df = load_data(args.csv_files)
+    df = load_data(conn, args.datasets)
     
     # Ignore the really bad models
     if args.remove_extremely_bad:
@@ -157,7 +161,7 @@ def main():
     print(df.columns)
     X, y = prepare_data(df)
     
-    print(f"Loaded data from {', '.join(args.csv_files)}")
+    print(f"Loaded data for {', '.join(args.datasets)}")
     print(f"Number of samples: {len(X)}")
     print(f"Using {args.crossval}-fold cross-validation to evaluate models")
     

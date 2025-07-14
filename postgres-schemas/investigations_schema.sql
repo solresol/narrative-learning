@@ -80,3 +80,8 @@ CREATE TABLE baseline_ebm (
     contributions DOUBLE PRECISION[],
     PRIMARY KEY (dataset, feature)
 );
+
+CREATE TABLE dataset_provenance (
+    dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+    provenance TEXT NOT NULL
+);

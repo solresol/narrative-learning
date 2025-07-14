@@ -74,7 +74,7 @@ def get_interesting_ensembles(conn, dataset: str) -> pd.DataFrame:
 
 
 def main(argv: Iterable[str] | None = None) -> None:
-    from modules.postgres import get_connection
+    from postgres import get_connection
 
     parser = argparse.ArgumentParser(description="List interesting ensembles")
     parser.add_argument("dataset", help="Dataset name")

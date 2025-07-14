@@ -5,31 +5,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import wilcoxon
 from typing import List, Tuple
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze impact of sample size on model performance')
-    parser.add_argument('csv_files', nargs='+', help='List of CSV result files to process')
+    parser.add_argument('datasets', nargs='+', help='Datasets to include')
     parser.add_argument('--pivot', required=True, help='Output path for pivot table CSV')
     parser.add_argument('--image', required=True, help='Output path for scatter plot image')
     parser.add_argument('--stats-results', required=True, help='Output path for statistical test results')
     parser.add_argument('--brief-stats', required=True, help="LaTeX-format output file to give the p-value of the test")
     return parser.parse_args()
 
-def load_and_combine_data(csv_files: List[str]) -> pd.DataFrame:
+def load_and_combine_data(conn, datasets: List[str]) -> pd.DataFrame:
     """
-    Load and combine data from multiple CSV files
+    Load and combine data from the database for multiple datasets
     
     Args:
-        csv_files: List of paths to CSV files
+        conn: PostgreSQL connection
+        datasets: List of dataset names
         
     Returns:
         Combined DataFrame
     """
+    cur = conn.cursor()
     dataframes = []
-    for file in csv_files:
-        df = pd.read_csv(file)
+    for ds in datasets:
+        cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (ds,))
+        row = cur.fetchone()
+        if not row:
+            raise SystemExit(f"dataset {ds} not found")
+        df = load_results_dataframe(conn, ds, row[0])
         dataframes.append(df)
-    
+
     return pd.concat(dataframes, ignore_index=True)
 
 def create_pivot_table(df: pd.DataFrame) -> pd.DataFrame:
@@ -122,8 +130,9 @@ def run_wilcoxon_test(pivot_df: pd.DataFrame) -> Tuple[float, float]:
 def main():
     args = parse_args()
     
+    conn = get_connection()
     # Load and combine data
-    df = load_and_combine_data(args.csv_files)
+    df = load_and_combine_data(conn, args.datasets)
     
     # Create pivot table
     pivot_df = create_pivot_table(df)
