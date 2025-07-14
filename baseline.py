@@ -177,11 +177,19 @@ def extract_model_representation(name, clf, feature_names):
         return buf.getvalue()
 
     if name == 'dummy':
-        return str(getattr(clf, 'constant_', [clf])[0])
+        # DummyClassifier doesn't expose a constant_ attribute unless using the
+        # "constant" strategy. Compute the majority class from class_prior_
+        try:
+            idx = clf.class_prior_.argmax()
+            return str(clf.classes_[idx])
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to extract Dummy constant: %s", e)
+            return str(clf)
 
     if name == 'RuleFit':
+        # imodels 2.x exposes _get_rules() instead of get_rules()
         try:
-            df = clf.get_rules()
+            df = clf._get_rules()
         except Exception as e:  # noqa: BLE001
             logger.warning("Failed to extract RuleFit rules: %s", e)
             return []
@@ -195,19 +203,20 @@ def extract_model_representation(name, clf, feature_names):
 
     if name == 'BayesianRuleList':
         rows = []
-        for i, rule in enumerate(getattr(clf, 'rule_list_', [])):
-            prob = getattr(rule, 'p', None)
-            rows.append((i, str(rule), float(prob) if prob is not None else None))
+        for i, rule in enumerate(getattr(clf, 'rules_', [])):
+            # imodels >=2 does not store rule probabilities
+            rows.append((i, str(rule), None))
         return rows
 
     if name == 'CORELS':
-        rules = getattr(getattr(clf, 'rl', None), 'rules', [])
+        rules = getattr(clf, 'rules_', [])
         return [(i, str(rule)) for i, rule in enumerate(rules)]
 
     if name == 'EBM':
         rows = []
-        additive = getattr(clf, 'additive_terms_', [])
-        for fname, term in zip(feature_names, additive):
+        scores = getattr(clf, 'term_scores_', [])
+        names = getattr(clf, 'term_names_', feature_names)
+        for fname, term in zip(names, scores):
             try:
                 term_list = [float(x) for x in term.tolist()]
             except Exception as e:  # noqa: BLE001
@@ -233,7 +242,8 @@ def train_and_evaluate_models(
     models = {
         'logistic regression': LogisticRegression(max_iter=1000),
         'decision trees': DecisionTreeClassifier(),
-        'dummy': DummyClassifier(),
+        # Use most frequent strategy to ensure constant predictions
+        'dummy': DummyClassifier(strategy='most_frequent'),
         'RuleFit': RuleFitClassifier(),
         'BayesianRuleList': BayesianRuleListClassifier(max_iter=500, n_chains=2),
         # imodels 2.x does not support the ``max_depth`` or ``lambda_``
