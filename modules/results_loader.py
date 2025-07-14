@@ -7,7 +7,9 @@ from datasetconfig import DatasetConfig
 from modules.text_analysis import count_words
 
 
-def load_results_dataframe(conn, dataset: str, cfg_file: str, model_details_file: str = "model_details.json") -> pd.DataFrame:
+def load_results_dataframe(
+    conn, dataset: str, cfg_file: str, model_details_file: str = "model_details.json"
+) -> pd.DataFrame:
     """Return a DataFrame similar to the CSV created by create_task_csv_file."""
     with open(model_details_file, "r", encoding="utf-8") as f:
         model_details = json.load(f)
@@ -53,6 +55,7 @@ def load_results_dataframe(conn, dataset: str, cfg_file: str, model_details_file
     for inv_id, run_name, training_model, patience, sampler in investigations:
         cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
         split_id = cfg.get_latest_split_id()
+        round_count = len(cfg.get_processed_rounds_for_split(split_id))
         best_round = cfg.get_best_round_id(split_id, "accuracy")
         val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
         val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
@@ -77,28 +80,36 @@ def load_results_dataframe(conn, dataset: str, cfg_file: str, model_details_file
         neg_log_error = None
         if test_acc is not None:
             count_correct = round(test_acc * dataset_size)
-            lower_bound, _ = proportion_confint(count_correct, dataset_size, alpha=0.05, method="beta")
-            neg_log_error = -math.log10(1 - lower_bound) if lower_bound < 1 else float("inf")
-        rows.append({
-            "Task": dataset,
-            "Model": training_model,
-            "Run Name": f"{run_name}.",
-            "Patience": patience,
-            "Sampler": sampler,
-            "Accuracy": test_acc,
-            "Accuracy Lower Bound": lower_bound,
-            "Neg Log Error": neg_log_error,
-            "Rounds": best_round,
-            "Prompt Word Count": prompt_word_count,
-            "Reasoning Word Count": reasoning_word_count,
-            "Cumulative Reasoning Words": cumul_reasoning_words,
-            "Herdan Coefficient": herdan_coeff,
-            "Herdan R-squared": herdan_r2,
-            "Zipf Coefficient": zipf_coeff,
-            "Zipf R-squared": zipf_r2,
-            "Model Size": model_size,
-            "Data Points": dataset_size,
-            **baseline,
-        })
+            lower_bound, _ = proportion_confint(
+                count_correct, dataset_size, alpha=0.05, method="beta"
+            )
+            neg_log_error = (
+                -math.log10(1 - lower_bound) if lower_bound < 1 else float("inf")
+            )
+        rows.append(
+            {
+                "Task": dataset,
+                "Model": training_model,
+                "Run Name": f"{run_name}.",
+                "Investigation": inv_id,
+                "Patience": patience,
+                "Sampler": sampler,
+                "Accuracy": test_acc,
+                "Accuracy Lower Bound": lower_bound,
+                "Neg Log Error": neg_log_error,
+                "Best Round": best_round,
+                "Round Count": round_count,
+                "Prompt Word Count": prompt_word_count,
+                "Reasoning Word Count": reasoning_word_count,
+                "Cumulative Reasoning Words": cumul_reasoning_words,
+                "Herdan Coefficient": herdan_coeff,
+                "Herdan R-squared": herdan_r2,
+                "Zipf Coefficient": zipf_coeff,
+                "Zipf R-squared": zipf_r2,
+                "Model Size": model_size,
+                "Data Points": dataset_size,
+                **baseline,
+            }
+        )
 
     return pd.DataFrame(rows)

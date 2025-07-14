@@ -121,9 +121,9 @@ def plot_release_chart(
     ens_df = ens_df.copy()
     ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
     ens_df.sort_values("Release Date", inplace=True)
-    ens_df["KT"] = (
-        ens_df["test_correct"] / ens_df["test_total"]
-    ).apply(lambda x: accuracy_to_kt(x, dataset_size))
+    ens_df["KT"] = (ens_df["test_correct"] / ens_df["test_total"]).apply(
+        lambda x: accuracy_to_kt(x, dataset_size)
+    )
     ax.scatter(
         ens_df["Release Date"],
         -ens_df["KT"],
@@ -163,7 +163,9 @@ def plot_release_chart(
     return slope, intercept, pval
 
 
-def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int, out_dir: str) -> None:
+def generate_round_page(
+    cfg: DatasetConfig, investigation_id: int, round_id: int, out_dir: str
+) -> None:
     cur = cfg.conn.cursor()
     rounds_table = cfg.rounds_table
     inf_table = f"{cfg.dataset}_inferences" if cfg.dataset else "inferences"
@@ -196,11 +198,19 @@ def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int
     body.append(f"<li>First inference: {first_inf if first_inf else 'n/a'}</li>")
     body.append(f"<li>Last inference: {last_inf if last_inf else 'n/a'}</li>")
     body.append(f"<li>Completed: {'yes' if completed else 'no'}</li>")
-    body.append(f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}</li>")
-    body.append(f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}</li>")
-    body.append(f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}</li>")
+    body.append(
+        f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}</li>"
+    )
+    body.append(
+        f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}</li>"
+    )
+    body.append(
+        f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}</li>"
+    )
     body.append("</ul>")
-    write_page(os.path.join(out_dir, "index.html"), f"Round {round_id}", "\n".join(body))
+    write_page(
+        os.path.join(out_dir, "index.html"), f"Round {round_id}", "\n".join(body)
+    )
 
 
 def generate_investigation_page(
@@ -283,10 +293,19 @@ def generate_investigation_page(
     dataset_size = cfg.get_data_point_count()
     body.append("<table border='1'>")
     body.append(
-        "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed" +
-        "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+        "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed"
+        + "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
     )
-    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
+    for (
+        r_id,
+        r_uuid,
+        r_start,
+        r_completed,
+        train_acc,
+        v_acc,
+        t_acc,
+        inf_count,
+    ) in rounds:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
         if v_acc is not None:
@@ -302,18 +321,22 @@ def generate_investigation_page(
         body.append(
             f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
         )
-        generate_round_page(cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id)))
+        generate_round_page(
+            cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id))
+        )
     body.append("</table>")
 
     if df_rounds.empty:
         raise RuntimeError(f"no rounds data found for investigation {inv_id}")
     plot_df = (
-        df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
+        df_rounds.dropna(subset=["val_acc"])
+        .sort_values("round_start")
+        .reset_index(drop=True)
     )
     plot_df["rank"] = plot_df.index + 1
     for col in ["train_acc", "val_acc", "test_acc"]:
         plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
-    plt.figure(figsize=(8,4))
+    plt.figure(figsize=(8, 4))
     plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
     plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
     plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
@@ -329,7 +352,9 @@ def generate_investigation_page(
     body.append("<h2>Scores</h2>")
     body.append(f"<img src='scores.png' alt='round scores'>")
 
-    write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
+    write_page(
+        os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body)
+    )
 
 
 def generate_dataset_page(
@@ -363,17 +388,8 @@ def generate_dataset_page(
         body.append("<h2>Provenance</h2>")
         body.append(f"<pre>{html.escape(row[0])}</pre>")
 
-    body.append("<h2>Investigations</h2>")
-    groups: dict[str, list[tuple[int, str]]] = {}
-    for inv_id, model, training_model in investigations:
-        groups.setdefault(training_model, []).append((inv_id, model))
+    for inv_id, model, _training_model in investigations:
         generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
-
-    for tm, rows in groups.items():
-        body.append(f"<h3>{tm}</h3><ul>")
-        for inv_id, model in rows:
-            body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
-        body.append("</ul>")
 
     # Load results directly from the database
     df_results = load_results_dataframe(conn, dataset, cfg_file)
@@ -404,34 +420,50 @@ def generate_dataset_page(
         df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
         body.append("<h2>Model Scores</h2><table border='1'>")
         body.append(
-            "<tr><th>Model</th><th>Release Date</th><th>Examples</th><th>Patience" +
-            "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+            "<tr><th>Model</th><th>Run Name</th><th>Investigation</th><th>Release Date"
+            + "</th><th>Examples</th><th>Patience</th><th>Rounds</th><th>Val Acc"
+            + "</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
         )
-        for m, d_, run_name, ex, patience in df[["Model", "Release Date", "Run Name", "Sampler", "Patience"]].itertuples(index=False):
-            cur.execute(
-                "SELECT id FROM investigations WHERE dataset = %s AND model = %s",
-                (dataset, run_name.rstrip(".")),
-            )
-            inv_row = cur.fetchone()
-            if inv_row:
-                cfg = DatasetConfig(conn, cfg_file, dataset, inv_row[0])
-                split_id = cfg.get_latest_split_id()
-                try:
-                    best_round = cfg.get_best_round_id(split_id, "accuracy")
-                    val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
-                    val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
-                    test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
-                except Exception:
-                    val_acc = test_acc = None
-            else:
+        for m, d_, run_name, inv_id, ex, patience in df[
+            [
+                "Model",
+                "Release Date",
+                "Run Name",
+                "Investigation",
+                "Sampler",
+                "Patience",
+            ]
+        ].itertuples(index=False):
+            cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
+            split_id = cfg.get_latest_split_id()
+            round_count = len(cfg.get_processed_rounds_for_split(split_id))
+            try:
+                best_round = cfg.get_best_round_id(split_id, "accuracy")
+                val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+                val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+                test_acc = cfg.get_test_metric_for_best_validation_round(
+                    split_id, "accuracy"
+                )
+            except Exception:
                 val_acc = test_acc = None
             val_acc_disp = f"{val_acc:.3f}" if val_acc is not None else "n/a"
-            val_kt = f"{accuracy_to_kt(val_acc, dataset_size):.3f}" if val_acc is not None else "n/a"
+            val_kt = (
+                f"{accuracy_to_kt(val_acc, dataset_size):.3f}"
+                if val_acc is not None
+                else "n/a"
+            )
             test_acc_disp = f"{test_acc:.3f}" if test_acc is not None else "n/a"
-            test_kt = f"{accuracy_to_kt(test_acc, dataset_size):.3f}" if test_acc is not None else "n/a"
+            test_kt = (
+                f"{accuracy_to_kt(test_acc, dataset_size):.3f}"
+                if test_acc is not None
+                else "n/a"
+            )
             body.append(
-                f"<tr><td>{m}</td><td>{d_.date()}</td><td>{ex}</td><td>{patience}</td>"
-                f"<td>{val_acc_disp}</td><td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
+                f"<tr><td>{m}</td><td>{run_name.rstrip('.')}</td>"
+                f"<td><a href='investigation/{inv_id}/index.html'>{inv_id}</a></td>"
+                f"<td>{d_.date()}</td><td>{ex}</td><td>{patience}</td><td>{round_count}</td>"
+                f"<td><a href='investigation/{inv_id}/round/{best_round}/index.html'>{val_acc_disp}</a></td>"
+                f"<td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
             )
         body.append("</table>")
 
@@ -441,21 +473,27 @@ def generate_dataset_page(
         ens_df = ens_df.copy()
         ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
         ens_df.sort_values("Release Date", inplace=True)
-        ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(
+            lambda x: accuracy_to_kt(x, dataset_size)
+        )
         ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
-        ens_df["test_kt"] = ens_df["test_accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+        ens_df["test_kt"] = ens_df["test_accuracy"].apply(
+            lambda x: accuracy_to_kt(x, dataset_size)
+        )
         body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
         body.append(
             "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
         )
-        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[[
-            "Release Date",
-            "validation_accuracy",
-            "validation_kt",
-            "test_accuracy",
-            "test_kt",
-            "model_names",
-        ]].itertuples(index=False):
+        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[
+            [
+                "Release Date",
+                "validation_accuracy",
+                "validation_kt",
+                "test_accuracy",
+                "test_kt",
+                "model_names",
+            ]
+        ].itertuples(index=False):
             body.append(
                 f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
             )
@@ -490,7 +528,9 @@ def generate_dataset_page(
                 display_acc = f"{val:.3f}"
             else:
                 display_kt = display_acc = "n/a"
-            body.append(f"<tr><td>{name}</td><td>{display_acc}</td><td>{display_kt}</td></tr>")
+            body.append(
+                f"<tr><td>{name}</td><td>{display_acc}</td><td>{display_kt}</td></tr>"
+            )
         body.append("</table>")
 
         body.append("<h2>Baseline Models</h2>")
@@ -510,7 +550,9 @@ def generate_dataset_page(
                 if feat == "intercept":
                     intercept = wt
                 else:
-                    instructions.append(f"take the {html.escape(feat)} and multiply by {wt:.3f}")
+                    instructions.append(
+                        f"take the {html.escape(feat)} and multiply by {wt:.3f}"
+                    )
             body.append("</table>")
             if intercept is not None and instructions:
                 pos = html.escape(cfg.positive_label())
@@ -532,16 +574,22 @@ def generate_dataset_page(
             img_path = os.path.join(out_dir, img_name)
             dot_path = None
             try:
-                with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as tf:
+                with tempfile.NamedTemporaryFile(
+                    "w", suffix=".dot", delete=False
+                ) as tf:
                     tf.write(dot_data)
                     dot_path = tf.name
-                subprocess.run([
-                    "dot",
-                    "-Tpng",
-                    dot_path,
-                    "-o",
-                    img_path,
-                ], check=True, timeout=30)
+                subprocess.run(
+                    [
+                        "dot",
+                        "-Tpng",
+                        dot_path,
+                        "-o",
+                        img_path,
+                    ],
+                    check=True,
+                    timeout=30,
+                )
                 body.append(f"<img src='{img_name}' alt='decision tree'>")
             except (subprocess.CalledProcessError, FileNotFoundError):
                 body.append(f"<pre class='graphviz'>{html.escape(dot_data)}</pre>")
@@ -565,9 +613,13 @@ def generate_dataset_page(
         rows = cur.fetchall()
         if rows:
             body.append("<h3>RuleFit</h3>")
-            body.append("<table border='1'><tr><th>#</th><th>Rule</th><th>Weight</th></tr>")
+            body.append(
+                "<table border='1'><tr><th>#</th><th>Rule</th><th>Weight</th></tr>"
+            )
             for idx, rule, wt in rows:
-                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{wt:.3f}</td></tr>")
+                body.append(
+                    f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{wt:.3f}</td></tr>"
+                )
             body.append("</table>")
 
         cur.execute(
@@ -577,10 +629,14 @@ def generate_dataset_page(
         rows = cur.fetchall()
         if rows:
             body.append("<h3>Bayesian Rule List</h3>")
-            body.append("<table border='1'><tr><th>#</th><th>Rule</th><th>Probability</th></tr>")
+            body.append(
+                "<table border='1'><tr><th>#</th><th>Rule</th><th>Probability</th></tr>"
+            )
             for idx, rule, prob in rows:
                 prob_disp = f"{prob:.3f}" if prob is not None else "n/a"
-                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{prob_disp}</td></tr>")
+                body.append(
+                    f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{prob_disp}</td></tr>"
+                )
             body.append("</table>")
 
         cur.execute(
@@ -602,32 +658,48 @@ def generate_dataset_page(
         rows = cur.fetchall()
         if rows:
             body.append("<h3>EBM</h3>")
-            body.append("<table border='1'><tr><th>Feature</th><th>Contribution Data</th></tr>")
+            body.append(
+                "<table border='1'><tr><th>Feature</th><th>Contribution Data</th></tr>"
+            )
             for feat, contrib in rows:
-                body.append(f"<tr><td>{html.escape(feat)}</td><td>{html.escape(str(contrib))}</td></tr>")
+                body.append(
+                    f"<tr><td>{html.escape(feat)}</td><td>{html.escape(str(contrib))}</td></tr>"
+                )
             body.append("</table>")
 
-    write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
+    write_page(
+        os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body)
+    )
 
 
-def generate_dataset_index_page(dataset_rows: List[tuple[str, str | None]], out_path: str) -> None:
+def generate_dataset_index_page(
+    dataset_rows: List[tuple[str, str | None]], out_path: str
+) -> None:
     body = ["<table border='1'>", "<tr><th>Dataset</th><th>Description</th></tr>"]
     for dataset, summary in dataset_rows:
         desc = html.escape(summary) if summary else ""
-        body.append(f"<tr><td><a href='{dataset}/index.html'>{dataset}</a></td><td>{desc}</td></tr>")
+        body.append(
+            f"<tr><td><a href='{dataset}/index.html'>{dataset}</a></td><td>{desc}</td></tr>"
+        )
     body.append("</table>")
     write_page(out_path, "Datasets", "\n".join(body))
 
 
-def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str, str]) -> None:
+def generate_model_page(
+    conn, model: str, out_dir: str, dataset_lookup: dict[str, str]
+) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
-    cur.execute("SELECT training_model, inference_model FROM models WHERE model = %s", (model,))
+    cur.execute(
+        "SELECT training_model, inference_model FROM models WHERE model = %s", (model,)
+    )
     row = cur.fetchone()
     if not row:
         return
     training_model, inference_model = row
-    cur.execute("SELECT id, dataset FROM investigations WHERE model = %s ORDER BY id", (model,))
+    cur.execute(
+        "SELECT id, dataset FROM investigations WHERE model = %s ORDER BY id", (model,)
+    )
     investigations = cur.fetchall()
     perf_rows: List[Tuple[str, str, str]] = []
     for inv_id, dataset in investigations:
@@ -638,14 +710,21 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
             val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
             val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
             try:
-                test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
+                test_acc = cfg.get_test_metric_for_best_validation_round(
+                    split_id, "accuracy"
+                )
             except Exception:
                 test_acc = "n/a"
         except Exception:
             val_acc = "n/a"
             test_acc = "n/a"
         perf_rows.append((dataset, str(val_acc), str(test_acc)))
-    body = ["<p>", f"Training model: {training_model}<br>", f"Inference model: {inference_model}", "</p>"]
+    body = [
+        "<p>",
+        f"Training model: {training_model}<br>",
+        f"Inference model: {inference_model}",
+        "</p>",
+    ]
     body.append("<h2>Investigations</h2><ul>")
     for inv_id, dataset in investigations:
         body.append(
@@ -655,14 +734,18 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
     if not perf_rows:
         raise RuntimeError(f"no investigation performance data found for {model}")
     body.append("<h2>Performance</h2><table border='1'>")
-    body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
+    body.append(
+        "<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>"
+    )
     for d, v, t in perf_rows:
         body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
     body.append("</table>")
     write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
 
 
-def generate_model_index_page(rows: List[tuple[str, datetime, str, str, int]], out_path: str) -> None:
+def generate_model_index_page(
+    rows: List[tuple[str, datetime, str, str, int]], out_path: str
+) -> None:
     body = [
         "<table border='1'>",
         "<tr><th>Vendor</th><th>Language model</th><th>Release Date</th><th>examples=3</th><th>examples=10</th></tr>",
@@ -676,8 +759,12 @@ def generate_model_index_page(rows: List[tuple[str, datetime, str, str, int]], o
         else:
             table[key].setdefault(ex, []).append(model)
     for (vendor, training_model, date), counts in table.items():
-        ex3 = "<br>".join(f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(3, []))
-        ex10 = "<br>".join(f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(10, []))
+        ex3 = "<br>".join(
+            f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(3, [])
+        )
+        ex10 = "<br>".join(
+            f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(10, [])
+        )
         body.append(
             f"<tr><td>{vendor}</td><td>{training_model}</td><td>{date}</td><td>{ex3}</td><td>{ex10}</td></tr>"
         )
@@ -732,70 +819,70 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         raise RuntimeError("no lexicostatistics data found")
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     for col, fname in [
-            ("Prompt Herdan", "prompt_herdan.png"),
-            ("Prompt Zipf", "prompt_zipf.png"),
-            ("Reasoning Herdan", "reasoning_herdan.png"),
-            ("Reasoning Zipf", "reasoning_zipf.png"),
-        ]:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            ax.scatter(df["Release Date"], df[col], marker="o")
-            law = "Herdan" if "Herdan" in col else "Zipf"
-            section = "prompts" if "Prompt" in col else "reasoning"
-            ax.set_title(f"{law}'s Law Coefficients over Time ({section})")
-            x_num = mdates.date2num(df["Release Date"])
-            y = df[col]
-            x0 = x_num.min()
-            slope, intercept, r, pval, std = linregress(x_num - x0, y)
-            end_date = datetime(2027, 1, 1)
-            x_end = mdates.date2num(end_date)
-            xs = np.linspace(x0, x_end, 100)
-            ax.plot(
-                mdates.num2date(xs),
-                intercept + slope * (xs - x0),
-                "--",
+        ("Prompt Herdan", "prompt_herdan.png"),
+        ("Prompt Zipf", "prompt_zipf.png"),
+        ("Reasoning Herdan", "reasoning_herdan.png"),
+        ("Reasoning Zipf", "reasoning_zipf.png"),
+    ]:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.scatter(df["Release Date"], df[col], marker="o")
+        law = "Herdan" if "Herdan" in col else "Zipf"
+        section = "prompts" if "Prompt" in col else "reasoning"
+        ax.set_title(f"{law}'s Law Coefficients over Time ({section})")
+        x_num = mdates.date2num(df["Release Date"])
+        y = df[col]
+        x0 = x_num.min()
+        slope, intercept, r, pval, std = linregress(x_num - x0, y)
+        end_date = datetime(2027, 1, 1)
+        x_end = mdates.date2num(end_date)
+        xs = np.linspace(x0, x_end, 100)
+        ax.plot(
+            mdates.num2date(xs),
+            intercept + slope * (xs - x0),
+            "--",
+        )
+        ax.set_xlim(df["Release Date"].min(), end_date)
+        if law == "Herdan":
+            lines = {
+                0.5: "Children's speech (~0.5–0.6)",
+                0.6: "High-school essays (~0.6–0.7)",
+                0.7: "General fiction/technical (~0.7–0.8)",
+                0.8: "Shakespeare plays (~0.8–0.9)",
+                0.9: "Highly rich vocabulary",
+            }
+        else:
+            lines = {
+                0.7: "Academic texts (~0.7–0.9)",
+                0.8: "Shakespeare/poetry (~0.8–0.9)",
+                0.9: "Fiction/chat (~0.9–1.1)",
+                0.95: "High-school writing (~0.95–1.1)",
+                1.0: "Upper fiction bound (~1.0)",
+                1.1: "Conversation upper (~1.1)",
+            }
+        for y_line, label in lines.items():
+            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+            ax.text(
+                end_date,
+                y_line,
+                f" {label}",
+                va="bottom",
+                ha="left",
+                fontsize=8,
+                color="gray",
             )
-            ax.set_xlim(df["Release Date"].min(), end_date)
-            if law == "Herdan":
-                lines = {
-                    0.5: "Children's speech (~0.5–0.6)",
-                    0.6: "High-school essays (~0.6–0.7)",
-                    0.7: "General fiction/technical (~0.7–0.8)",
-                    0.8: "Shakespeare plays (~0.8–0.9)",
-                    0.9: "Highly rich vocabulary",
-                }
-            else:
-                lines = {
-                    0.7: "Academic texts (~0.7–0.9)",
-                    0.8: "Shakespeare/poetry (~0.8–0.9)",
-                    0.9: "Fiction/chat (~0.9–1.1)",
-                    0.95: "High-school writing (~0.95–1.1)",
-                    1.0: "Upper fiction bound (~1.0)",
-                    1.1: "Conversation upper (~1.1)",
-                }
-            for y_line, label in lines.items():
-                ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
-                ax.text(
-                    end_date,
-                    y_line,
-                    f" {label}",
-                    va="bottom",
-                    ha="left",
-                    fontsize=8,
-                    color="gray",
-                )
-            ax.set_xlabel("Release date")
-            ax.set_ylabel(f"{law} coefficient")
-            plt.xticks(rotation=45)
-            fig.tight_layout()
-            chart_path = os.path.join(out_dir, fname)
-            plt.savefig(chart_path)
-            plt.close(fig)
-            body.append(f"<h2>{law} Coefficient ({section.capitalize()})</h2>")
-            alt_title = f"{law}'s Law ({section})"
-            body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
-            body.append(
-                f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
-            )
+        ax.set_xlabel("Release date")
+        ax.set_ylabel(f"{law} coefficient")
+        plt.xticks(rotation=45)
+        fig.tight_layout()
+        chart_path = os.path.join(out_dir, fname)
+        plt.savefig(chart_path)
+        plt.close(fig)
+        body.append(f"<h2>{law} Coefficient ({section.capitalize()})</h2>")
+        alt_title = f"{law}'s Law ({section})"
+        body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
+        body.append(
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+        )
 
     # Ensemble trends
     cur.execute(
@@ -845,72 +932,78 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
 
     ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
     for col, fname, title, section in [
-                ("Prompt Herdan", "ensemble_prompt_herdan.png", "Herdan", "prompts"),
-                ("Prompt Zipf", "ensemble_prompt_zipf.png", "Zipf", "prompts"),
-                ("Reasoning Herdan", "ensemble_reasoning_herdan.png", "Herdan", "reasoning"),
-                ("Reasoning Zipf", "ensemble_reasoning_zipf.png", "Zipf", "reasoning"),
-            ]:
-                fig, ax = plt.subplots(figsize=(8, 4))
-                ax.scatter(ens_df["Release Date"], ens_df[col], marker="o")
-                law_title = "Herdan's" if title == "Herdan" else "Zipf's"
-                ax.set_title(f"{law_title} Law Coefficients over Time ({section})")
-                x_num = mdates.date2num(ens_df["Release Date"])
-                y = ens_df[col]
-                x0 = x_num.min()
-                slope, intercept, r, pval, std = linregress(x_num - x0, y)
-                end_date = datetime(2027, 1, 1)
-                x_end = mdates.date2num(end_date)
-                xs = np.linspace(x0, x_end, 100)
-                ax.plot(mdates.num2date(xs), intercept + slope * (xs - x0), "--")
-                ax.set_xlim(ens_df["Release Date"].min(), end_date)
-                if title == "Herdan":
-                    lines = {
-                        0.5: "Children's speech (~0.5–0.6)",
-                        0.6: "High-school essays (~0.6–0.7)",
-                        0.7: "General fiction/technical (~0.7–0.8)",
-                        0.8: "Shakespeare plays (~0.8–0.9)",
-                        0.9: "Highly rich vocabulary",
-                    }
-                else:
-                    lines = {
-                        0.7: "Academic texts (~0.7–0.9)",
-                        0.8: "Shakespeare/poetry (~0.8–0.9)",
-                        0.9: "Fiction/chat (~0.9–1.1)",
-                        0.95: "High-school writing (~0.95–1.1)",
-                        1.0: "Upper fiction bound (~1.0)",
-                        1.1: "Conversation upper (~1.1)",
-                    }
-                for y_line, label in lines.items():
-                    ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
-                    ax.text(
-                        end_date,
-                        y_line,
-                        f" {label}",
-                        va="bottom",
-                        ha="left",
-                        fontsize=8,
-                        color="gray",
-                    )
-                ax.set_xlabel("Release date")
-                ax.set_ylabel(f"{title} coefficient")
-                plt.xticks(rotation=45)
-                fig.tight_layout()
-                chart_path = os.path.join(out_dir, fname)
-                plt.savefig(chart_path)
-                plt.close(fig)
-                body.append(f"<h2>{title} Coefficient (Ensembles - {section.capitalize()})</h2>")
-                alt_title = f"{law_title} Law ({section})"
-                body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
-                body.append(
-                    f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
-                )
+        ("Prompt Herdan", "ensemble_prompt_herdan.png", "Herdan", "prompts"),
+        ("Prompt Zipf", "ensemble_prompt_zipf.png", "Zipf", "prompts"),
+        ("Reasoning Herdan", "ensemble_reasoning_herdan.png", "Herdan", "reasoning"),
+        ("Reasoning Zipf", "ensemble_reasoning_zipf.png", "Zipf", "reasoning"),
+    ]:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.scatter(ens_df["Release Date"], ens_df[col], marker="o")
+        law_title = "Herdan's" if title == "Herdan" else "Zipf's"
+        ax.set_title(f"{law_title} Law Coefficients over Time ({section})")
+        x_num = mdates.date2num(ens_df["Release Date"])
+        y = ens_df[col]
+        x0 = x_num.min()
+        slope, intercept, r, pval, std = linregress(x_num - x0, y)
+        end_date = datetime(2027, 1, 1)
+        x_end = mdates.date2num(end_date)
+        xs = np.linspace(x0, x_end, 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * (xs - x0), "--")
+        ax.set_xlim(ens_df["Release Date"].min(), end_date)
+        if title == "Herdan":
+            lines = {
+                0.5: "Children's speech (~0.5–0.6)",
+                0.6: "High-school essays (~0.6–0.7)",
+                0.7: "General fiction/technical (~0.7–0.8)",
+                0.8: "Shakespeare plays (~0.8–0.9)",
+                0.9: "Highly rich vocabulary",
+            }
+        else:
+            lines = {
+                0.7: "Academic texts (~0.7–0.9)",
+                0.8: "Shakespeare/poetry (~0.8–0.9)",
+                0.9: "Fiction/chat (~0.9–1.1)",
+                0.95: "High-school writing (~0.95–1.1)",
+                1.0: "Upper fiction bound (~1.0)",
+                1.1: "Conversation upper (~1.1)",
+            }
+        for y_line, label in lines.items():
+            ax.axhline(y_line, color="gray", linestyle=":", linewidth=0.5)
+            ax.text(
+                end_date,
+                y_line,
+                f" {label}",
+                va="bottom",
+                ha="left",
+                fontsize=8,
+                color="gray",
+            )
+        ax.set_xlabel("Release date")
+        ax.set_ylabel(f"{title} coefficient")
+        plt.xticks(rotation=45)
+        fig.tight_layout()
+        chart_path = os.path.join(out_dir, fname)
+        plt.savefig(chart_path)
+        plt.close(fig)
+        body.append(
+            f"<h2>{title} Coefficient (Ensembles - {section.capitalize()})</h2>"
+        )
+        alt_title = f"{law_title} Law ({section})"
+        body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
+        body.append(
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+        )
 
     write_page(os.path.join(out_dir, "index.html"), "Lexicostatistics", "\n".join(body))
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export investigation results as static HTML")
-    parser.add_argument("--progress-bar", action="store_true", help="show progress bars")
+    parser = argparse.ArgumentParser(
+        description="Export investigation results as static HTML"
+    )
+    parser.add_argument(
+        "--progress-bar", action="store_true", help="show progress bars"
+    )
     args = parser.parse_args()
 
     base_dir = "website"
@@ -930,6 +1023,7 @@ def main() -> None:
     dataset_iter = datasets
     if args.progress_bar:
         import tqdm
+
         dataset_iter = tqdm.tqdm(datasets, desc="datasets")
     for row in dataset_iter:
         dataset, cfg_file, *rest = row
@@ -938,7 +1032,9 @@ def main() -> None:
         generate_dataset_page(conn, dataset, cfg_file, dataset_dir, summary)
         dataset_rows.append((dataset, summary))
 
-    generate_dataset_index_page(dataset_rows, os.path.join(base_dir, "dataset", "index.html"))
+    generate_dataset_index_page(
+        dataset_rows, os.path.join(base_dir, "dataset", "index.html")
+    )
     dataset_names = [d for d, _ in dataset_rows]
 
     cur.execute(
