@@ -11,7 +11,7 @@ import tempfile
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from scipy.stats import linregress
+from scipy.stats import linregress, wilcoxon
 import numpy as np
 
 import pandas as pd
@@ -744,7 +744,10 @@ def generate_model_page(
 
 
 def generate_model_index_page(
-    rows: List[tuple[str, datetime, str, str, int]], out_path: str
+    conn,
+    dataset_lookup: dict[str, str],
+    rows: List[tuple[str, datetime, str, str, int]],
+    out_path: str,
 ) -> None:
     body = [
         "<table border='1'>",
@@ -769,6 +772,52 @@ def generate_model_index_page(
             f"<tr><td>{vendor}</td><td>{training_model}</td><td>{date}</td><td>{ex3}</td><td>{ex10}</td></tr>"
         )
     body.append("</table>")
+
+    # gather performance data across datasets
+    df_list = []
+    for dataset, cfg_file in dataset_lookup.items():
+        df = load_results_dataframe(conn, dataset, cfg_file)
+        df_list.append(df)
+    if df_list:
+        full_df = pd.concat(df_list, ignore_index=True)
+        full_df["Neg Log KT"] = full_df.apply(
+            lambda r: -accuracy_to_kt(r["Accuracy"], r["Data Points"]) if r["Accuracy"] is not None else np.nan,
+            axis=1,
+        )
+        pivot = full_df.pivot_table(
+            index=["Task", "Model"], columns="Patience", values="Neg Log KT"
+        )
+        plot_df = pivot.dropna(subset=[3, 10])
+        if not plot_df.empty:
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.scatter(plot_df[3], plot_df[10], marker="o")
+            lo = min(plot_df[3].min(), plot_df[10].min())
+            hi = max(plot_df[3].max(), plot_df[10].max())
+            ax.plot([lo, hi], [lo, hi], "r--")
+            ax.set_xlabel("-log10 KT (patience=3)")
+            ax.set_ylabel("-log10 KT (patience=10)")
+            fig.tight_layout()
+            scatter_file = os.path.join(os.path.dirname(out_path), "patience_scatter.png")
+            plt.savefig(scatter_file)
+            plt.close(fig)
+
+            diff = plot_df[10] - plot_df[3]
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.hist(diff, bins=10, edgecolor="black")
+            ax.set_xlabel("Difference in -log10 KT")
+            ax.set_ylabel("Frequency")
+            fig.tight_layout()
+            hist_file = os.path.join(os.path.dirname(out_path), "patience_diff_hist.png")
+            plt.savefig(hist_file)
+            plt.close(fig)
+
+            stat, pval = wilcoxon(plot_df[10], plot_df[3])
+
+            body.append("<h2>Patience Comparison</h2>")
+            body.append(f"<img src='patience_scatter.png' alt='patience scatter'>")
+            body.append(f"<img src='patience_diff_hist.png' alt='difference histogram'>")
+            body.append(f"<p>Wilcoxon statistic: {stat:.2f}, p-value: {pval:.3g}</p>")
+
     write_page(out_path, "Models", "\n".join(body))
 
 
@@ -1051,7 +1100,7 @@ def main() -> None:
         model_dir = os.path.join(base_dir, "model", model)
         generate_model_page(conn, model, model_dir, dataset_lookup)
 
-    generate_model_index_page(rows, os.path.join(base_dir, "model", "index.html"))
+    generate_model_index_page(conn, dataset_lookup, rows, os.path.join(base_dir, "model", "index.html"))
 
     index_body_parts = [
         "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
