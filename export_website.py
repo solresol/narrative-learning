@@ -313,7 +313,7 @@ def generate_investigation_page(
 
 
 def generate_dataset_page(
-    conn, dataset: str, cfg_file: str, out_dir: str
+    conn, dataset: str, cfg_file: str, out_dir: str, short_summary: str | None = None
 ) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
@@ -332,6 +332,8 @@ def generate_dataset_page(
     dataset_size = cfg.get_data_point_count()
 
     body = []
+    if short_summary:
+        body.append(f"<p>{html.escape(short_summary)}</p>")
     cur.execute(
         "SELECT provenance FROM dataset_provenance WHERE dataset = %s",
         (dataset,),
@@ -588,6 +590,15 @@ def generate_dataset_page(
     write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
 
 
+def generate_dataset_index_page(dataset_rows: List[tuple[str, str | None]], out_path: str) -> None:
+    body = ["<table border='1'>", "<tr><th>Dataset</th><th>Description</th></tr>"]
+    for dataset, summary in dataset_rows:
+        desc = html.escape(summary) if summary else ""
+        body.append(f"<tr><td><a href='{dataset}/index.html'>{dataset}</a></td><td>{desc}</td></tr>")
+    body.append("</table>")
+    write_page(out_path, "Datasets", "\n".join(body))
+
+
 def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str, str]) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
@@ -629,6 +640,29 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
         body.append(f"<tr><td>{d}</td><td>{v}</td><td>{t}</td></tr>")
     body.append("</table>")
     write_page(os.path.join(out_dir, "index.html"), f"Model {model}", "\n".join(body))
+
+
+def generate_model_index_page(rows: List[tuple[str, datetime, str, str, int]], out_path: str) -> None:
+    body = [
+        "<table border='1'>",
+        "<tr><th>Vendor</th><th>Language model</th><th>Release Date</th><th>examples=3</th><th>examples=10</th></tr>",
+    ]
+    table: dict[tuple[str, str, str], dict[int, list[str]]] = {}
+    for vendor, release_date, training_model, model, ex in rows:
+        key = (vendor, training_model, str(release_date.date()))
+        table.setdefault(key, {3: [], 10: []})
+        if ex in (3, 10):
+            table[key][ex].append(model)
+        else:
+            table[key].setdefault(ex, []).append(model)
+    for (vendor, training_model, date), counts in table.items():
+        ex3 = "<br>".join(f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(3, []))
+        ex10 = "<br>".join(f"<a href='{m}/index.html'>{m}</a>" for m in counts.get(10, []))
+        body.append(
+            f"<tr><td>{vendor}</td><td>{training_model}</td><td>{date}</td><td>{ex3}</td><td>{ex10}</td></tr>"
+        )
+    body.append("</table>")
+    write_page(out_path, "Models", "\n".join(body))
 
 
 def generate_lexicostatistics_page(conn, out_dir: str) -> None:
@@ -863,22 +897,33 @@ def main() -> None:
     os.makedirs(base_dir, exist_ok=True)
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT dataset, config_file FROM datasets ORDER BY dataset")
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='datasets' AND column_name='short_summary'"
+    )
+    has_summary = cur.fetchone() is not None
+    cur.execute(
+        f"SELECT dataset, config_file{', short_summary' if has_summary else ''} FROM datasets ORDER BY dataset"
+    )
     datasets = cur.fetchall()
-    dataset_lookup = {d: c for d, c in datasets}
-    dataset_links = []
+    dataset_lookup = {d: c for d, c, *rest in datasets}
+    dataset_rows: List[tuple[str, str | None]] = []
     dataset_iter = datasets
     if args.progress_bar:
         import tqdm
         dataset_iter = tqdm.tqdm(datasets, desc="datasets")
-    for dataset, cfg_file in dataset_iter:
+    for row in dataset_iter:
+        dataset, cfg_file, *rest = row
+        summary = rest[0] if rest else None
         dataset_dir = os.path.join(base_dir, "dataset", dataset)
-        generate_dataset_page(conn, dataset, cfg_file, dataset_dir)
-        dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
+        generate_dataset_page(conn, dataset, cfg_file, dataset_dir, summary)
+        dataset_rows.append((dataset, summary))
+
+    generate_dataset_index_page(dataset_rows, os.path.join(base_dir, "dataset", "index.html"))
+    dataset_names = [d for d, _ in dataset_rows]
 
     cur.execute(
         """
-        SELECT lm.vendor, m.training_model, m.model, m.example_count
+        SELECT lm.vendor, lm.release_date, m.training_model, m.model, m.example_count
           FROM models m
           JOIN language_models lm ON m.training_model = lm.training_model
          ORDER BY lm.vendor, m.training_model, m.example_count, m.model
@@ -886,38 +931,32 @@ def main() -> None:
     )
     rows = cur.fetchall()
 
-    index_body = "<h2>Datasets</h2><ul>" + "".join(dataset_links) + "</ul>"
-    index_body += "<p><a href='lexicostatistics/index.html'>Lexicostatistics</a></p>"
-    index_body += "<h2>Models</h2>"
-
-    # group models by (vendor, training_model)
-    table: dict[tuple[str, str], dict[int, list[str]]] = {}
-    for vendor, training_model, model, ex in rows:
-        table.setdefault((vendor, training_model), {3: [], 10: []})
-        if ex in (3, 10):
-            table[(vendor, training_model)][ex].append(model)
-        else:
-            table[(vendor, training_model)].setdefault(ex, []).append(model)
+    for vendor, release_date, training_model, model, ex in rows:
         model_dir = os.path.join(base_dir, "model", model)
         generate_model_page(conn, model, model_dir, dataset_lookup)
 
-    index_body += (
-        "<table border='1'>\n"
-        "<tr><th>Vendor</th><th>Language model</th><th>examples=3" +
-        "</th><th>examples=10</th></tr>"
+    generate_model_index_page(rows, os.path.join(base_dir, "model", "index.html"))
+
+    index_body_parts = [
+        "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
+        "<p>This site serves as an observatory to track progress and compare ensembles to traditional explainable models.</p>",
+    ]
+    for d in dataset_names:
+        index_body_parts.append(f"<h2>{d}</h2>")
+        index_body_parts.append(
+            f"<img src='dataset/{d}/release_scores.png' alt='ensemble accuracy trend for {d}'>"
+        )
+    index_body_parts.append("<h2>Lexicostatistics</h2>")
+    index_body_parts.append(
+        "<img src='lexicostatistics/ensemble_prompt_herdan.png' alt='Prompt vocabulary trend'>"
     )
-    for (vendor, training_model), counts in table.items():
-        ex3 = "<br>".join(
-            f"<a href='model/{m}/index.html'>{m}</a>" for m in counts.get(3, [])
-        )
-        ex10 = "<br>".join(
-            f"<a href='model/{m}/index.html'>{m}</a>" for m in counts.get(10, [])
-        )
-        index_body += (
-            f"<tr><td>{vendor}</td><td>{training_model}</td>"
-            f"<td>{ex3}</td><td>{ex10}</td></tr>"
-        )
-    index_body += "</table>"
+    index_body_parts.append(
+        "<img src='lexicostatistics/ensemble_reasoning_herdan.png' alt='Reasoning vocabulary trend'>"
+    )
+    index_body_parts.append(
+        "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a></p>"
+    )
+    index_body = "\n".join(index_body_parts)
 
     # generate lexicostatistics page
     generate_lexicostatistics_page(conn, os.path.join(base_dir, "lexicostatistics"))
