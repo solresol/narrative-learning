@@ -3,6 +3,7 @@
 from __future__ import annotations
 import os
 import html
+import argparse
 from datetime import datetime
 from typing import List, Tuple, Optional
 
@@ -180,7 +181,14 @@ def generate_round_page(cfg: DatasetConfig, investigation_id: int, round_id: int
     write_page(os.path.join(out_dir, "index.html"), f"Round {round_id}", "\n".join(body))
 
 
-def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, base_dir: str) -> None:
+def generate_investigation_page(
+    conn,
+    dataset: str,
+    cfg_file: str,
+    inv_id: int,
+    base_dir: str,
+    progress: bool = False,
+) -> None:
     inv_dir = os.path.join(base_dir, "investigation", str(inv_id))
     os.makedirs(inv_dir, exist_ok=True)
     cur = conn.cursor()
@@ -257,7 +265,11 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed" +
         "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
     )
-    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
+    iterator = rounds
+    if progress:
+        import tqdm
+        iterator = tqdm.tqdm(rounds, desc=f"investigation {inv_id}")
+    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in iterator:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
         if v_acc is not None:
@@ -303,7 +315,9 @@ def generate_investigation_page(conn, dataset: str, cfg_file: str, inv_id: int, 
     write_page(os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body))
 
 
-def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> None:
+def generate_dataset_page(
+    conn, dataset: str, cfg_file: str, out_dir: str, progress: bool = False
+) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
     cur.execute(
@@ -332,9 +346,13 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
 
     body.append("<h2>Investigations</h2>")
     groups: dict[str, list[tuple[int, str]]] = {}
-    for inv_id, model, training_model in investigations:
+    iterator = investigations
+    if progress:
+        import tqdm
+        iterator = tqdm.tqdm(investigations, desc=f"dataset {dataset}")
+    for inv_id, model, training_model in iterator:
         groups.setdefault(training_model, []).append((inv_id, model))
-        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
+        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir, progress)
 
     for tm, rows in groups.items():
         body.append(f"<h3>{tm}</h3><ul>")
@@ -810,6 +828,10 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Export investigation results as static HTML")
+    parser.add_argument("--progress-bar", action="store_true", help="show progress bars")
+    args = parser.parse_args()
+
     base_dir = "website"
     os.makedirs(base_dir, exist_ok=True)
     conn = get_connection()
@@ -818,9 +840,13 @@ def main() -> None:
     datasets = cur.fetchall()
     dataset_lookup = {d: c for d, c in datasets}
     dataset_links = []
-    for dataset, cfg_file in datasets:
+    dataset_iter = datasets
+    if args.progress_bar:
+        import tqdm
+        dataset_iter = tqdm.tqdm(datasets, desc="datasets")
+    for dataset, cfg_file in dataset_iter:
         dataset_dir = os.path.join(base_dir, "dataset", dataset)
-        generate_dataset_page(conn, dataset, cfg_file, dataset_dir)
+        generate_dataset_page(conn, dataset, cfg_file, dataset_dir, args.progress_bar)
         dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
 
     cur.execute(
