@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
+import os
+import json
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegressionCV, LogisticRegression
@@ -12,8 +15,9 @@ from interpret.glassbox import ExplainableBoostingClassifier
 from datasetconfig import DatasetConfig
 from modules.postgres import get_connection, get_investigation_settings
 import sys
-import os
-import json
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -156,8 +160,74 @@ def preprocess_data(train_df, test_df, config):
     return X_train, y_train, X_test, y_test, feature_names, numeric_continuous_indices
 
 
-def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuous_indices):
-    """Train multiple baseline models and return accuracy metrics."""
+def extract_model_representation(name, clf, feature_names):
+    """Return structured data representing a trained model."""
+    if name == 'logistic regression':
+        return [
+            ('intercept', float(clf.intercept_[0])),
+            *[(feature, float(weight)) for feature, weight in zip(feature_names, clf.coef_[0])],
+        ]
+
+    if name == 'decision trees':
+        from io import StringIO
+        from sklearn.tree import export_graphviz
+
+        buf = StringIO()
+        export_graphviz(clf, out_file=buf, feature_names=feature_names)
+        return buf.getvalue()
+
+    if name == 'dummy':
+        return str(getattr(clf, 'constant_', [clf])[0])
+
+    if name == 'RuleFit':
+        try:
+            df = clf.get_rules()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to extract RuleFit rules: %s", e)
+            return []
+        rows = []
+        idx = 0
+        for _, r in df.iterrows():
+            if r.get('type') == 'rule':
+                rows.append((idx, r['rule'], float(r['coef'])))
+                idx += 1
+        return rows
+
+    if name == 'BayesianRuleList':
+        rows = []
+        for i, rule in enumerate(getattr(clf, 'rule_list_', [])):
+            prob = getattr(rule, 'p', None)
+            rows.append((i, str(rule), float(prob) if prob is not None else None))
+        return rows
+
+    if name == 'CORELS':
+        rules = getattr(getattr(clf, 'rl', None), 'rules', [])
+        return [(i, str(rule)) for i, rule in enumerate(rules)]
+
+    if name == 'EBM':
+        rows = []
+        additive = getattr(clf, 'additive_terms_', [])
+        for fname, term in zip(feature_names, additive):
+            try:
+                term_list = [float(x) for x in term.tolist()]
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Failed to convert EBM term for %s: %s", fname, e)
+                term_list = [float(x) for x in term]
+            rows.append((fname, term_list))
+        return rows
+
+    return None
+
+
+def train_and_evaluate_models(
+    X_train,
+    y_train,
+    X_test,
+    y_test,
+    numeric_continuous_indices,
+    feature_names,
+):
+    """Train multiple baseline models and return accuracy metrics and representations."""
     from statsmodels.stats.proportion import proportion_confint
 
     models = {
@@ -198,6 +268,7 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuo
         X_train_discrete, X_test_discrete = X_train, X_test
 
     accuracies = {}
+    representations = {}
     for name, clf in models.items():
         if name in {'BayesianRuleList', 'CORELS'}:
             clf.fit(X_train_discrete, y_train)
@@ -205,6 +276,7 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuo
         else:
             clf.fit(X_train, y_train)
             accuracies[name] = clf.score(X_test, y_test)
+        representations[name] = extract_model_representation(name, clf, feature_names)
 
     n_test = len(y_test)
     correct_counts = {name: round(acc * n_test) for name, acc in accuracies.items()}
@@ -232,7 +304,7 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuo
     for name in models:
         print(f"{name}: accuracy = {accuracies[name]:.4f} (95% CI Lower Bound: {lower_bounds[name]:.4f})")
 
-    return output
+    return output, representations
 
 
 def main():
@@ -270,7 +342,14 @@ def main():
         sys.exit("Error: No usable features found after preprocessing")
 
     # Train and evaluate models
-    results = train_and_evaluate_models(X_train, y_train, X_test, y_test, numeric_continuous_indices)
+    results, representations = train_and_evaluate_models(
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        numeric_continuous_indices,
+        feature_names,
+    )
 
     if args.output:
         with open(args.output, 'w') as f:
@@ -278,47 +357,96 @@ def main():
 
     if dataset:
         cur = conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS baseline_results (
-                dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
-                logistic_regression DOUBLE PRECISION,
-                decision_trees DOUBLE PRECISION,
-                dummy DOUBLE PRECISION,
-                rulefit DOUBLE PRECISION,
-                bayesian_rule_list DOUBLE PRECISION,
-                corels DOUBLE PRECISION,
-                ebm DOUBLE PRECISION
+        try:
+            cur.execute(
+                """
+                INSERT INTO baseline_results (
+                    dataset, logistic_regression, decision_trees, dummy,
+                    rulefit, bayesian_rule_list, corels, ebm
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (dataset) DO UPDATE SET
+                    logistic_regression=EXCLUDED.logistic_regression,
+                    decision_trees=EXCLUDED.decision_trees,
+                    dummy=EXCLUDED.dummy,
+                    rulefit=EXCLUDED.rulefit,
+                    bayesian_rule_list=EXCLUDED.bayesian_rule_list,
+                    corels=EXCLUDED.corels,
+                    ebm=EXCLUDED.ebm
+                """,
+                (
+                    dataset,
+                    results['logistic regression']['lower_bound'],
+                    results['decision trees']['lower_bound'],
+                    results['dummy']['lower_bound'],
+                    results['RuleFit']['lower_bound'],
+                    results['BayesianRuleList']['lower_bound'],
+                    results['CORELS']['lower_bound'],
+                    results['EBM']['lower_bound'],
+                ),
             )
-            """
-        )
-        cur.execute(
-            """
-            INSERT INTO baseline_results (
-                dataset, logistic_regression, decision_trees, dummy,
-                rulefit, bayesian_rule_list, corels, ebm
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (dataset) DO UPDATE SET
-                logistic_regression=EXCLUDED.logistic_regression,
-                decision_trees=EXCLUDED.decision_trees,
-                dummy=EXCLUDED.dummy,
-                rulefit=EXCLUDED.rulefit,
-                bayesian_rule_list=EXCLUDED.bayesian_rule_list,
-                corels=EXCLUDED.corels,
-                ebm=EXCLUDED.ebm
-            """,
-            (
-                dataset,
-                results['logistic regression']['lower_bound'],
-                results['decision trees']['lower_bound'],
-                results['dummy']['lower_bound'],
-                results['RuleFit']['lower_bound'],
-                results['BayesianRuleList']['lower_bound'],
-                results['CORELS']['lower_bound'],
-                results['EBM']['lower_bound'],
-            ),
-        )
-        conn.commit()
+            cur.execute("DELETE FROM baseline_logreg WHERE dataset = %s", (dataset,))
+            cur.executemany(
+                "INSERT INTO baseline_logreg (dataset, feature, weight) VALUES (%s, %s, %s)",
+                [
+                    (dataset, feat, weight)
+                    for feat, weight in representations.get("logistic regression", [])
+                ],
+            )
+
+            cur.execute("DELETE FROM baseline_decision_tree WHERE dataset = %s", (dataset,))
+            dot = representations.get("decision trees")
+            if dot is not None:
+                cur.execute(
+                    "INSERT INTO baseline_decision_tree (dataset, dot_data) VALUES (%s, %s)",
+                    (dataset, dot),
+                )
+
+            cur.execute(
+                "INSERT INTO baseline_dummy (dataset, constant_value) VALUES (%s, %s)"
+                " ON CONFLICT (dataset) DO UPDATE SET constant_value = EXCLUDED.constant_value",
+                (dataset, representations.get("dummy")),
+            )
+
+            cur.execute("DELETE FROM baseline_rulefit WHERE dataset = %s", (dataset,))
+            cur.executemany(
+                "INSERT INTO baseline_rulefit (dataset, rule_index, rule, weight) VALUES (%s, %s, %s, %s)",
+                [
+                    (dataset, idx, rule, wt)
+                    for idx, rule, wt in representations.get("RuleFit", [])
+                ],
+            )
+
+            cur.execute("DELETE FROM baseline_bayesian_rule_list WHERE dataset = %s", (dataset,))
+            cur.executemany(
+                "INSERT INTO baseline_bayesian_rule_list (dataset, rule_order, rule, probability) VALUES (%s, %s, %s, %s)",
+                [
+                    (dataset, idx, rule, prob)
+                    for idx, rule, prob in representations.get("BayesianRuleList", [])
+                ],
+            )
+
+            cur.execute("DELETE FROM baseline_corels WHERE dataset = %s", (dataset,))
+            cur.executemany(
+                "INSERT INTO baseline_corels (dataset, rule_order, rule) VALUES (%s, %s, %s)",
+                [
+                    (dataset, idx, rule)
+                    for idx, rule in representations.get("CORELS", [])
+                ],
+            )
+
+            cur.execute("DELETE FROM baseline_ebm WHERE dataset = %s", (dataset,))
+            cur.executemany(
+                "INSERT INTO baseline_ebm (dataset, feature, contributions) VALUES (%s, %s, %s)",
+                [
+                    (dataset, feat, contrib)
+                    for feat, contrib in representations.get("EBM", [])
+                ],
+            )
+
+            conn.commit()
+        except Exception:  # noqa: BLE001
+            conn.rollback()
+            raise
 
     # Close database connection
     conn.close()

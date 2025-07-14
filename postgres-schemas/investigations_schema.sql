@@ -33,3 +33,50 @@ CREATE TABLE baseline_results (
     corels DOUBLE PRECISION,
     ebm DOUBLE PRECISION
 );
+
+CREATE TABLE baseline_logreg (
+    dataset TEXT REFERENCES datasets(dataset),
+    feature TEXT,
+    weight DOUBLE PRECISION,
+    PRIMARY KEY (dataset, feature)
+);
+
+CREATE TABLE baseline_decision_tree (
+    dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+    dot_data TEXT
+);
+
+CREATE TABLE baseline_dummy (
+    dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
+    constant_value TEXT
+);
+
+CREATE TABLE baseline_rulefit (
+    dataset TEXT REFERENCES datasets(dataset),
+    rule_index INTEGER,
+    rule TEXT,
+    weight DOUBLE PRECISION,
+    PRIMARY KEY (dataset, rule_index)
+);
+
+CREATE TABLE baseline_bayesian_rule_list (
+    dataset TEXT REFERENCES datasets(dataset),
+    rule_order INTEGER,
+    rule TEXT,
+    probability DOUBLE PRECISION,
+    PRIMARY KEY (dataset, rule_order)
+);
+
+CREATE TABLE baseline_corels (
+    dataset TEXT REFERENCES datasets(dataset),
+    rule_order INTEGER,
+    rule TEXT,
+    PRIMARY KEY (dataset, rule_order)
+);
+
+CREATE TABLE baseline_ebm (
+    dataset TEXT REFERENCES datasets(dataset),
+    feature TEXT,
+    contributions DOUBLE PRECISION[],
+    PRIMARY KEY (dataset, feature)
+);
