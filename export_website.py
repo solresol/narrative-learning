@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import html
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple, Optional
 import subprocess
 import tempfile
@@ -139,8 +139,8 @@ def plot_release_chart(
         ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
         if best_baseline_y is not None and slope > 0:
             cross_x = (best_baseline_y - intercept) / slope
-            cross_date = mdates.num2date(cross_x)
-            if datetime(2024, 8, 1) <= cross_date <= datetime(2027, 1, 1):
+            cross_date = mdates.num2date(cross_x, tz=timezone.utc)
+            if datetime(2024, 8, 1, tzinfo=timezone.utc) <= cross_date <= datetime(2027, 1, 1, tzinfo=timezone.utc):
                 ax.axvline(cross_date, linestyle=":", color="gray")
                 ax.annotate(
                     cross_date.strftime("%Y-%m-%d"),
