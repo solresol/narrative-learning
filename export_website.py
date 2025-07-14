@@ -187,7 +187,6 @@ def generate_investigation_page(
     cfg_file: str,
     inv_id: int,
     base_dir: str,
-    progress: bool = False,
 ) -> None:
     inv_dir = os.path.join(base_dir, "investigation", str(inv_id))
     os.makedirs(inv_dir, exist_ok=True)
@@ -265,11 +264,7 @@ def generate_investigation_page(
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed" +
         "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
     )
-    iterator = rounds
-    if progress:
-        import tqdm
-        iterator = tqdm.tqdm(rounds, desc=f"investigation {inv_id}")
-    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in iterator:
+    for r_id, r_uuid, r_start, r_completed, train_acc, v_acc, t_acc, inf_count in rounds:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
         if v_acc is not None:
@@ -316,7 +311,7 @@ def generate_investigation_page(
 
 
 def generate_dataset_page(
-    conn, dataset: str, cfg_file: str, out_dir: str, progress: bool = False
+    conn, dataset: str, cfg_file: str, out_dir: str
 ) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
@@ -346,13 +341,9 @@ def generate_dataset_page(
 
     body.append("<h2>Investigations</h2>")
     groups: dict[str, list[tuple[int, str]]] = {}
-    iterator = investigations
-    if progress:
-        import tqdm
-        iterator = tqdm.tqdm(investigations, desc=f"dataset {dataset}")
-    for inv_id, model, training_model in iterator:
+    for inv_id, model, training_model in investigations:
         groups.setdefault(training_model, []).append((inv_id, model))
-        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir, progress)
+        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
 
     for tm, rows in groups.items():
         body.append(f"<h3>{tm}</h3><ul>")
@@ -846,7 +837,7 @@ def main() -> None:
         dataset_iter = tqdm.tqdm(datasets, desc="datasets")
     for dataset, cfg_file in dataset_iter:
         dataset_dir = os.path.join(base_dir, "dataset", dataset)
-        generate_dataset_page(conn, dataset, cfg_file, dataset_dir, args.progress_bar)
+        generate_dataset_page(conn, dataset, cfg_file, dataset_dir)
         dataset_links.append(f"<li><a href='dataset/{dataset}/index.html'>{dataset}</a></li>")
 
     cur.execute(
