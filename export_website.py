@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from modules.postgres import get_connection, get_investigation_settings
+from modules.results_loader import load_results_dataframe
 from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
@@ -40,17 +41,15 @@ def get_split_id(cfg: DatasetConfig) -> int:
 
 
 def plot_release_chart(
-    conn, dataset: str, csv_path: str, out_path: str, dataset_size: int
+    conn, dataset: str, df: pd.DataFrame, out_path: str, dataset_size: int
 ) -> Optional[tuple[float, float, float]]:
     """Plot test scores by model release date for a dataset.
 
     Returns the slope, intercept and p-value of the regression line calculated
     over the ensemble maximum scores, or ``None`` if no ensemble data exists.
     """
-    if not os.path.exists(csv_path):
+    if df.empty:
         return None
-
-    df = pd.read_csv(csv_path)
     cur = conn.cursor()
     cur.execute(
         "SELECT training_model, release_date, ollama_hosted FROM language_models"
@@ -343,10 +342,12 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             body.append(f"<li><a href='investigation/{inv_id}/index.html'>{inv_id} ({model})</a></li>")
         body.append("</ul>")
 
+    # Load results directly from the database
+    df_results = load_results_dataframe(conn, dataset, cfg_file)
+
     # Plot test results by model release date
-    results_csv = os.path.join("outputs", f"{dataset}_results.csv")
     chart_file = os.path.join(out_dir, "release_scores.png")
-    stats = plot_release_chart(conn, dataset, results_csv, chart_file, dataset_size)
+    stats = plot_release_chart(conn, dataset, df_results, chart_file, dataset_size)
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
         body.append(f"<img src='release_scores.png' alt='scores by release date'>")
@@ -356,8 +357,8 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
                 f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.3g}</p>"
             )
 
-    if os.path.exists(results_csv):
-        df = pd.read_csv(results_csv)
+    if not df_results.empty:
+        df = df_results.copy()
         cur.execute(
             "SELECT training_model, release_date, ollama_hosted FROM language_models"
         )

@@ -10,13 +10,9 @@ import sys
 from sklearn.linear_model import LinearRegression
 import statsmodels.api as sm
 from chartutils import draw_baselines
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
-def load_data(file_path):
-    """Load data from a CSV file."""
-    df = pd.read_csv(file_path)
-    # Convert accuracy to numeric, handling any missing values
-    df['Accuracy'] = pd.to_numeric(df['Accuracy'], errors='coerce')
-    return df
 
 def load_elo_data(file_path):
     """Load ELO data from a CSV file."""
@@ -252,7 +248,6 @@ def calculate_projection(df, elo_threshold=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create ELO rating vs error rate plot from CSV data.')
     parser.add_argument("--dataset", required=True, help="Dataset name for the plot title")
-    parser.add_argument('--input', required=True, help='Path to the input results CSV file')
     parser.add_argument('--elo', required=True, help='Path to the ELO ratings CSV file')
     parser.add_argument('--elo-translation', help='Path to JSON file with model name translations')
     parser.add_argument('--output', required=True, help='Output image file path')
@@ -261,13 +256,13 @@ if __name__ == "__main__":
     parser.add_argument('--threshold', type=float, help='Specific ELO threshold to calculate projection for')
     args = parser.parse_args()
     
-    # Load the data
-    df = load_data(args.input)
-    
-    # Check if data was loaded successfully
-    if df.empty:
-        print("Error: No data loaded from the results CSV file.")
-        sys.exit(1)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (args.dataset,))
+    cfg_row = cur.fetchone()
+    if not cfg_row:
+        raise SystemExit(f"dataset {args.dataset} not found")
+    df = load_results_dataframe(conn, args.dataset, cfg_row[0])
     
     # Load ELO data
     try:
@@ -313,7 +308,7 @@ if __name__ == "__main__":
         df = df.drop(rows_to_drop).reset_index(drop=True)
     
     # Print summary of the data
-    print(f"Loaded {len(df)} rows from {args.input}")
+    print(f"Loaded {len(df)} rows for {args.dataset}")
     print("\nData Summary:")
     print(df[['Model', 'ELO', 'Accuracy', 'Neg Log Error']].describe())
     

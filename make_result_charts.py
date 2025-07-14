@@ -9,13 +9,9 @@ import json
 import sklearn.linear_model
 import statsmodels.api as sm
 import sys
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
-def load_data(file_path):
-    """Load data from a CSV file."""
-    df = pd.read_csv(file_path)
-    # Convert accuracy to numeric, handling any missing values
-    df['Accuracy'] = pd.to_numeric(df['Accuracy'], errors='coerce')
-    return df
 
 def plot_prompt_word_count_vs_accuracy(df, output_prefix):
     """Plot Prompt Word Count vs Accuracy."""
@@ -269,9 +265,8 @@ def name_model(record):
     return f"{name_lookup[env_name]}, {sample_size} samples"
 
 def main():
-    parser = argparse.ArgumentParser(description='Create model analysis plots from CSV data.')
-    parser.add_argument("--dataset-name", required=True, help="Used in the plot title")
-    parser.add_argument('--input', required=True, help='Path to the input CSV file')
+    parser = argparse.ArgumentParser(description='Create model analysis plots from database results.')
+    parser.add_argument("--dataset", required=True, help="Dataset name")
     parser.add_argument('--output', required=True, help='Prefix for output plot files')
     parser.add_argument("--baselines", required=True, help="Path the JSON file of baselines for this data")
     args = parser.parse_args()
@@ -280,12 +275,13 @@ def main():
     error_rate_baseline = { x: 1 - y for x,y in baselines.items() }
     neg_log_error_rate_baseline = { x : - math.log10(y) if y > 0 else math.log10(0.01) for x,y in error_rate_baseline.items() }
     # Load the data
-    df = load_data(args.input)
-
-    # Check if data was loaded successfully
-    if df.empty:
-        print("Error: No data loaded from the CSV file.")
-        return
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (args.dataset,))
+    cfg_row = cur.fetchone()
+    if not cfg_row:
+        raise SystemExit(f"dataset {args.dataset} not found")
+    df = load_results_dataframe(conn, args.dataset, cfg_row[0])
 
     df['Display_Name'] = df.apply(name_model, axis=1)
     df['Official_Name'] = df.Model.map(name_lookup.get)
@@ -297,7 +293,7 @@ def main():
     df = df[df.Accuracy > baselines['dummy']]
     # If the next line errors, it's because the error rate was 0
     # Print summary of the data
-    print(f"Loaded {len(df)} rows from {args.input}")
+    print(f"Loaded {len(df)} rows for {args.dataset}")
     print("\nData Summary:")
     print(df.describe())
 

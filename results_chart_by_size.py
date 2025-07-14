@@ -9,13 +9,9 @@ import json
 import sklearn.linear_model
 import statsmodels.api as sm
 from chartutils import draw_baselines
+from modules.postgres import get_connection
+from modules.results_loader import load_results_dataframe
 
-def load_data(file_path):
-    """Load data from a CSV file."""
-    df = pd.read_csv(file_path)
-    # Convert accuracy to numeric, handling any missing values
-    df['Accuracy'] = pd.to_numeric(df['Accuracy'], errors='coerce')
-    return df
 
 def plot_log_model_size_vs_log_error(df, output_prefix, dataset_name, pvalue_file=None):
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -151,27 +147,26 @@ def calculate_projection(df):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description='Create model size vs error rate plot from CSV data.')
-    parser.add_argument("--dataset-name", required=True, help="Used in the plot title")
-    parser.add_argument('--input', required=True, help='Path to the input CSV file')
+    parser = argparse.ArgumentParser(description='Create model size vs error rate plot from database results.')
+    parser.add_argument('--dataset', required=True, help='Dataset name')
     parser.add_argument('--image', required=True, help='Output image file path')
     parser.add_argument('--pvalue', help='File to save the p-value to (just the value, nothing else)')
     parser.add_argument('--projection', help='File to save parameter projection to')
     args = parser.parse_args()
-    
-    # Load the data
-    df = load_data(args.input)
 
-    # Check if data was loaded successfully
-    if df.empty:
-        print("Error: No data loaded from the CSV file.")
-        return
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT config_file FROM datasets WHERE dataset = %s", (args.dataset,))
+    cfg_row = cur.fetchone()
+    if not cfg_row:
+        raise SystemExit(f"dataset {args.dataset} not found")
+    df = load_results_dataframe(conn, args.dataset, cfg_row[0])
 
     df['Display_Name'] = df.apply(name_model, axis=1)
     df['Log_Model_Size'] = (df['Model Size'] * 1000000000.0).map(math.log10)
     
     # Print summary of the data
-    print(f"Loaded {len(df)} rows from {args.input}")
+    print(f"Loaded {len(df)} rows for {args.dataset}")
     print("\nData Summary:")
     print(df.describe())
 
@@ -186,7 +181,7 @@ def main():
             print(f"Saved projection to {args.projection}")
 
     # Create the plot
-    plot_log_model_size_vs_log_error(df, args.image, args.dataset_name, args.pvalue)
+    plot_log_model_size_vs_log_error(df, args.image, args.dataset, args.pvalue)
 
     print("\nPlot created successfully!")
 
