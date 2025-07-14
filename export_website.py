@@ -785,7 +785,7 @@ def generate_model_index_page(
             axis=1,
         )
         pivot = full_df.pivot_table(
-            index=["Task", "Model"], columns="Patience", values="Neg Log KT"
+            index=["Task", "Model"], columns="Sampler", values="Neg Log KT"
         )
         plot_df = pivot.dropna(subset=[3, 10])
         if not plot_df.empty:
@@ -794,10 +794,10 @@ def generate_model_index_page(
             lo = min(plot_df[3].min(), plot_df[10].min())
             hi = max(plot_df[3].max(), plot_df[10].max())
             ax.plot([lo, hi], [lo, hi], "r--")
-            ax.set_xlabel("-log10 KT (patience=3)")
-            ax.set_ylabel("-log10 KT (patience=10)")
+            ax.set_xlabel("-log10 KT (examples=3)")
+            ax.set_ylabel("-log10 KT (examples=10)")
             fig.tight_layout()
-            scatter_file = os.path.join(os.path.dirname(out_path), "patience_scatter.png")
+            scatter_file = os.path.join(os.path.dirname(out_path), "examples_scatter.png")
             plt.savefig(scatter_file)
             plt.close(fig)
 
@@ -807,15 +807,15 @@ def generate_model_index_page(
             ax.set_xlabel("Difference in -log10 KT")
             ax.set_ylabel("Frequency")
             fig.tight_layout()
-            hist_file = os.path.join(os.path.dirname(out_path), "patience_diff_hist.png")
+            hist_file = os.path.join(os.path.dirname(out_path), "examples_diff_hist.png")
             plt.savefig(hist_file)
             plt.close(fig)
 
             stat, pval = wilcoxon(plot_df[10], plot_df[3])
 
-            body.append("<h2>Patience Comparison</h2>")
-            body.append(f"<img src='patience_scatter.png' alt='patience scatter'>")
-            body.append(f"<img src='patience_diff_hist.png' alt='difference histogram'>")
+            body.append("<h2>Example Count Comparison</h2>")
+            body.append(f"<img src='examples_scatter.png' alt='examples scatter'>")
+            body.append(f"<img src='examples_diff_hist.png' alt='difference histogram'>")
             body.append(f"<p>Wilcoxon statistic: {stat:.2f}, p-value: {pval:.3g}</p>")
 
     write_page(out_path, "Models", "\n".join(body))
