@@ -218,10 +218,10 @@ def extract_model_representation(name, clf, feature_names):
         names = getattr(clf, 'term_names_', feature_names)
         for fname, term in zip(names, scores):
             try:
-                term_list = [float(x) for x in term.tolist()]
+                term_list = np.asarray(term, dtype=float).ravel().tolist()
             except Exception as e:  # noqa: BLE001
                 logger.warning("Failed to convert EBM term for %s: %s", fname, e)
-                term_list = [float(x) for x in term]
+                term_list = [float(x) for x in np.ravel(term)]
             rows.append((fname, term_list))
         return rows
 
