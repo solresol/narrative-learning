@@ -4,8 +4,12 @@ Utility functions for generating and formatting charts in the narrative-learning
 """
 
 import math
+from datetime import datetime
+
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import pandas as pd
 from modules.metrics import accuracy_to_kt
 
 
@@ -39,9 +43,16 @@ def draw_baselines(ax, df, xpos=None, dataset_size=None):
     xlim = ax.get_xlim()
     if xpos is None:
         start, end = xlim
+        convert_dates = False
     else:
         start, end = xlim[0], xpos
+        convert_dates = isinstance(end, (datetime, pd.Timestamp, np.datetime64))
+
+    if convert_dates:
+        end = mdates.date2num(end)
     x_positions = np.linspace(start, end, len(names))
+    if convert_dates:
+        x_positions = mdates.num2date(x_positions)
 
     for model, xpos_val in zip(names, x_positions):
         score = df[model].mean()
