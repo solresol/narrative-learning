@@ -53,32 +53,25 @@ def load_results_dataframe(conn, dataset: str, cfg_file: str, model_details_file
     for inv_id, run_name, training_model, patience, sampler in investigations:
         cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
         split_id = cfg.get_latest_split_id()
-        try:
-            best_round = cfg.get_best_round_id(split_id, "accuracy")
-            val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
-            val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
-            test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
-        except Exception:
-            val_acc = test_acc = None
-            best_round = None
+        best_round = cfg.get_best_round_id(split_id, "accuracy")
+        val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+        val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+        test_acc = cfg.get_test_metric_for_best_validation_round(split_id, "accuracy")
         prompt_word_count = reasoning_word_count = cumul_reasoning_words = 0
         herdan_coeff = herdan_r2 = zipf_coeff = zipf_r2 = None
         if best_round is not None:
-            try:
-                prompt = cfg.get_round_prompt(best_round)
-                reasoning = cfg.get_round_reasoning(best_round)
-                prompt_word_count = count_words(prompt)
-                reasoning_word_count = count_words(reasoning)
-                totals = cfg.get_total_word_count(split_id, best_round)
-                cumul_reasoning_words = totals["reasoning_words"]
-                herdan = cfg.calculate_herdans_law(split_id)
-                zipf = cfg.calculate_zipfs_law(split_id)
-                herdan_coeff = herdan["coefficient"]
-                herdan_r2 = herdan["r_squared"]
-                zipf_coeff = zipf["coefficient"]
-                zipf_r2 = zipf["r_squared"]
-            except Exception:
-                pass
+            prompt = cfg.get_round_prompt(best_round)
+            reasoning = cfg.get_round_reasoning(best_round)
+            prompt_word_count = count_words(prompt)
+            reasoning_word_count = count_words(reasoning)
+            totals = cfg.get_total_word_count(split_id, best_round)
+            cumul_reasoning_words = totals["reasoning_words"]
+            herdan = cfg.calculate_herdans_law(split_id)
+            zipf = cfg.calculate_zipfs_law(split_id)
+            herdan_coeff = herdan["coefficient"]
+            herdan_r2 = herdan["r_squared"]
+            zipf_coeff = zipf["coefficient"]
+            zipf_r2 = zipf["r_squared"]
         model_size = model_details.get(run_name, {}).get("parameters", "")
         lower_bound = None
         neg_log_error = None
