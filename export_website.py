@@ -460,6 +460,86 @@ def generate_dataset_page(conn, dataset: str, cfg_file: str, out_dir: str) -> No
             body.append(f"<tr><td>{name}</td><td>{display_acc}</td><td>{display_kt}</td></tr>")
         body.append("</table>")
 
+        body.append("<h2>Baseline Models</h2>")
+
+        cur.execute(
+            "SELECT feature, weight FROM baseline_logreg WHERE dataset = %s ORDER BY feature",
+            (dataset,),
+        )
+        rows = cur.fetchall()
+        if rows:
+            body.append("<h3>Logistic Regression</h3>")
+            body.append("<table border='1'><tr><th>Feature</th><th>Weight</th></tr>")
+            for feat, wt in rows:
+                body.append(f"<tr><td>{html.escape(feat)}</td><td>{wt:.3f}</td></tr>")
+            body.append("</table>")
+
+        cur.execute(
+            "SELECT dot_data FROM baseline_decision_tree WHERE dataset = %s",
+            (dataset,),
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            body.append("<h3>Decision Tree</h3>")
+            body.append(f"<pre class='graphviz'>{html.escape(row[0])}</pre>")
+
+        cur.execute(
+            "SELECT constant_value FROM baseline_dummy WHERE dataset = %s",
+            (dataset,),
+        )
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            body.append("<h3>Dummy</h3>")
+            body.append("<pre>" + html.escape(str(row[0])) + "</pre>")
+
+        cur.execute(
+            "SELECT rule_index, rule, weight FROM baseline_rulefit WHERE dataset = %s ORDER BY rule_index",
+            (dataset,),
+        )
+        rows = cur.fetchall()
+        if rows:
+            body.append("<h3>RuleFit</h3>")
+            body.append("<table border='1'><tr><th>#</th><th>Rule</th><th>Weight</th></tr>")
+            for idx, rule, wt in rows:
+                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{wt:.3f}</td></tr>")
+            body.append("</table>")
+
+        cur.execute(
+            "SELECT rule_order, rule, probability FROM baseline_bayesian_rule_list WHERE dataset = %s ORDER BY rule_order",
+            (dataset,),
+        )
+        rows = cur.fetchall()
+        if rows:
+            body.append("<h3>Bayesian Rule List</h3>")
+            body.append("<table border='1'><tr><th>#</th><th>Rule</th><th>Probability</th></tr>")
+            for idx, rule, prob in rows:
+                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{prob:.3f}</td></tr>")
+            body.append("</table>")
+
+        cur.execute(
+            "SELECT rule_order, rule FROM baseline_corels WHERE dataset = %s ORDER BY rule_order",
+            (dataset,),
+        )
+        rows = cur.fetchall()
+        if rows:
+            body.append("<h3>CORELS</h3>")
+            body.append("<ol>")
+            for _, rule in rows:
+                body.append(f"<li>{html.escape(rule)}</li>")
+            body.append("</ol>")
+
+        cur.execute(
+            "SELECT feature, contributions FROM baseline_ebm WHERE dataset = %s ORDER BY feature",
+            (dataset,),
+        )
+        rows = cur.fetchall()
+        if rows:
+            body.append("<h3>EBM</h3>")
+            body.append("<table border='1'><tr><th>Feature</th><th>Contribution Data</th></tr>")
+            for feat, contrib in rows:
+                body.append(f"<tr><td>{html.escape(feat)}</td><td>{html.escape(str(contrib))}</td></tr>")
+            body.append("</table>")
+
     write_page(os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body))
 
 

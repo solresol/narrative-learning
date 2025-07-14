@@ -54,7 +54,9 @@ PGUSER=root uv run baseline.py --dataset <dataset>
 `baseline.py` will look up the configuration path for the given dataset from
 the `datasets` table if `--config` is not supplied.
 
-Run this once per dataset to fill the `baseline_results` table.
+Run this once per dataset to fill the `baseline_results` table and the `baseline_*` tables.
+Each `baseline_*` table stores interpretable model data (e.g. logistic regression
+weights or decision tree graphs) so the website can display the trained models.
 
 Then copy everything from `outputs/*_results.csv`
 
