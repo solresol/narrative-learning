@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime
 from typing import List, Tuple, Optional
 import subprocess
+import tempfile
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -505,21 +506,26 @@ def generate_dataset_page(
         if row and row[0]:
             body.append("<h3>Decision Tree</h3>")
             dot_data = row[0]
-            dot_path = os.path.join(out_dir, "decision_tree.dot")
-            img_path = os.path.join(out_dir, "decision_tree.png")
-            with open(dot_path, "w", encoding="utf-8") as f:
-                f.write(dot_data)
+            img_name = "decision_tree.png"
+            img_path = os.path.join(out_dir, img_name)
+            dot_path = None
             try:
+                with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as tf:
+                    tf.write(dot_data)
+                    dot_path = tf.name
                 subprocess.run([
                     "dot",
                     "-Tpng",
                     dot_path,
                     "-o",
                     img_path,
-                ], check=True)
-                body.append(f"<img src='decision_tree.png' alt='decision tree'>")
-            except Exception:
+                ], check=True, timeout=30)
+                body.append(f"<img src='{img_name}' alt='decision tree'>")
+            except (subprocess.CalledProcessError, FileNotFoundError):
                 body.append(f"<pre class='graphviz'>{html.escape(dot_data)}</pre>")
+            finally:
+                if dot_path and os.path.exists(dot_path):
+                    os.remove(dot_path)
 
         cur.execute(
             "SELECT constant_value FROM baseline_dummy WHERE dataset = %s",
