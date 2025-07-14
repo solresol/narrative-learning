@@ -284,7 +284,7 @@ def generate_investigation_page(
     body.append("</table>")
 
     if df_rounds.empty:
-        raise RuntimeError("no rounds data found")
+        raise RuntimeError(f"no rounds data found for investigation {inv_id}")
     plot_df = (
         df_rounds.dropna(subset=["val_acc"]).sort_values("round_start").reset_index(drop=True)
     )
