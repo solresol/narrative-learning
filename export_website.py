@@ -586,7 +586,7 @@ def generate_model_page(conn, model: str, out_dir: str, dataset_lookup: dict[str
         )
     body.append("</ul>")
     if not perf_rows:
-        raise RuntimeError("no investigation performance data found")
+        raise RuntimeError(f"no investigation performance data found for {model}")
     body.append("<h2>Performance</h2><table border='1'>")
     body.append("<tr><th>Dataset</th><th>Validation accuracy</th><th>Test accuracy</th></tr>")
     for d, v, t in perf_rows:
