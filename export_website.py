@@ -80,6 +80,7 @@ def plot_release_chart(
         (dataset,),
     )
     row = cur.fetchone()
+    best_baseline_y = None
     if row:
         cols_db = [
             "logistic_regression",
@@ -99,8 +100,13 @@ def plot_release_chart(
             "corels",
             "ebm",
         ]
+        baseline_vals = []
         for col_db, col_df, val in zip(cols_db, cols_df, row):
             df[col_df] = val
+            if val is not None:
+                baseline_vals.append(-accuracy_to_kt(val, dataset_size))
+        if baseline_vals:
+            best_baseline_y = max(baseline_vals)
 
     ens_df = get_interesting_ensembles(conn, dataset)
     if ens_df.empty:
@@ -109,7 +115,7 @@ def plot_release_chart(
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
     ax.set_xlabel("Model release date")
-    ax.set_ylabel("log10 KT accuracy")
+    ax.set_ylabel("-log10 KT accuracy")
     draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
 
     ens_df = ens_df.copy()
@@ -131,10 +137,24 @@ def plot_release_chart(
         slope, intercept, r, pval, std = linregress(x, y)
         xs = np.linspace(x.min(), x.max(), 100)
         ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
+        if best_baseline_y is not None and slope > 0:
+            cross_x = (best_baseline_y - intercept) / slope
+            cross_date = mdates.num2date(cross_x)
+            if datetime(2024, 8, 1) <= cross_date <= datetime(2027, 1, 1):
+                ax.axvline(cross_date, linestyle=":", color="gray")
+                ax.annotate(
+                    cross_date.strftime("%Y-%m-%d"),
+                    xy=(cross_date, best_baseline_y),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    rotation=90,
+                    ha="center",
+                    va="bottom",
+                )
     else:
         slope = intercept = pval = float("nan")
 
-    ax.set_title("Test scores by release date")
+    ax.set_title(f"{dataset} test scores by release date")
 
     ax.legend()
     fig.tight_layout()
