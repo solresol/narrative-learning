@@ -557,7 +557,8 @@ def generate_dataset_page(
             body.append("<h3>Bayesian Rule List</h3>")
             body.append("<table border='1'><tr><th>#</th><th>Rule</th><th>Probability</th></tr>")
             for idx, rule, prob in rows:
-                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{prob:.3f}</td></tr>")
+                prob_disp = f"{prob:.3f}" if prob is not None else "n/a"
+                body.append(f"<tr><td>{idx}</td><td>{html.escape(rule)}</td><td>{prob_disp}</td></tr>")
             body.append("</table>")
 
         cur.execute(
