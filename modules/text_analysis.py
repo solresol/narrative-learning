@@ -111,7 +111,10 @@ def calculate_zipfs_law(text_list: List[str]) -> Dict[str, Union[float, dict]]:
         y_pred = slope * log_ranks + intercept
         ss_total = np.sum((log_frequencies - np.mean(log_frequencies))**2)
         ss_residual = np.sum((log_frequencies - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
+        if ss_total == 0:
+            r_squared = 0.0
+        else:
+            r_squared = 1 - (ss_residual / ss_total)
         
         zipf_coefficients.append(zipf_coefficient)
         r_squared_values.append(r_squared)
@@ -207,7 +210,10 @@ def calculate_herdans_law(text_list: List[str]) -> Dict[str, Union[float, dict]]
         y_pred = slope * log_text_lengths + intercept
         ss_total = np.sum((log_vocab_sizes - np.mean(log_vocab_sizes))**2)
         ss_residual = np.sum((log_vocab_sizes - y_pred)**2)
-        r_squared = 1 - (ss_residual / ss_total)
+        if ss_total == 0:
+            r_squared = 0.0
+        else:
+            r_squared = 1 - (ss_residual / ss_total)
         
         herdan_coefficients.append(herdan_coefficient)
         r_squared_values.append(r_squared)

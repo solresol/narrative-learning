@@ -649,7 +649,7 @@ def generate_model_index_page(rows: List[tuple[str, datetime, str, str, int]], o
     ]
     table: dict[tuple[str, str, str], dict[int, list[str]]] = {}
     for vendor, release_date, training_model, model, ex in rows:
-        key = (vendor, training_model, str(release_date.date()))
+        key = (vendor, training_model, str(release_date))
         table.setdefault(key, {3: [], 10: []})
         if ex in (3, 10):
             table[key][ex].append(model)
