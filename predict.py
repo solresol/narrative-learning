@@ -119,6 +119,9 @@ def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
         run_info = ""
         
     # Insert the prediction into the database
+    inf_table = (
+        f"{config.dataset}_inferences" if getattr(config, "dataset", "") else "inferences"
+    )
     fields = f"round_id, {config.primary_key}, narrative_text, llm_stderr, prediction"
     placeholders = "?, ?, ?, ?, ?"
     if investigation_id is not None:
