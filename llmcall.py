@@ -97,8 +97,25 @@ def openai_request_json(model: str, prompt: str, valid_predictions: list[str]) -
 
 
 
-def openai_batch_predict(dataset: str, jsonl_path: str, dry_run: bool = False):
-    """Upload a JSONL batch to OpenAI and yield the results."""
+def openai_batch_predict(
+    dataset: str,
+    jsonl_path: str,
+    dry_run: bool = False,
+    progress_bar=None,
+):
+    """Upload a JSONL batch to OpenAI and yield the results.
+
+    Parameters
+    ----------
+    dataset:
+        Name of the dataset used as metadata for the batch.
+    jsonl_path:
+        Path to the JSONL file containing the batch request bodies.
+    dry_run:
+        If ``True`` the results are printed rather than yielded.
+    progress_bar:
+        Optional :class:`tqdm.tqdm` instance to update with progress.
+    """
     from openai import OpenAI
 
     api_key = open(os.path.expanduser("~/.openai.key")).read().strip()
@@ -115,12 +132,13 @@ def openai_batch_predict(dataset: str, jsonl_path: str, dry_run: bool = False):
 
     while True:
         openai_result = client.batches.retrieve(batch_id)
+        if progress_bar is not None:
+            progress_bar.total = openai_result.request_counts.total
+            progress_bar.n = openai_result.request_counts.completed
+            progress_bar.set_postfix(failures=openai_result.request_counts.failed)
+            progress_bar.refresh()
         if openai_result.status == "completed":
             break
-        print(
-            f"       Progress:{openai_result.request_counts.completed}/{openai_result.request_counts.total}"
-        )
-        print(f"       Failures: {openai_result.request_counts.failed}")
         time.sleep(15)
 
     openai_result = client.batches.retrieve(batch_id)
