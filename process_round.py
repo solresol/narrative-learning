@@ -70,10 +70,13 @@ def main():
         """
         config._execute(cur, query, (args.round_id,))
         # I think I should try doing a fetchall so that tqdm knows the appropriate length
-        iterator = cur
+        rows = cur.fetchall() if args.progress_bar else cur
+        iterator = rows
+        pb = None
         if args.progress_bar:
             import tqdm
-            iterator = tqdm.tqdm(cur.fetchall())
+            iterator = rows
+            pb = tqdm.tqdm(total=len(rows))
         anything_left = False
         ids_to_predict = []
         for row in iterator:
@@ -85,11 +88,6 @@ def main():
             if args.stop_after is not None and predictions_done + len(ids_to_predict) >= args.stop_after:
                 break
         if ids_to_predict:
-            if args.progress_bar:
-                import tqdm
-                pb = tqdm.tqdm(total=len(ids_to_predict))
-            else:
-                pb = None
             predict.predict_many(
                 config,
                 args.round_id,
