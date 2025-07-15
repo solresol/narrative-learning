@@ -102,6 +102,26 @@ Entity Data:
     config.conn.commit()
 
 
+def predict_many(
+    config,
+    round_id,
+    entity_ids,
+    model: str = "phi4:latest",
+    dry_run: bool = False,
+    investigation_id: int | None = None,
+):
+    """Run :func:`predict` for multiple entity IDs.
+
+    ``entity_ids`` can be an iterable of IDs or ``(id, unique_id)`` tuples. The
+    unique identifier is ignored for now but allows callers to verify that the
+    prediction corresponds to the expected entity in future implementations.
+    """
+
+    for item in entity_ids:
+        entity_id = item[0] if isinstance(item, tuple) else item
+        predict(config, round_id, entity_id, model=model, dry_run=dry_run, investigation_id=investigation_id)
+
+
 
 if __name__ == '__main__':
     default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', None)
