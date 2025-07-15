@@ -136,8 +136,13 @@ if __name__ == '__main__':
                         help="Round ID")
     parser.add_argument('--investigation-id', type=int,
                         help='ID from investigations table')
-    parser.add_argument('--entity-id', required=True,
-                        help="Entity ID (e.g., Patient_ID)")
+    parser.add_argument(
+        "--entity-id",
+        dest="entity_id",
+        nargs="+",
+        required=True,
+        help="Entity ID(s) (e.g., Patient_ID)",
+    )
     parser.add_argument("--dry-run", action="store_true",
                         help="Just show the prompt, then exit")
     parser.add_argument("--model", default=default_model,
@@ -157,4 +162,21 @@ if __name__ == '__main__':
         conn = get_connection(args.dsn, args.pg_config)
         config = datasetconfig.DatasetConfig(conn, args.config)
 
-    predict(config, args.round_id, args.entity_id, args.model, args.dry_run, args.investigation_id)
+    if len(args.entity_id) > 1:
+        predict_many(
+            config,
+            args.round_id,
+            args.entity_id,
+            model=args.model,
+            dry_run=args.dry_run,
+            investigation_id=args.investigation_id,
+        )
+    else:
+        predict(
+            config,
+            args.round_id,
+            args.entity_id[0],
+            args.model,
+            args.dry_run,
+            args.investigation_id,
+        )
