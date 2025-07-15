@@ -25,7 +25,9 @@ class AlreadyPredictedException(Exception):
     def __str__(self):
         return self.message
 
-def predict(config, round_id, entity_id, model='phi4:latest', dry_run=False, investigation_id: int | None = None):
+def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
+            prompt_only: bool = False,            
+            investigation_id: int | None = None):
     """
     Predict the outcome for a specific entity in a specific round.
 
@@ -48,7 +50,7 @@ def predict(config, round_id, entity_id, model='phi4:latest', dry_run=False, inv
     query = f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND {config.primary_key} = ?"
     config._execute(cursor, query, (round_id, entity_id))
     row = cursor.fetchone()
-    if row[0] == 1:
+    if row[0] == 1 and not (dry_run or prompt_only):
         raise AlreadyPredictedException(entity_id, round_id)
 
     # Get the entity features
@@ -65,7 +67,7 @@ Entity Data:
 {entity_features}
 """
 
-    if dry_run:
+    if prompt_only:
         print(prompt)
         return
 
@@ -98,16 +100,20 @@ Entity Data:
     params = [round_id, entity_id, prediction_output['narrative_text'], run_info, prediction_output['prediction']]
     if investigation_id is not None:
         params.append(investigation_id)
-    config._execute(cursor, insert_query, tuple(params))
-    config.conn.commit()
+    if dry_run:
+        print(entity_id, prediction_output['prediction'], prediction_output['narrative_text'])
+    else:
+        config._execute(cursor, insert_query, tuple(params))
+        config.conn.commit()
 
 
 def predict_many(
     config,
     round_id,
     entity_ids,
-    model: str = "phi4:latest",
+    model: str = "gpt-4.1-mini",
     dry_run: bool = False,
+        prompt_only: bool = False,
     investigation_id: int | None = None,
 ):
     """Run :func:`predict` for multiple entity IDs.
@@ -119,14 +125,11 @@ def predict_many(
 
     for item in entity_ids:
         entity_id = item[0] if isinstance(item, tuple) else item
-        predict(config, round_id, entity_id, model=model, dry_run=dry_run, investigation_id=investigation_id)
+        predict(config, round_id, entity_id, model=model, dry_run=dry_run, prompt_only=prompt_only, investigation_id=investigation_id)
 
 
 
 if __name__ == '__main__':
-    default_model = os.environ.get('NARRATIVE_LEARNING_INFERENCE_MODEL', None)
-    default_config = os.environ.get('NARRATIVE_LEARNING_CONFIG', None)
-
     parser = argparse.ArgumentParser(
         description="Make predictions for an entity based on the round prompt"
     )
@@ -143,11 +146,11 @@ if __name__ == '__main__':
         required=True,
         help="Entity ID(s) (e.g., Patient_ID)",
     )
-    parser.add_argument("--dry-run", action="store_true",
+    parser.add_argument("--dry-run", action="store_true", help="Don't store anything in the database")
+    parser.add_argument("--prompt-only", action="store_true",
                         help="Just show the prompt, then exit")
-    parser.add_argument("--model", default=default_model,
-                        help="AI model to use for prediction")
-    parser.add_argument("--config", default=default_config, help="The JSON config file that says what columns exist and what the tables are called")
+    parser.add_argument("--model", help="AI model to use for prediction", default="gpt-4.1-mini")
+    parser.add_argument("--config", help="The JSON config file that says what columns exist and what the tables are called")
     args = parser.parse_args()
 
     if args.investigation_id is not None:
@@ -169,6 +172,7 @@ if __name__ == '__main__':
             args.entity_id,
             model=args.model,
             dry_run=args.dry_run,
+            prompt_only=args.prompt_only,
             investigation_id=args.investigation_id,
         )
     else:
@@ -178,5 +182,6 @@ if __name__ == '__main__':
             args.entity_id[0],
             args.model,
             args.dry_run,
+            args.prompt_only,
             args.investigation_id,
         )
