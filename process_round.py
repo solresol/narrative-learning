@@ -85,12 +85,19 @@ def main():
             if args.stop_after is not None and predictions_done + len(ids_to_predict) >= args.stop_after:
                 break
         if ids_to_predict:
+            if args.progress_bar:
+                import tqdm
+                pb = tqdm.tqdm(total=len(ids_to_predict))
+            else:
+                pb = None
             predict.predict_many(
                 config,
                 args.round_id,
                 ids_to_predict,
                 model=args.model,
                 investigation_id=args.investigation_id,
+                immediate=True,
+                progressbar=pb,
             )
             predictions_done += len(ids_to_predict)
             if args.stop_after is not None and predictions_done >= args.stop_after:

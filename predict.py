@@ -59,6 +59,18 @@ def _insert_prediction(
     config.conn.commit()
 
 
+def _check_existing_prediction(config: datasetconfig.DatasetConfig, round_id: int, entity_id: str) -> bool:
+    """Return True if there is already a prediction for this entity."""
+    cursor = config.conn.cursor()
+    inf_table = (
+        f"{config.dataset}_inferences" if getattr(config, "dataset", "") else "inferences"
+    )
+    query = f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND {config.primary_key} = ?"
+    config._execute(cursor, query, (round_id, entity_id))
+    row = cursor.fetchone()
+    return row[0] == 1
+
+
 def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
             prompt_only: bool = False,            
             investigation_id: int | None = None):
@@ -77,11 +89,9 @@ def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
 
     prompt, instructions = _make_prompt(config, round_id, entity_id)
 
-    inf_table = f"{config.dataset}_inferences" if getattr(config, "dataset", "") else "inferences"
-    query = f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND {config.primary_key} = ?"
-    config._execute(cursor, query, (round_id, entity_id))
-    row = cursor.fetchone()
-    if row[0] == 1 and not (dry_run or prompt_only):
+    if _check_existing_prediction(config, round_id, entity_id) and not (
+        dry_run or prompt_only
+    ):
         raise llmcall.AlreadyPredictedException(entity_id, round_id)
 
 
@@ -132,8 +142,10 @@ def predict_many(
     entity_ids,
     model: str = "gpt-4.1-mini",
     dry_run: bool = False,
-        prompt_only: bool = False,
+    prompt_only: bool = False,
     investigation_id: int | None = None,
+    immediate: bool = False,
+    progressbar=None,
 ):
     """Run :func:`predict` for multiple entity IDs.
 
@@ -142,9 +154,51 @@ def predict_many(
     prediction corresponds to the expected entity in future implementations.
     """
 
-    for item in entity_ids:
-        entity_id = item[0] if isinstance(item, tuple) else item
-        predict(config, round_id, entity_id, model=model, dry_run=dry_run, prompt_only=prompt_only, investigation_id=investigation_id)
+    if not immediate:
+        instructions = config.get_round_prompt(round_id)
+        if instructions == "Choose randomly":
+            immediate = True
+
+    if immediate or not llmcall.is_openai_model(model):
+        for item in entity_ids:
+            entity_id = item[0] if isinstance(item, tuple) else item
+            predict(
+                config,
+                round_id,
+                entity_id,
+                model=model,
+                dry_run=dry_run,
+                prompt_only=prompt_only,
+                investigation_id=investigation_id,
+            )
+            if progressbar is not None:
+                progressbar.update(1)
+        return
+
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
+        jsonl_many(config, round_id, entity_ids, model, tmp.name)
+        tmp_name = tmp.name
+
+    try:
+        for result in llmcall.openai_batch_predict(
+            config.dataset,
+            tmp_name,
+            dry_run=dry_run,
+            progress_bar=progressbar,
+        ):
+            if dry_run:
+                continue
+            _insert_prediction(
+                config,
+                round_id,
+                result["entity_id"],
+                result["narrative_text"],
+                json.dumps(result["usage"]),
+                result["prediction"],
+                investigation_id,
+            )
+    finally:
+        os.unlink(tmp_name)
 
 
 def jsonl_many(config, round_id, entity_ids, model: str, output_file: str):
@@ -153,12 +207,7 @@ def jsonl_many(config, round_id, entity_ids, model: str, output_file: str):
     for item in entity_ids:
         entity_id = item[0] if isinstance(item, tuple) else item
 
-        cursor = config.conn.cursor()
-        inf_table = f"{config.dataset}_inferences" if getattr(config, "dataset", "") else "inferences"
-        query = f"SELECT COUNT(*) FROM {inf_table} WHERE round_id = ? AND {config.primary_key} = ?"
-        config._execute(cursor, query, (round_id, entity_id))
-        row = cursor.fetchone()
-        if row[0] == 1:
+        if _check_existing_prediction(config, round_id, entity_id):
             raise llmcall.AlreadyPredictedException(entity_id, round_id)
 
         prompt, instructions = _make_prompt(config, round_id, entity_id)
@@ -223,37 +272,22 @@ if __name__ == '__main__':
         if not llmcall.is_openai_model(args.model):
             sys.exit("--jsonl can only be used with OpenAI models")
         jsonl_many(config, args.round_id, args.entity_id, args.model, args.jsonl)
-    elif args.immediate or not llmcall.is_openai_model(args.model):
-        predict_many(
-            config,
-            args.round_id,
-            args.entity_id,
-            model=args.model,
-            dry_run=args.dry_run,
-            prompt_only=args.prompt_only,
-            investigation_id=args.investigation_id,
-        )
+        sys.exit(0)
+
+    if args.progress:
+        import tqdm
+        progressbar = tqdm.tqdm()
     else:
-        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
-            jsonl_many(config, args.round_id, args.entity_id, args.model, tmp.name)
-            tmp_name = tmp.name
-        if args.progress:
-            import tqdm
-            progressbar = tqdm.tqdm()
-        else:
-            progressbar = None
-        try:
-            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run, progress_bar=progressbar):
-                if args.dry_run:
-                    continue
-                _insert_prediction(
-                    config,
-                    args.round_id,
-                    result["entity_id"],
-                    result["narrative_text"],
-                    json.dumps(result["usage"]),
-                    result["prediction"],
-                    args.investigation_id,
-                )
-        finally:
-            os.unlink(tmp_name)
+        progressbar = None
+
+    predict_many(
+        config,
+        args.round_id,
+        args.entity_id,
+        model=args.model,
+        dry_run=args.dry_run,
+        prompt_only=args.prompt_only,
+        investigation_id=args.investigation_id,
+        immediate=args.immediate,
+        progressbar=progressbar,
+    )
