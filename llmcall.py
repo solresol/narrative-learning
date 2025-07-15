@@ -134,6 +134,9 @@ def openai_batch_predict(dataset: str, jsonl_path: str, dry_run: bool = False):
     for row in file_response.text.splitlines():
         record = json.loads(row)
         if record["response"]["status_code"] != 200:
+            sys.stderr.write(
+                f"Request failed for entity {record['custom_id']}: {record['response']}\n"
+            )
             continue
         arguments = json.loads(
             record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]

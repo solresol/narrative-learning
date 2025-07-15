@@ -235,7 +235,9 @@ if __name__ == '__main__':
     else:
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
             jsonl_many(config, args.round_id, args.entity_id, args.model, tmp.name)
-            for result in llmcall.openai_batch_predict(config.dataset, tmp.name, dry_run=args.dry_run):
+            tmp_name = tmp.name
+        try:
+            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run):
                 if args.dry_run:
                     continue
                 _insert_prediction(
@@ -247,3 +249,5 @@ if __name__ == '__main__':
                     result["prediction"],
                     args.investigation_id,
                 )
+        finally:
+            os.unlink(tmp_name)
