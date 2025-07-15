@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import random
+import tempfile
 import llmcall
 import datasetconfig
 from modules.postgres import get_connection, get_investigation_settings
@@ -30,22 +31,33 @@ Entity Data:
 
     return prompt, instructions
 
-class AlreadyPredictedException(Exception):
-    """Exception raised when a prediction has already been made for a specific primary key in a round.
 
-    Attributes:
-        primary_key_value -- The value of the primary key that already has a prediction
-        round_id -- The ID of the round where the prediction exists
-    """
+def _insert_prediction(
+    config: datasetconfig.DatasetConfig,
+    round_id: int,
+    entity_id: str,
+    narrative_text: str,
+    run_info: str,
+    prediction: str,
+    investigation_id: int | None = None,
+) -> None:
+    """Insert a prediction result into the database."""
+    cursor = config.conn.cursor()
+    inf_table = (
+        f"{config.dataset}_inferences" if getattr(config, "dataset", "") else "inferences"
+    )
+    fields = f"round_id, {config.primary_key}, narrative_text, llm_stderr, prediction"
+    placeholders = "?, ?, ?, ?, ?"
+    if investigation_id is not None:
+        fields += ", investigation_id"
+        placeholders += ", ?"
+    insert_query = f"INSERT INTO {inf_table} ({fields}) VALUES ({placeholders})"
+    params = [round_id, entity_id, narrative_text, run_info, prediction]
+    if investigation_id is not None:
+        params.append(investigation_id)
+    config._execute(cursor, insert_query, tuple(params))
+    config.conn.commit()
 
-    def __init__(self, primary_key_value, round_id):
-        self.primary_key_value = primary_key_value
-        self.round_id = round_id
-        self.message = f"A prediction for primary key '{primary_key_value}' already exists in round '{round_id}'"
-        super().__init__(self.message)
-
-    def __str__(self):
-        return self.message
 
 def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
             prompt_only: bool = False,            
@@ -70,7 +82,7 @@ def predict(config, round_id, entity_id, model='gpt-4.1-mini', dry_run=False,
     config._execute(cursor, query, (round_id, entity_id))
     row = cursor.fetchone()
     if row[0] == 1 and not (dry_run or prompt_only):
-        raise AlreadyPredictedException(entity_id, round_id)
+        raise llmcall.AlreadyPredictedException(entity_id, round_id)
 
 
 
@@ -147,7 +159,7 @@ def jsonl_many(config, round_id, entity_ids, model: str, output_file: str):
         config._execute(cursor, query, (round_id, entity_id))
         row = cursor.fetchone()
         if row[0] == 1:
-            raise AlreadyPredictedException(entity_id, round_id)
+            raise llmcall.AlreadyPredictedException(entity_id, round_id)
 
         prompt, instructions = _make_prompt(config, round_id, entity_id)
 
@@ -163,6 +175,8 @@ def jsonl_many(config, round_id, entity_ids, model: str, output_file: str):
         }
         with open(output_file, "a") as f:
             f.write(json.dumps(batch_text) + "\n")
+
+
 
 
 
@@ -189,6 +203,7 @@ if __name__ == '__main__':
     parser.add_argument("--model", help="AI model to use for prediction", default="gpt-4.1-mini")
     parser.add_argument("--config", help="The JSON config file that says what columns exist and what the tables are called")
     parser.add_argument("--jsonl", help="Write OpenAI batch requests to this file instead of running predictions")
+    parser.add_argument("--immediate", action="store_true", help="Run predictions immediately instead of using OpenAI batch")
     args = parser.parse_args()
 
     if args.investigation_id is not None:
@@ -207,7 +222,7 @@ if __name__ == '__main__':
         if not llmcall.is_openai_model(args.model):
             sys.exit("--jsonl can only be used with OpenAI models")
         jsonl_many(config, args.round_id, args.entity_id, args.model, args.jsonl)
-    else:
+    elif args.immediate or not llmcall.is_openai_model(args.model):
         predict_many(
             config,
             args.round_id,
@@ -217,3 +232,22 @@ if __name__ == '__main__':
             prompt_only=args.prompt_only,
             investigation_id=args.investigation_id,
         )
+    else:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
+            jsonl_many(config, args.round_id, args.entity_id, args.model, tmp.name)
+            tmp_name = tmp.name
+        try:
+            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run):
+                if args.dry_run:
+                    continue
+                _insert_prediction(
+                    config,
+                    args.round_id,
+                    result["entity_id"],
+                    result["narrative_text"],
+                    json.dumps(result["usage"]),
+                    result["prediction"],
+                    args.investigation_id,
+                )
+        finally:
+            os.unlink(tmp_name)
