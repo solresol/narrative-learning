@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import random
+import tempfile
+import time
 
 class MissingUpdatedPrompt(Exception):
     pass
@@ -15,6 +17,21 @@ class InvalidPrediction(Exception):
 
 class UnknownModel(Exception):
     pass
+
+
+class AlreadyPredictedException(Exception):
+    """Raised when a prediction already exists for a primary key in a round."""
+
+    def __init__(self, primary_key_value, round_id):
+        self.primary_key_value = primary_key_value
+        self.round_id = round_id
+        self.message = (
+            f"A prediction for primary key '{primary_key_value}' already exists in round '{round_id}'"
+        )
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message
 
 
 OPENAI_MODELS = {
@@ -76,6 +93,62 @@ def openai_request_json(model: str, prompt: str, valid_predictions: list[str]) -
         "tools": [prediction_function],
         "tool_choice": {"type": "function", "function": {"name": "store_prediction"}},
     }
+
+
+
+
+def openai_batch_predict(dataset: str, jsonl_path: str, dry_run: bool = False):
+    """Upload a JSONL batch to OpenAI and yield the results."""
+    from openai import OpenAI
+
+    api_key = open(os.path.expanduser("~/.openai.key")).read().strip()
+    client = OpenAI(api_key=api_key)
+
+    batch_input_file = client.files.create(file=open(jsonl_path, "rb"), purpose="batch")
+    result = client.batches.create(
+        input_file_id=batch_input_file.id,
+        endpoint="/v1/chat/completions",
+        completion_window="24h",
+        metadata={"dataset": dataset},
+    )
+    batch_id = result.id
+
+    while True:
+        openai_result = client.batches.retrieve(batch_id)
+        if openai_result.status == "completed":
+            break
+        print(
+            f"       Progress:{openai_result.request_counts.completed}/{openai_result.request_counts.total}"
+        )
+        print(f"       Failures: {openai_result.request_counts.failed}")
+        time.sleep(15)
+
+    openai_result = client.batches.retrieve(batch_id)
+    if openai_result.error_file_id is not None:
+        error_file_response = client.files.content(openai_result.error_file_id)
+        sys.stderr.write(error_file_response.text)
+    if openai_result.output_file_id is None:
+        return
+
+    file_response = client.files.content(openai_result.output_file_id)
+    for row in file_response.text.splitlines():
+        record = json.loads(row)
+        if record["response"]["status_code"] != 200:
+            continue
+        arguments = json.loads(
+            record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+        )
+        usage = record["response"]["body"]["usage"]
+        entity_id = record["custom_id"]
+        if dry_run:
+            print(entity_id, arguments.get("prediction"), arguments.get("narrative_text", ""))
+            continue
+        yield {
+            "entity_id": entity_id,
+            "narrative_text": arguments.get("narrative_text", ""),
+            "prediction": arguments.get("prediction"),
+            "usage": usage,
+        }
 
 def ollama_prediction(model, prompt, valid_predictions):
     command = ["ollama", "run", model, "--format=json", "--verbose"]
