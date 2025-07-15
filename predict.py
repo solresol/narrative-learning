@@ -132,8 +132,10 @@ def predict_many(
     entity_ids,
     model: str = "gpt-4.1-mini",
     dry_run: bool = False,
-        prompt_only: bool = False,
+    prompt_only: bool = False,
     investigation_id: int | None = None,
+    immediate: bool = False,
+    progressbar=None,
 ):
     """Run :func:`predict` for multiple entity IDs.
 
@@ -142,9 +144,46 @@ def predict_many(
     prediction corresponds to the expected entity in future implementations.
     """
 
-    for item in entity_ids:
-        entity_id = item[0] if isinstance(item, tuple) else item
-        predict(config, round_id, entity_id, model=model, dry_run=dry_run, prompt_only=prompt_only, investigation_id=investigation_id)
+    if immediate or not llmcall.is_openai_model(model):
+        for item in entity_ids:
+            entity_id = item[0] if isinstance(item, tuple) else item
+            predict(
+                config,
+                round_id,
+                entity_id,
+                model=model,
+                dry_run=dry_run,
+                prompt_only=prompt_only,
+                investigation_id=investigation_id,
+            )
+            if progressbar is not None:
+                progressbar.update(1)
+        return
+
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
+        jsonl_many(config, round_id, entity_ids, model, tmp.name)
+        tmp_name = tmp.name
+
+    try:
+        for result in llmcall.openai_batch_predict(
+            config.dataset,
+            tmp_name,
+            dry_run=dry_run,
+            progress_bar=progressbar,
+        ):
+            if dry_run:
+                continue
+            _insert_prediction(
+                config,
+                round_id,
+                result["entity_id"],
+                result["narrative_text"],
+                json.dumps(result["usage"]),
+                result["prediction"],
+                investigation_id,
+            )
+    finally:
+        os.unlink(tmp_name)
 
 
 def jsonl_many(config, round_id, entity_ids, model: str, output_file: str):
@@ -223,37 +262,22 @@ if __name__ == '__main__':
         if not llmcall.is_openai_model(args.model):
             sys.exit("--jsonl can only be used with OpenAI models")
         jsonl_many(config, args.round_id, args.entity_id, args.model, args.jsonl)
-    elif args.immediate or not llmcall.is_openai_model(args.model):
-        predict_many(
-            config,
-            args.round_id,
-            args.entity_id,
-            model=args.model,
-            dry_run=args.dry_run,
-            prompt_only=args.prompt_only,
-            investigation_id=args.investigation_id,
-        )
+        sys.exit(0)
+
+    if args.progress:
+        import tqdm
+        progressbar = tqdm.tqdm()
     else:
-        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
-            jsonl_many(config, args.round_id, args.entity_id, args.model, tmp.name)
-            tmp_name = tmp.name
-        if args.progress:
-            import tqdm
-            progressbar = tqdm.tqdm()
-        else:
-            progressbar = None
-        try:
-            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run, progress_bar=progressbar):
-                if args.dry_run:
-                    continue
-                _insert_prediction(
-                    config,
-                    args.round_id,
-                    result["entity_id"],
-                    result["narrative_text"],
-                    json.dumps(result["usage"]),
-                    result["prediction"],
-                    args.investigation_id,
-                )
-        finally:
-            os.unlink(tmp_name)
+        progressbar = None
+
+    predict_many(
+        config,
+        args.round_id,
+        args.entity_id,
+        model=args.model,
+        dry_run=args.dry_run,
+        prompt_only=args.prompt_only,
+        investigation_id=args.investigation_id,
+        immediate=args.immediate,
+        progressbar=progressbar,
+    )
