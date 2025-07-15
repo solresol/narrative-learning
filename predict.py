@@ -204,6 +204,7 @@ if __name__ == '__main__':
     parser.add_argument("--config", help="The JSON config file that says what columns exist and what the tables are called")
     parser.add_argument("--jsonl", help="Write OpenAI batch requests to this file instead of running predictions")
     parser.add_argument("--immediate", action="store_true", help="Run predictions immediately instead of using OpenAI batch")
+    parser.add_argument("--progress", action="store_true", help="Show a progress bar")
     args = parser.parse_args()
 
     if args.investigation_id is not None:
@@ -236,8 +237,13 @@ if __name__ == '__main__':
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tmp:
             jsonl_many(config, args.round_id, args.entity_id, args.model, tmp.name)
             tmp_name = tmp.name
+        if args.progress:
+            import tqdm
+            progressbar = tqdm.tqdm()
+        else:
+            progressbar = None
         try:
-            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run):
+            for result in llmcall.openai_batch_predict(config.dataset, tmp_name, dry_run=args.dry_run, progress_bar=progressbar):
                 if args.dry_run:
                     continue
                 _insert_prediction(
