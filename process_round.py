@@ -94,7 +94,7 @@ def main():
                 ids_to_predict,
                 model=args.model,
                 investigation_id=args.investigation_id,
-                immediate=True,
+                immediate=False,
                 progressbar=pb,
             )
             predictions_done += len(ids_to_predict)
