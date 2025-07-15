@@ -16,6 +16,67 @@ class InvalidPrediction(Exception):
 class UnknownModel(Exception):
     pass
 
+
+OPENAI_MODELS = {
+    "gpt-4o",
+    "gpt-4o-mini",
+    "o1",
+    "o3",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.5-preview",
+    "gpt-3.5-turbo",
+}
+
+
+def is_openai_model(model: str) -> bool:
+    """Return ``True`` if the supplied model name is an OpenAI model."""
+    return model in OPENAI_MODELS
+
+
+def openai_request_json(model: str, prompt: str, valid_predictions: list[str]) -> dict:
+    """Return the request body for an OpenAI chat completion call."""
+
+    prediction_function = {
+        "type": "function",
+        "function": {
+            "name": "store_prediction",
+            "strict": True,
+            "description": "Store the prediction along with the narrative of your thinking process.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "narrative_text": {
+                        "type": "string",
+                        "description": "Your thinking process in evaluating the prompt.",
+                    },
+                    "prediction": {
+                        "type": "string",
+                        "description": "Either " + " or ".join(valid_predictions),
+                    },
+                },
+                "required": ["narrative_text", "prediction"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful prediction assistant. Use the store_prediction function to provide your answer.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+
+    return {
+        "model": model,
+        "messages": messages,
+        "temperature": 0,
+        "tools": [prediction_function],
+        "tool_choice": {"type": "function", "function": {"name": "store_prediction"}},
+    }
+
 def ollama_prediction(model, prompt, valid_predictions):
     command = ["ollama", "run", model, "--format=json", "--verbose"]
     process = subprocess.Popen(
