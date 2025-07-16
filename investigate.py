@@ -21,12 +21,23 @@ from modules.round_utils import update_round_statistics
 from modules.postgres import get_connection
 
 
-def run_cmd(cmd: list[str]) -> int:
-    """Run command and stream output."""
+def run_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) -> int:
+    """Run command, optionally suppressing output."""
+    if quiet:
+        label = f"investigation {inv_id}" if inv_id is not None else "investigation"
+        print(f"{label}: starting {' '.join(cmd)}")
+        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"{label}: finished {' '.join(cmd)} (exit {proc.returncode})")
+        return proc.returncode
     return subprocess.call(cmd)
 
-
-def capture_cmd(cmd: list[str]) -> tuple[int, str]:
+def capture_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) -> tuple[int, str]:
+    if quiet:
+        label = f"investigation {inv_id}" if inv_id is not None else "investigation"
+        print(f"{label}: starting {' '.join(cmd)}")
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        print(f"{label}: finished {' '.join(cmd)} (exit {proc.returncode})")
+        return proc.returncode, proc.stdout.strip()
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
     return proc.returncode, proc.stdout.strip()
 
@@ -39,6 +50,11 @@ def main() -> None:
     parser.add_argument(
         "--dsn",
         help="PostgreSQL connection string (defaults to libpq environment variables)",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Only print when subprocesses start and finish",
     )
     args = parser.parse_args()
 
@@ -134,7 +150,9 @@ def main() -> None:
                 "--validation",
                 "--patience",
                 str(patience if patience is not None else 3),
-            ]
+            ],
+            args.quiet,
+            args.investigation_id,
         )
         if ret != 0:
             break
@@ -151,7 +169,9 @@ def main() -> None:
                     "--progress-bar",
                     "--investigation-id",
                     str(args.investigation_id),
-                ]
+                ],
+                args.quiet,
+                args.investigation_id,
             )
             != 0
         ):
@@ -173,7 +193,9 @@ def main() -> None:
                     training_model,
                     *(["--example-count", str(example_count)] if example_count else []),
                     "--verbose",
-                ]
+                ],
+                args.quiet,
+                args.investigation_id,
             )
             != 0
         ):
@@ -202,7 +224,10 @@ def main() -> None:
         "--investigation-id",
         str(args.investigation_id),
         "--best",
-    ])
+    ],
+        args.quiet,
+        args.investigation_id,
+    )
     cur.close()
     conn.close()
 

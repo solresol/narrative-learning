@@ -125,8 +125,11 @@ psql "$POSTGRES_DSN" -f postgres-schemas/investigations_data.sql
 Run the training loop with:
 
 ```bash
-uv run investigate.py <investigation-id>
+uv run investigate.py <investigation-id> [--quiet]
 ```
+
+Use `--quiet` when running many investigations in parallel to
+only print when each subprocess starts and stops.
 
 `investigate.py` reads the settings for the given investigation ID from
 PostgreSQL and updates the `round_number` field after each successful round.
