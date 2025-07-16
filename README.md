@@ -36,34 +36,49 @@ This approach offers several potential advantages:
 
 ## Usage
 
-Hopefully, you should be able to say `make` and it should build everything.
+The old Makefile targets for building dataset databases no longer work.
+Use the following sequence to create the PostgreSQL database, populate
+each dataset and run the investigations.
 
-In practice, I'm not sure it all works. I tend to do this:
+1. Install PostgreSQL and ensure the `uv` tool is available.  If you
+   want to restore a pre-made dump you can run `./envsetup.sh`
+   (see the section on restoring from backup), otherwise install
+   `postgresql` and `postgresql-client` manually.
 
-`make potions-databases potions-baseline potions-best outputs/potions_results.csv`
+2. Load the schema and default investigations:
 
+```bash
+psql "$POSTGRES_DSN" -f postgres-schemas/investigations_schema.sql
+psql "$POSTGRES_DSN" -f postgres-schemas/investigations_data.sql
+```
 
-(for each of `titanic`, `southgermancredit`, `wisconsin`, `timetravel` and `espionage`)
+3. Generate or load each dataset. Synthetic datasets are produced with
+`random_classification_data_generator.py`, while real CSV files are
+loaded with `initialise_database.py`. Both write a configuration file in
+`configs/` and prepare a SQLite template.
 
-After the tables are created, calculate baseline metrics with:
+4. Import the dataset into PostgreSQL:
+
+```bash
+uv run import_dataset.py --investigation-id <id>
+```
+
+5. Calculate baseline metrics:
 
 ```bash
 PGUSER=root uv run baseline.py --dataset <dataset>
 ```
 
-`baseline.py` will look up the configuration path for the given dataset from
-the `datasets` table if `--config` is not supplied.
-
-Run this once per dataset to fill the `baseline_results` table and the `baseline_*` tables.
-Each `baseline_*` table stores interpretable model data (e.g. logistic regression
-weights or decision tree graphs) so the website can display the trained models.
-
-Then copy everything from `outputs/*_results.csv`
-
-Then, run the ensemble analysis:
+6. Launch the investigation loop:
 
 ```bash
-# Generate ensemble results for each dataset stored in PostgreSQL
+uv run investigate.py <investigation-id>
+```
+
+Copy everything from `outputs/*_results.csv` after each run and then
+generate ensemble summaries:
+
+```bash
 python results_ensembling.py titanic --summary outputs/titanic_ensemble_summary.txt
 python results_ensembling.py wisconsin --summary outputs/wisconsin_ensemble_summary.txt
 python results_ensembling.py southgermancredit --summary outputs/southgermancredit_ensemble_summary.txt
@@ -72,11 +87,11 @@ python results_ensembling.py timetravel_insurance --summary outputs/timetravel_i
 python results_ensembling.py espionage --summary outputs/espionage_ensemble_summary.txt
 ```
 
-The detailed results for each combination are stored in the `ensemble_results` table.
-
-The ensemble script will automatically organize results by model release dates from the `language_models` table.
-
-Copy these into the `papers/narrative-learning` directory.
+The ensemble script stores results in the `ensemble_results` table and
+orders them by model release date from `language_models`.
+Some older models such as `gpt-4.5-preview` have been removed from the
+OpenAI API and `gemini-2.0` now requires a paid account, so you may need
+to substitute newer model names.
 
 
 
@@ -157,4 +172,13 @@ rsync -av website/ merah.cassia.ifost.org.au:/var/www/vhosts/narrative-learning.
 ```
 
 which will make it appear at <http://narrative-learning.symmachus.org/>.
+
+## Restoring from a backup
+
+`./envsetup.sh` installs PostgreSQL, creates the `root` and `narrative`
+roles and downloads a compressed dump of the `narrative` database from
+datadumps.ifost.org.au. Run this script if you want to replicate the
+exact database used in previous experiments. It will also install the
+`uv` package manager so that project scripts can be executed with
+`uv run`.
 
