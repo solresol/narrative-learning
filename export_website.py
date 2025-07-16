@@ -279,6 +279,7 @@ def generate_investigation_page(
         ],
     )
     body = ["<ul>"]
+    body.append(f"<li>Dataset: {dataset}</li>")
     body.append(f"<li>Model: {model}</li>")
     body.append(f"<li>Training model: {training_model}</li>")
     body.append(f"<li>Inference model: {inference_model}</li>")
@@ -340,9 +341,17 @@ def generate_investigation_page(
     plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
     plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
     plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
-    plt.xticks(plot_df["rank"], plot_df["round_id"])
+    if len(plot_df) > 20:
+        ticks = plot_df["rank"]
+        labels = [
+            r_id if (i + 1) % 5 == 0 else ""
+            for i, r_id in enumerate(plot_df["round_id"])
+        ]
+        plt.xticks(ticks, labels)
+    else:
+        plt.xticks(plot_df["rank"], plot_df["round_id"])
     plt.xlabel("Round")
-    plt.ylabel("log10 KT accuracy")
+    plt.ylabel("Negative log10 KT score")
     plt.title("Round Scores")
     plt.legend()
     plt.tight_layout()
