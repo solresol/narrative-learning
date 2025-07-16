@@ -9,3 +9,5 @@ can inspect it with `psql -U root narrative` or connect from Python using
 
 When testing scripts that use libpq defaults, set the `PGUSER` environment
 variable to `root` so connections are made with the correct role.
+
+When running tests, always use `uv run pytest`. Running pytest directly usually fails.
