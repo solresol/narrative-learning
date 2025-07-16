@@ -219,7 +219,7 @@ def generate_investigation_page(
     cfg_file: str,
     inv_id: int,
     base_dir: str,
-) -> None:
+) -> int | None:
     inv_dir = os.path.join(base_dir, "investigation", str(inv_id))
     os.makedirs(inv_dir, exist_ok=True)
     cur = conn.cursor()
@@ -335,6 +335,7 @@ def generate_investigation_page(
         .reset_index(drop=True)
     )
     plot_df["rank"] = plot_df.index + 1
+    best_rank = int(plot_df["val_acc"].idxmax()) + 1 if not plot_df.empty else None
     for col in ["train_acc", "val_acc", "test_acc"]:
         plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
     plt.figure(figsize=(8, 4))
@@ -364,6 +365,8 @@ def generate_investigation_page(
     write_page(
         os.path.join(inv_dir, "index.html"), f"Investigation {inv_id}", "\n".join(body)
     )
+
+    return best_rank
 
 
 def generate_dataset_page(
@@ -397,8 +400,27 @@ def generate_dataset_page(
         body.append("<h2>Provenance</h2>")
         body.append(f"<pre>{html.escape(row[0])}</pre>")
 
+    best_ranks: list[int] = []
     for inv_id, model, _training_model in investigations:
-        generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
+        rank = generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
+        if rank is not None:
+            best_ranks.append(rank)
+
+    if best_ranks:
+        plt.figure(figsize=(6, 4))
+        bins = range(1, max(best_ranks) + 2)
+        plt.hist(best_ranks, bins=bins, edgecolor="black", align="left")
+        plt.xlabel("number of rounds")
+        plt.ylabel("frequency")
+        plt.title("Best validation round position")
+        plt.tight_layout()
+        rank_chart = os.path.join(out_dir, "best_round_rank.png")
+        plt.savefig(rank_chart)
+        plt.close()
+        body.append("<h2>Best Validation Round Rank</h2>")
+        body.append("<img src='best_round_rank.png' alt='best round rank distribution'>")
+    else:
+        raise RuntimeError("no round rank data found")
 
     # Load results directly from the database
     df_results = load_results_dataframe(conn, dataset, cfg_file)
