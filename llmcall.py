@@ -156,9 +156,17 @@ def openai_batch_predict(
                 f"Request failed for entity {record['custom_id']}: {record['response']}\n"
             )
             continue
-        arguments = json.loads(
-            record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
-        )
+        try:
+            arguments = json.loads(
+                record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+            )
+        except KeyError as e:
+            print(f"Missing key in record: {e}", file=sys.stderr)
+            print("Full record dump:", file=sys.stderr)
+            json.dump(record, sys.stderr, indent=2)
+            print("", file=sys.stderr)  # newline
+            # Re-raise the original exception to preserve stack trace
+            raise
         usage = record["response"]["body"]["usage"]
         entity_id = record["custom_id"]
         if dry_run:
