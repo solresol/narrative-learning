@@ -26,7 +26,7 @@ def run_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) -> i
     if quiet:
         label = f"investigation {inv_id}" if inv_id is not None else "investigation"
         print(f"{label}: starting {' '.join(cmd)}")
-        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL)
         print(f"{label}: finished {' '.join(cmd)} (exit {proc.returncode})")
         return proc.returncode
     return subprocess.call(cmd)
@@ -35,7 +35,7 @@ def capture_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) 
     if quiet:
         label = f"investigation {inv_id}" if inv_id is not None else "investigation"
         print(f"{label}: starting {' '.join(cmd)}")
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
         print(f"{label}: finished {' '.join(cmd)} (exit {proc.returncode})")
         return proc.returncode, proc.stdout.strip()
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
