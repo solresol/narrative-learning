@@ -45,30 +45,35 @@ def get_split_id(cfg: DatasetConfig) -> int:
 
 def plot_release_chart(
     conn, dataset: str, df: pd.DataFrame, out_path: str, dataset_size: int
-) -> Optional[tuple[float, float, float]]:
+) -> tuple[Optional[tuple[float, float, float]], list[str]]:
     """Plot test scores by model release date for a dataset.
 
     Returns the slope, intercept and p-value of the regression line calculated
     over the ensemble maximum scores, or ``None`` if no ensemble data exists.
     """
+    actions: list[str] = []
     if df.empty:
-        return None
+        return None, actions
     cur = conn.cursor()
     cur.execute(
         "SELECT training_model, release_date, ollama_hosted FROM language_models"
     )
     info = pd.DataFrame(cur.fetchall(), columns=["Model", "Release Date", "ollama"])
     df = df.merge(info, on="Model", how="left")
+    actions.append(f"merge info: {len(df)} rows")
     # ``ollama`` is True for models hosted on Ollama. These rows should be
     # excluded from the plot, treating missing values as False.
     df = df[~df["ollama"].fillna(False).astype(bool)]
+    actions.append(f"filter ollama: {len(df)} rows")
     df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
+    actions.append(f"drop NA release/accuracy: {len(df)} rows")
     if df.empty:
         raise RuntimeError("no model results found to plot")
 
     df["Release Date"] = pd.to_datetime(df["Release Date"])
     df.sort_values("Release Date", inplace=True)
     df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
+    actions.append("compute KT and sort")
 
     cur.execute(
         """
@@ -107,16 +112,25 @@ def plot_release_chart(
                 baseline_vals.append(-accuracy_to_kt(val, dataset_size))
         if baseline_vals:
             best_baseline_y = max(baseline_vals)
+    actions.append("added baselines")
 
     ens_df = get_interesting_ensembles(conn, dataset)
     if ens_df.empty:
         raise RuntimeError("no interesting ensembles found")
 
     fig, ax = plt.subplots(figsize=(8, 4))
+    actions.append("create figure")
     ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
+    actions.append(f"scatter models: {len(df)}")
     ax.set_xlabel("Model release date")
     ax.set_ylabel("-log10 KT accuracy")
-    draw_baselines(ax, df, xpos=df["Release Date"].max(), dataset_size=dataset_size)
+    draw_baselines(
+        ax,
+        df,
+        xpos=df["Release Date"].max(),
+        dataset_size=dataset_size,
+        debug=actions,
+    )
 
     ens_df = ens_df.copy()
     ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
@@ -131,12 +145,14 @@ def plot_release_chart(
         c="red",
         label="ensemble",
     )
+    actions.append(f"scatter ensembles: {len(ens_df)}")
     x = mdates.date2num(ens_df["Release Date"])
     y = -ens_df["KT"]
     if len(ens_df) > 1:
         slope, intercept, r, pval, std = linregress(x, y)
         xs = np.linspace(x.min(), x.max(), 100)
         ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
+        actions.append("draw ensemble trend line")
         if best_baseline_y is not None and slope > 0:
             cross_x = (best_baseline_y - intercept) / slope
             cross_date = mdates.num2date(cross_x, tz=timezone.utc)
@@ -151,6 +167,7 @@ def plot_release_chart(
                     ha="center",
                     va="bottom",
                 )
+                actions.append("mark baseline crossing")
     else:
         slope = intercept = pval = float("nan")
 
@@ -159,8 +176,9 @@ def plot_release_chart(
     ax.legend()
     fig.tight_layout()
     plt.savefig(out_path)
+    actions.append(f"savefig {out_path}")
     plt.close(fig)
-    return slope, intercept, pval
+    return (slope, intercept, pval), actions
 
 
 def generate_round_page(
@@ -427,15 +445,22 @@ def generate_dataset_page(
 
     # Plot test results by model release date
     chart_file = os.path.join(out_dir, "release_scores.png")
-    stats = plot_release_chart(conn, dataset, df_results, chart_file, dataset_size)
+    stats, debug_actions = plot_release_chart(
+        conn, dataset, df_results, chart_file, dataset_size
+    )
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
-        body.append(f"<img src='release_scores.png' alt='scores by release date'>")
+        body.append(
+            f"<img src='release_scores.png' alt='scores by release date'>"
+        )
         if stats is not None:
             slope, intercept, pval = stats
             body.append(
                 f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.3g}</p>"
             )
+        if debug_actions:
+            body.append("<h3>Debug</h3>")
+            body.append("<pre>" + "\n".join(debug_actions) + "</pre>")
 
     if not df_results.empty:
         df = df_results.copy()
