@@ -31,7 +31,10 @@ def run_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) -> i
         return proc.returncode
     return subprocess.call(cmd)
 
-def capture_cmd(cmd: list[str], quiet: bool = False, inv_id: int | None = None) -> tuple[int, str]:
+
+def capture_cmd(
+    cmd: list[str], quiet: bool = False, inv_id: int | None = None
+) -> tuple[int, str]:
     if quiet:
         label = f"investigation {inv_id}" if inv_id is not None else "investigation"
         print(f"{label}: starting {' '.join(cmd)}")
@@ -102,8 +105,9 @@ def main() -> None:
         config_json = json.load(f)
     rounds_table = config_json.get("rounds_table", f"{dataset}_rounds")
     splits_table = config_json.get("splits_table", f"{dataset}_splits")
-    config_obj = datasetconfig.DatasetConfig(conn, config, dataset, args.investigation_id)
-
+    config_obj = datasetconfig.DatasetConfig(
+        conn, config, dataset, args.investigation_id
+    )
 
     # Ensure there is at least one round for this investigation and that
     # ``round_no`` references a valid round.
@@ -157,19 +161,20 @@ def main() -> None:
         if ret != 0:
             break
 
+        process_cmd = [
+            "uv",
+            "run",
+            "process_round.py",
+            "--round-id",
+            str(round_no),
+            "--loop",
+        ]
+        if not args.quiet:
+            process_cmd.append("--progress-bar")
+        process_cmd.extend(["--investigation-id", str(args.investigation_id)])
         if (
             run_cmd(
-                [
-                    "uv",
-                    "run",
-                    "process_round.py",
-                    "--round-id",
-                    str(round_no),
-                    "--loop",
-                    "--progress-bar",
-                    "--investigation-id",
-                    str(args.investigation_id),
-                ],
+                process_cmd,
                 args.quiet,
                 args.investigation_id,
             )
@@ -217,14 +222,15 @@ def main() -> None:
             (round_no, round_uuid, args.investigation_id),
         )
 
-    ret, best = capture_cmd([
-        "uv",
-        "run",
-        "report-script.py",
-        "--investigation-id",
-        str(args.investigation_id),
-        "--best",
-    ],
+    ret, best = capture_cmd(
+        [
+            "uv",
+            "run",
+            "report-script.py",
+            "--investigation-id",
+            str(args.investigation_id),
+            "--best",
+        ],
         args.quiet,
         args.investigation_id,
     )
