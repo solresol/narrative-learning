@@ -13,7 +13,7 @@ import pandas as pd
 from modules.metrics import accuracy_to_kt
 
 
-def draw_baselines(ax, df, xpos=None, dataset_size=None):
+def draw_baselines(ax, df, xpos=None, dataset_size=None, debug=None):
     """Draw baseline model performance as horizontal lines on a plot.
 
     Args:
@@ -38,6 +38,8 @@ def draw_baselines(ax, df, xpos=None, dataset_size=None):
 
     names = [m for m in colours if m in df.columns]
     if not names:
+        if debug is not None:
+            debug.append("no baseline columns found")
         return
 
     xlim = ax.get_xlim()
@@ -59,9 +61,13 @@ def draw_baselines(ax, df, xpos=None, dataset_size=None):
         if dataset_size is not None and not math.isnan(score):
             score = -accuracy_to_kt(score, dataset_size)
         ax.axhline(score, linestyle="dotted", c=colours[model])
+        if debug is not None:
+            debug.append(f"axhline {model} at {score:.3f}")
         ax.annotate(
             xy=(xpos_val, score - 0.03),
             text=model.title(),
             c=colours[model],
             ha="center",
         )
+        if debug is not None:
+            debug.append(f"annotate {model} at {xpos_val}")
