@@ -121,7 +121,8 @@ def plot_release_chart(
     fig, ax = plt.subplots(figsize=(8, 4))
     actions.append("create figure")
     ax.scatter(df["Release Date"], -df["KT"], marker="o", label="model")
-    actions.append(f"scatter models: {len(df)}")
+    coords = list(zip(df["Release Date"].dt.date, (-df["KT"]).tolist()))
+    actions.append(f"scatter models: {coords}")
     ax.set_xlabel("Model release date")
     ax.set_ylabel("-log10 KT accuracy")
     draw_baselines(
@@ -444,14 +445,14 @@ def generate_dataset_page(
     df_results = load_results_dataframe(conn, dataset, cfg_file)
 
     # Plot test results by model release date
-    chart_file = os.path.join(out_dir, "release_scores.png")
+    chart_file = os.path.join(out_dir, f"release_scores_{dataset}.png")
     stats, debug_actions = plot_release_chart(
         conn, dataset, df_results, chart_file, dataset_size
     )
     if os.path.exists(chart_file):
         body.append("<h2>Test scores by release date</h2>")
         body.append(
-            f"<img src='release_scores.png' alt='scores by release date'>"
+            f"<img src='release_scores_{dataset}.png' alt='scores by release date'>"
         )
         if stats is not None:
             slope, intercept, pval = stats
@@ -946,7 +947,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
             intercept + slope * (xs - x0),
             "--",
         )
-        ax.set_xlim(df["Release Date"].min(), end_date)
+        # ax.set_xlim(df["Release Date"].min(), end_date)
         if law == "Herdan":
             lines = {
                 0.5: "Children's speech (~0.5–0.6)",
@@ -1054,7 +1055,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         x_end = mdates.date2num(end_date)
         xs = np.linspace(x0, x_end, 100)
         ax.plot(mdates.num2date(xs), intercept + slope * (xs - x0), "--")
-        ax.set_xlim(ens_df["Release Date"].min(), end_date)
+        # ax.set_xlim(ens_df["Release Date"].min(), end_date)
         if title == "Herdan":
             lines = {
                 0.5: "Children's speech (~0.5–0.6)",
@@ -1165,7 +1166,7 @@ def main() -> None:
     for d in dataset_names:
         index_body_parts.append(f"<h2>{d}</h2>")
         index_body_parts.append(
-            f"<img src='dataset/{d}/release_scores.png' alt='ensemble accuracy trend for {d}'>"
+            f"<img src='dataset/{d}/release_scores_{d}.png' alt='ensemble accuracy trend for {d}'>"
         )
     index_body_parts.append("<h2>Lexicostatistics</h2>")
     index_body_parts.append(
