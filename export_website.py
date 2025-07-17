@@ -71,7 +71,7 @@ def plot_release_chart(
     if df.empty:
         raise RuntimeError("no model results found to plot")
 
-    df["Release Date"] = pd.to_datetime(df["Release Date"])
+    df["Release Date"] = pd.to_datetime(df["Release Date"], utc=True)
     df.sort_values("Release Date", inplace=True)
     df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
     actions.append("compute KT and sort")
@@ -135,7 +135,7 @@ def plot_release_chart(
     )
 
     ens_df = ens_df.copy()
-    ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+    ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"], utc=True)
     ens_df.sort_values("Release Date", inplace=True)
     ens_df["KT"] = (ens_df["test_correct"] / ens_df["test_total"]).apply(
         lambda x: accuracy_to_kt(x, dataset_size)
@@ -490,7 +490,7 @@ def generate_dataset_page(
         df = df.merge(info, on="Model", how="left")
         df = df[~df["ollama"].fillna(False).astype(bool)]
         df.dropna(subset=["Release Date", "Accuracy"], inplace=True)
-        df["Release Date"] = pd.to_datetime(df["Release Date"])
+        df["Release Date"] = pd.to_datetime(df["Release Date"], utc=True)
         df.sort_values("Release Date", inplace=True)
         df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
         body.append("<h2>Model Scores</h2><table border='1'>")
@@ -546,7 +546,7 @@ def generate_dataset_page(
         if ens_df.empty:
             raise RuntimeError("no ensemble data found")
         ens_df = ens_df.copy()
-        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"])
+        ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"], utc=True)
         ens_df.sort_values("Release Date", inplace=True)
         ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(
             lambda x: accuracy_to_kt(x, dataset_size)
@@ -941,7 +941,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
 
     if df.empty:
         raise RuntimeError("no lexicostatistics data found")
-    df["Release Date"] = pd.to_datetime(df["Release Date"])
+    df["Release Date"] = pd.to_datetime(df["Release Date"], utc=True)
     for col, fname in [
         ("Prompt Herdan", "prompt_herdan.png"),
         ("Prompt Zipf", "prompt_zipf.png"),
@@ -1054,7 +1054,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         )
     body.append("</table>")
 
-    ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"])
+    ens_df["Release Date"] = pd.to_datetime(ens_df["Release Date"], utc=True)
     for col, fname, title, section in [
         ("Prompt Herdan", "ensemble_prompt_herdan.png", "Herdan", "prompts"),
         ("Prompt Zipf", "ensemble_prompt_zipf.png", "Zipf", "prompts"),
