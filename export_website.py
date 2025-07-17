@@ -4,7 +4,8 @@ from __future__ import annotations
 import os
 import html
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from dateutil.relativedelta import relativedelta
 from typing import List, Tuple, Optional
 import subprocess
 import tempfile
@@ -139,6 +140,13 @@ def plot_release_chart(
     ens_df["KT"] = (ens_df["test_correct"] / ens_df["test_total"]).apply(
         lambda x: accuracy_to_kt(x, dataset_size)
     )
+
+    earliest_date = min(df["Release Date"].min(), ens_df["Release Date"].min())
+    xlim_min = earliest_date.to_pydatetime().replace(day=1)
+    actions.append(f"xlim_min {xlim_min.date()}")
+
+    latest_model = df["Release Date"].max()
+    latest_ens = ens_df["Release Date"].max()
     ax.scatter(
         ens_df["Release Date"],
         -ens_df["KT"],
@@ -149,28 +157,38 @@ def plot_release_chart(
     actions.append(f"scatter ensembles: {len(ens_df)}")
     x = mdates.date2num(ens_df["Release Date"])
     y = -ens_df["KT"]
+    xlim_max_candidate = max(latest_model, latest_ens)
+    cross_date = None
     if len(ens_df) > 1:
         slope, intercept, r, pval, std = linregress(x, y)
-        xs = np.linspace(x.min(), x.max(), 100)
-        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
-        actions.append("draw ensemble trend line")
         if best_baseline_y is not None and slope > 0:
             cross_x = (best_baseline_y - intercept) / slope
             cross_date = mdates.num2date(cross_x, tz=timezone.utc)
-            if datetime(2024, 8, 1, tzinfo=timezone.utc) <= cross_date <= datetime(2027, 1, 1, tzinfo=timezone.utc):
-                ax.axvline(cross_date, linestyle=":", color="gray")
-                ax.annotate(
-                    cross_date.strftime("%Y-%m-%d"),
-                    xy=(cross_date, best_baseline_y),
-                    xytext=(0, 5),
-                    textcoords="offset points",
-                    rotation=90,
-                    ha="center",
-                    va="bottom",
-                )
-                actions.append("mark baseline crossing")
+            future_limit = datetime.now(timezone.utc) + relativedelta(months=18)
+            if cross_date <= future_limit:
+                xlim_max_candidate = max(xlim_max_candidate, cross_date)
+        xs = np.linspace(mdates.date2num(xlim_min), mdates.date2num(xlim_max_candidate), 100)
+        ax.plot(mdates.num2date(xs), intercept + slope * xs, "--", c="red")
+        actions.append("draw ensemble trend line")
     else:
         slope = intercept = pval = float("nan")
+
+    xlim_max = xlim_max_candidate
+    ax.set_xlim(xlim_min, xlim_max)
+    actions.append(f"xlim_max {xlim_max.date()}")
+
+    if cross_date is not None and xlim_min <= cross_date <= xlim_max:
+        ax.axvline(cross_date, linestyle=":", color="gray")
+        ax.annotate(
+            cross_date.strftime("%Y-%m-%d"),
+            xy=(cross_date, best_baseline_y),
+            xytext=(0, 5),
+            textcoords="offset points",
+            rotation=90,
+            ha="center",
+            va="bottom",
+        )
+        actions.append("mark baseline crossing")
 
     ax.set_title(f"{dataset} test scores by release date")
 
