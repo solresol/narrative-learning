@@ -664,10 +664,17 @@ def generate_dataset_page(
                     ],
                     check=True,
                     timeout=30,
+                    capture_output=True,
+                    text=True,
                 )
                 body.append(f"<img src='{img_name}' alt='decision tree'>")
-            except (subprocess.CalledProcessError, FileNotFoundError):
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
                 body.append(f"<pre class='graphviz'>{html.escape(dot_data)}</pre>")
+                err = getattr(e, "stderr", None)
+                if err:
+                    body.append(f"<pre>{html.escape(str(err))}</pre>")
+                else:
+                    body.append(f"<pre>{html.escape(str(e))}</pre>")
             finally:
                 if dot_path and os.path.exists(dot_path):
                     os.remove(dot_path)

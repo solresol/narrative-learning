@@ -19,7 +19,7 @@ jobs:
       - name: Setup environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql postgresql-client rsync python3-psycopg2
+          sudo apt-get install -y postgresql postgresql-client rsync python3-psycopg2 graphviz
           curl -LsSf https://astral.sh/uv/install.sh | sh
           ./envsetup.sh
           sudo -u postgres createuser --superuser $(whoami)

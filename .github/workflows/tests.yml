@@ -33,7 +33,7 @@ jobs:
           PGUSER: root
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client graphviz
           curl -L https://datadumps.ifost.org.au/narrative-learning/narrative.sql.gz -o narrative.sql.gz
           gunzip -c narrative.sql.gz | psql -d narrative
       - name: Run tests
