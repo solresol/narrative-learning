@@ -408,7 +408,7 @@ def generate_investigation_page(
 
 def generate_dataset_page(
     conn, dataset: str, cfg_file: str, out_dir: str, short_summary: str | None = None
-) -> None:
+) -> tuple[float, float, float] | None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
     cur.execute(
@@ -475,7 +475,7 @@ def generate_dataset_page(
         if stats is not None:
             slope, intercept, pval = stats
             body.append(
-                f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.3g}</p>"
+                f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.5g}</p>"
             )
         if debug_actions:
             body.append("<h3>Debug</h3>")
@@ -753,6 +753,8 @@ def generate_dataset_page(
         os.path.join(out_dir, "index.html"), f"Dataset {dataset}", "\n".join(body)
     )
 
+    return stats
+
 
 def generate_dataset_index_page(
     dataset_rows: List[tuple[str, str | None]], out_path: str
@@ -898,12 +900,12 @@ def generate_model_index_page(
             body.append("<h2>Example Count Comparison</h2>")
             body.append(f"<img src='examples_scatter.png' alt='examples scatter'>")
             body.append(f"<img src='examples_diff_hist.png' alt='difference histogram'>")
-            body.append(f"<p>Wilcoxon statistic: {stat:.2f}, p-value: {pval:.3g}</p>")
+            body.append(f"<p>Wilcoxon statistic: {stat:.2f}, p-value: {pval:.5g}</p>")
 
     write_page(out_path, "Models", "\n".join(body))
 
 
-def generate_lexicostatistics_page(conn, out_dir: str) -> None:
+def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float, float, float]]:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
     cur.execute(
@@ -932,6 +934,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
     )
 
     body = ["<h2>Language Models</h2>"]
+    stats: dict[str, tuple[float, float, float]] = {}
     body.append("<table border='1'>")
     body.append(
         "<tr><th>Release Date</th><th>Vendor</th><th>Model</th>"
@@ -1012,8 +1015,9 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         alt_title = f"{law}'s Law ({section})"
         body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
         body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
         )
+        stats[fname] = (slope, intercept, pval)
 
     # Ensemble trends
     cur.execute(
@@ -1122,10 +1126,13 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> None:
         alt_title = f"{law_title} Law ({section})"
         body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
         body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.3g}</p>"
+            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
         )
+        stats[fname] = (slope, intercept, pval)
 
     write_page(os.path.join(out_dir, "index.html"), "Lexicostatistics", "\n".join(body))
+
+    return stats
 
 
 def main() -> None:
@@ -1156,17 +1163,22 @@ def main() -> None:
         import tqdm
 
         dataset_iter = tqdm.tqdm(datasets, desc="datasets")
+    dataset_stats: dict[str, tuple[float, float, float] | None] = {}
     for row in dataset_iter:
         dataset, cfg_file, *rest = row
         summary = rest[0] if rest else None
         dataset_dir = os.path.join(base_dir, "dataset", dataset)
-        generate_dataset_page(conn, dataset, cfg_file, dataset_dir, summary)
+        stats = generate_dataset_page(conn, dataset, cfg_file, dataset_dir, summary)
         dataset_rows.append((dataset, summary))
+        dataset_stats[dataset] = stats
 
     generate_dataset_index_page(
         dataset_rows, os.path.join(base_dir, "dataset", "index.html")
     )
     dataset_names = [d for d, _ in dataset_rows]
+
+    # generate lexicostatistics page before building the index body
+    lex_stats = generate_lexicostatistics_page(conn, os.path.join(base_dir, "lexicostatistics"))
 
     cur.execute(
         """
@@ -1193,20 +1205,33 @@ def main() -> None:
         index_body_parts.append(
             f"<img src='dataset/{d}/release_scores_{d}.png' alt='ensemble accuracy trend for {d}'>"
         )
+        stats = dataset_stats.get(d)
+        if stats:
+            s, i, p = stats
+            index_body_parts.append(
+                f"<p>Slope {s:.4f}, intercept {i:.4f}, p={p:.5g}</p>"
+            )
     index_body_parts.append("<h2>Lexicostatistics</h2>")
     index_body_parts.append(
         "<img src='lexicostatistics/ensemble_prompt_herdan.png' alt='Prompt vocabulary trend'>"
     )
+    s = lex_stats.get("ensemble_prompt_herdan.png") if lex_stats else None
+    if s:
+        index_body_parts.append(
+            f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
+        )
     index_body_parts.append(
         "<img src='lexicostatistics/ensemble_reasoning_herdan.png' alt='Reasoning vocabulary trend'>"
     )
+    s = lex_stats.get("ensemble_reasoning_herdan.png") if lex_stats else None
+    if s:
+        index_body_parts.append(
+            f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
+        )
     index_body_parts.append(
         "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a></p>"
     )
     index_body = "\n".join(index_body_parts)
-
-    # generate lexicostatistics page
-    generate_lexicostatistics_page(conn, os.path.join(base_dir, "lexicostatistics"))
 
     write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
     conn.close()
