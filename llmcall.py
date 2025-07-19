@@ -157,15 +157,17 @@ def openai_batch_predict(
             )
             continue
         try:
-            arguments = json.loads(
-                record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
-            )
+            arguments_str = record["response"]["body"]["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+            arguments = json.loads(arguments_str)
         except KeyError as e:
             print(f"Missing key in record: {e}", file=sys.stderr)
             print("Full record dump:", file=sys.stderr)
             json.dump(record, sys.stderr, indent=2)
             print("", file=sys.stderr)  # newline
             # Re-raise the original exception to preserve stack trace
+            raise
+        except json.decoder.JSONDecodeError:
+            print(f"Decode failure: {arguments_str}", file=sys.stderr)
             raise
         usage = record["response"]["body"]["usage"]
         entity_id = record["custom_id"]
