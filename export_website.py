@@ -919,7 +919,11 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
          ORDER BY lm.release_date
         """
     )
-    rows = cur.fetchall()
+    rows = [
+        row
+        for row in cur.fetchall()
+        if not any(v == 0 for v in row[3:])
+    ]
     df = pd.DataFrame(
         rows,
         columns=[
@@ -1034,7 +1038,11 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
         "SELECT training_model, prompt_herdan, prompt_zipf, reasoning_herdan, reasoning_zipf FROM lexicostatistics WHERE training_model = ANY(%s)",
         ([r[1] for r in ens_rows],),
     )
-    lookup = {m: (ph, pz, rh, rz) for m, ph, pz, rh, rz in cur.fetchall()}
+    lookup = {
+        m: (ph, pz, rh, rz)
+        for m, ph, pz, rh, rz in cur.fetchall()
+        if not any(v == 0 for v in (ph, pz, rh, rz))
+    }
     data = []
     for date, models in ens_rows:
         if models in lookup:
