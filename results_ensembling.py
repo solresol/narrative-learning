@@ -8,6 +8,11 @@ import datasetconfig
 from modules.postgres import get_connection
 from modules.exceptions import NoProcessedRoundsException
 from typing import List, Dict, Tuple, Optional
+
+# Mapping of run names (``models.model``) to training model identifiers.
+# This is populated in ``main`` after reading from the database so that
+# helper functions can translate run names when looking up release dates.
+MODEL_TO_TRAINING: Dict[str, str] = {}
 import sys
 from datetime import datetime
 from statsmodels.stats.proportion import proportion_confint
@@ -279,20 +284,24 @@ def find_best_combinations(results, top_n=5):
 
 
 
-def get_model_release_date(model_name, release_dates_df):
-    """Get the release date for a model.
-    
-    Args:
-        model_name: The name of the model
-        release_dates_df: DataFrame containing release dates
-        
-    Returns:
-        Release date as a datetime object or None if not found
+def get_model_release_date(model_name: str, release_dates_df: pd.DataFrame) -> Optional[datetime]:
+    """Return the release date for ``model_name`` if available.
+
+    ``model_name`` is the run name from the ``models`` table. The release date
+    information is keyed by training model, so we first translate the run name
+    using ``MODEL_TO_TRAINING``. If no matching training model is found or the
+    training model has no recorded release date, ``None`` is returned.
     """
-    if model_name not in release_dates_df['Model Name'].values:
+
+    training_model = MODEL_TO_TRAINING.get(model_name, model_name)
+
+    if training_model not in release_dates_df['Model Name'].values:
         return None
-    
-    date_val = release_dates_df.loc[release_dates_df['Model Name'] == model_name, 'Release Date'].iloc[0]
+
+    date_val = release_dates_df.loc[
+        release_dates_df['Model Name'] == training_model,
+        'Release Date'
+    ].iloc[0]
     return pd.to_datetime(date_val).to_pydatetime()
 
 
@@ -732,10 +741,11 @@ if __name__ == '__main__':
 
     cur.execute(
         """
-        SELECT id, model
-          FROM investigations
-         WHERE dataset = %s
-         ORDER BY id
+        SELECT i.id, i.model, m.training_model
+          FROM investigations i
+          JOIN models m ON i.model = m.model
+         WHERE i.dataset = %s
+         ORDER BY i.id
         """,
         (args.dataset,),
     )
@@ -745,6 +755,9 @@ if __name__ == '__main__':
 
     investigation_ids = [r[0] for r in rows]
     model_names = [r[1] for r in rows]
+    training_models = [r[2] for r in rows]
+
+    MODEL_TO_TRAINING = dict(zip(model_names, training_models))
 
     release_dates_df = None
     try:
@@ -760,15 +773,21 @@ if __name__ == '__main__':
     if release_dates_df is not None:
         valid_invs = []
         valid_models = []
-        for inv_id, name in zip(investigation_ids, model_names):
-            if name in release_dates_df['Model Name'].values:
+        valid_training = []
+        for inv_id, name, tmodel in zip(investigation_ids, model_names, training_models):
+            if tmodel in release_dates_df['Model Name'].values:
                 valid_invs.append(inv_id)
                 valid_models.append(name)
+                valid_training.append(tmodel)
             else:
                 if args.verbose:
-                    print(f"Skipping model {name} - not found in release dates")
+                    print(
+                        f"Skipping model {name} - training model {tmodel} not found in release dates"
+                    )
         investigation_ids = valid_invs
         model_names = valid_models
+        training_models = valid_training
+        MODEL_TO_TRAINING = dict(zip(model_names, training_models))
 
     if len(investigation_ids) < args.k:
         sys.exit(f"At least {args.k} investigations are required for {args.k}-ensemble, but only {len(investigation_ids)} found")
