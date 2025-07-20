@@ -732,11 +732,10 @@ if __name__ == '__main__':
 
     cur.execute(
         """
-        SELECT i.id, m.name
-          FROM investigations i
-          JOIN models m ON i.model = m.model
-         WHERE i.dataset = %s
-         ORDER BY i.id
+        SELECT id, model
+          FROM investigations
+         WHERE dataset = %s
+         ORDER BY id
         """,
         (args.dataset,),
     )
