@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import html
 import argparse
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import List, Tuple, Optional
@@ -25,16 +26,19 @@ from modules.ensemble_selection import get_interesting_ensembles
 from modules.metrics import accuracy_to_kt
 import math
 
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+_env = Environment(
+    loader=FileSystemLoader(TEMPLATES_DIR),
+    autoescape=select_autoescape(["html", "xml"]),
+)
+_page_template = _env.get_template("page.html")
+
 
 def write_page(path: str, title: str, body: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    html_content = _page_template.render(title=title, body=body)
     with open(path, "w", encoding="utf-8") as f:
-        f.write("<!doctype html><html><head><meta charset='utf-8'>")
-        f.write(f"<title>{html.escape(title)}</title>")
-        f.write("</head><body>")
-        f.write(f"<h1>{html.escape(title)}</h1>\n")
-        f.write(body)
-        f.write("</body></html>")
+        f.write(html_content)
 
 
 def get_split_id(cfg: DatasetConfig) -> int:
