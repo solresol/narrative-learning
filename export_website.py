@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from scipy.stats import linregress, wilcoxon
 import numpy as np
+import umap
 
 import pandas as pd
 
@@ -202,6 +203,59 @@ def plot_release_chart(
     actions.append(f"savefig {out_path}")
     plt.close(fig)
     return (slope, intercept, pval), actions
+
+
+def plot_feature_scatter(cfg: DatasetConfig, out_path: str) -> bool:
+    """Plot a 2D scatter of dataset features.
+
+    If the dataset has exactly two feature columns, they are used directly.
+    Otherwise the features are reduced to two dimensions using UMAP with a
+    fixed random state so the plot is deterministic.
+    """
+    features = [
+        c
+        for c in cfg.columns
+        if c not in (cfg.primary_key, cfg.target_field)
+    ]
+    if len(features) < 2:
+        return False
+
+    cur = cfg.conn.cursor()
+    cols = ", ".join([cfg._ident(c) for c in features + [cfg.target_field]])
+    cfg._execute(cur, f"SELECT {cols} FROM {cfg.table_name}")
+    rows = cur.fetchall()
+    df = pd.DataFrame(rows, columns=features + [cfg.target_field])
+
+    if len(features) > 2:
+        # Convert categorical data to numeric via one-hot encoding
+        X = pd.get_dummies(df[features])
+        embedding = umap.UMAP(n_components=2, random_state=0).fit_transform(X)
+        scatter_df = pd.DataFrame(embedding, columns=["x", "y"])
+    else:
+        scatter_df = df[features].rename(columns={features[0]: "x", features[1]: "y"})
+
+    scatter_df[cfg.target_field] = df[cfg.target_field]
+
+    markers = ["o", "s", "^", "v", "D", "X", "P", "<", ">", "*"]
+    colors = plt.cm.tab10.colors
+    fig, ax = plt.subplots(figsize=(6, 6))
+    for i, target_val in enumerate(sorted(scatter_df[cfg.target_field].unique())):
+        mask = scatter_df[cfg.target_field] == target_val
+        ax.scatter(
+            scatter_df.loc[mask, "x"],
+            scatter_df.loc[mask, "y"],
+            marker=markers[i % len(markers)],
+            color=colors[i % len(colors)],
+            label=str(target_val),
+        )
+
+    ax.set_xlabel(features[0] if len(features) == 2 else "UMAP1")
+    ax.set_ylabel(features[1] if len(features) == 2 else "UMAP2")
+    ax.legend()
+    fig.tight_layout()
+    plt.savefig(out_path)
+    plt.close(fig)
+    return True
 
 
 def generate_round_page(
@@ -429,7 +483,14 @@ def generate_dataset_page(
     cfg = DatasetConfig(conn, cfg_file, dataset)
     dataset_size = cfg.get_data_point_count()
 
-    body = []
+    scatter_path = os.path.join(out_dir, "feature_scatter.png")
+    if plot_feature_scatter(cfg, scatter_path):
+        body = [
+            "<h2>Feature Scatter</h2>",
+            "<img src='feature_scatter.png' alt='feature scatter'>",
+        ]
+    else:
+        body = []
     if short_summary:
         body.append(f"<p>{html.escape(short_summary)}</p>")
     cur.execute(
