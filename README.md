@@ -75,23 +75,31 @@ PGUSER=root uv run baseline.py --dataset <dataset>
 uv run investigate.py <investigation-id>
 ```
 
-Copy everything from `outputs/*_results.csv` after each run and then
-generate ensemble summaries:
+After each round the results are written to PostgreSQL. Generate
+ensemble summaries directly from the database:
 
 ```bash
-python results_ensembling.py titanic --summary outputs/titanic_ensemble_summary.txt
-python results_ensembling.py wisconsin --summary outputs/wisconsin_ensemble_summary.txt
-python results_ensembling.py southgermancredit --summary outputs/southgermancredit_ensemble_summary.txt
-python results_ensembling.py potions --summary outputs/potions_ensemble_summary.txt
-python results_ensembling.py timetravel_insurance --summary outputs/timetravel_insurance_ensemble_summary.txt
-python results_ensembling.py espionage --summary outputs/espionage_ensemble_summary.txt
+uv run results_ensembling.py --progress titanic
+uv run results_ensembling.py --progress wisconsin
+uv run results_ensembling.py --progress southgermancredit
+uv run results_ensembling.py --progress --no-decodex espionage
+uv run results_ensembling.py --progress --no-decodex timetravel_insurance
+uv run results_ensembling.py --progress --no-decodex potions
 ```
 
 The ensemble script stores results in the `ensemble_results` table and
-orders them by model release date from `language_models`.
-Some older models such as `gpt-4.5-preview` have been removed from the
-OpenAI API and `gemini-2.0` now requires a paid account, so you may need
-to substitute newer model names.
+orders them by model release date from `language_models`. Some older
+models such as `gpt-4.5-preview` have been removed from the OpenAI API
+and `gemini-2.0` now requires a paid account, so you may need to
+substitute newer model names.
+
+Run `lexicostatistics.py` for each ensemble once the investigations have
+completed so that lexical statistics are available when exporting the
+website:
+
+```bash
+uv run lexicostatistics.py "anthropic,openai45,openai35"
+```
 
 
 
