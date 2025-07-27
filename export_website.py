@@ -25,6 +25,7 @@ from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
 from modules.metrics import accuracy_to_kt
+from modules.investigation_status import lookup_incomplete_investigations
 import math
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -314,6 +315,7 @@ def generate_investigation_page(
     cfg_file: str,
     inv_id: int,
     base_dir: str,
+    status: str | None = None,
 ) -> int | None:
     inv_dir = os.path.join(base_dir, "investigation", str(inv_id))
     os.makedirs(inv_dir, exist_ok=True)
@@ -374,6 +376,8 @@ def generate_investigation_page(
         ],
     )
     body = ["<ul>"]
+    if status:
+        body.append(f"<li><b>Status:</b> {html.escape(status)}</li>")
     body.append(f"<li>Dataset: {dataset}</li>")
     body.append(f"<li>Model: {model}</li>")
     body.append(f"<li>Training model: {training_model}</li>")
@@ -465,7 +469,12 @@ def generate_investigation_page(
 
 
 def generate_dataset_page(
-    conn, dataset: str, cfg_file: str, out_dir: str, short_summary: str | None = None
+    conn,
+    dataset: str,
+    cfg_file: str,
+    out_dir: str,
+    short_summary: str | None = None,
+    incomplete: dict[int, str] | None = None,
 ) -> tuple[float, float, float] | None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
@@ -504,7 +513,10 @@ def generate_dataset_page(
 
     best_ranks: list[int] = []
     for inv_id, model, _training_model in investigations:
-        rank = generate_investigation_page(conn, dataset, cfg_file, inv_id, out_dir)
+        reason = incomplete.get(inv_id) if incomplete else None
+        rank = generate_investigation_page(
+            conn, dataset, cfg_file, inv_id, out_dir, reason
+        )
         if rank is not None:
             best_ranks.append(rank)
 
@@ -598,9 +610,12 @@ def generate_dataset_page(
                 if test_acc is not None
                 else "n/a"
             )
+            label = str(inv_id)
+            if incomplete and inv_id in incomplete:
+                label += f" ({html.escape(incomplete[inv_id])})"
             body.append(
                 f"<tr><td>{m}</td><td>{run_name.rstrip('.')}</td>"
-                f"<td><a href='investigation/{inv_id}/index.html'>{inv_id}</a></td>"
+                f"<td><a href='investigation/{inv_id}/index.html'>{label}</a></td>"
                 f"<td>{d_.date()}</td><td>{ex}</td><td>{patience}</td><td>{round_count}</td>"
                 f"<td><a href='investigation/{inv_id}/round/{best_round}/index.html'>{val_acc_disp}</a></td>"
                 f"<td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
@@ -835,7 +850,11 @@ def generate_dataset_index_page(
 
 
 def generate_model_page(
-    conn, model: str, out_dir: str, dataset_lookup: dict[str, str]
+    conn,
+    model: str,
+    out_dir: str,
+    dataset_lookup: dict[str, str],
+    incomplete: dict[int, str] | None = None,
 ) -> None:
     os.makedirs(out_dir, exist_ok=True)
     cur = conn.cursor()
@@ -876,8 +895,11 @@ def generate_model_page(
     ]
     body.append("<h2>Investigations</h2><ul>")
     for inv_id, dataset in investigations:
+        label = f"Investigation {inv_id} ({dataset})"
+        if incomplete and inv_id in incomplete:
+            label += f" - {html.escape(incomplete[inv_id])}"
         body.append(
-            f"<li><a href='../../dataset/{dataset}/investigation/{inv_id}/index.html'>Investigation {inv_id} ({dataset})</a></li>"
+            f"<li><a href='../../dataset/{dataset}/investigation/{inv_id}/index.html'>{label}</a></li>"
         )
     body.append("</ul>")
     if not perf_rows:
@@ -1220,6 +1242,7 @@ def main() -> None:
     base_dir = "website"
     os.makedirs(base_dir, exist_ok=True)
     conn = get_connection()
+    incomplete_lookup = lookup_incomplete_investigations(conn)
     cur = conn.cursor()
     cur.execute(
         "SELECT column_name FROM information_schema.columns WHERE table_name='datasets' AND column_name='short_summary'"
@@ -1241,7 +1264,14 @@ def main() -> None:
         dataset, cfg_file, *rest = row
         summary = rest[0] if rest else None
         dataset_dir = os.path.join(base_dir, "dataset", dataset)
-        stats = generate_dataset_page(conn, dataset, cfg_file, dataset_dir, summary)
+        stats = generate_dataset_page(
+            conn,
+            dataset,
+            cfg_file,
+            dataset_dir,
+            summary,
+            incomplete_lookup,
+        )
         dataset_rows.append((dataset, summary))
         dataset_stats[dataset] = stats
 
@@ -1265,7 +1295,7 @@ def main() -> None:
 
     for vendor, release_date, training_model, model, ex in rows:
         model_dir = os.path.join(base_dir, "model", model)
-        generate_model_page(conn, model, model_dir, dataset_lookup)
+        generate_model_page(conn, model, model_dir, dataset_lookup, incomplete_lookup)
 
     generate_model_index_page(conn, dataset_lookup, rows, os.path.join(base_dir, "model", "index.html"))
 
