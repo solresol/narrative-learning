@@ -19,8 +19,8 @@ def compute_for_models(
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT model FROM models WHERE training_model = ANY(%s)",
-        (training_models,),
+        "SELECT model FROM models WHERE training_model = ANY(%s) or model = ANY(%s)",
+        (training_models,training_models),
     )
     model_rows = cur.fetchall()
     if not model_rows:
