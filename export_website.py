@@ -1113,9 +1113,10 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
     # Ensemble trends
     cur.execute(
         """
-        SELECT DISTINCT ON (release_date) release_date, models
+        SELECT release_date, models
           FROM ensemble_results
-         ORDER BY release_date, test_accuracy DESC
+         WHERE best_yet
+         ORDER BY release_date
         """
     )
     ens_rows = cur.fetchall()
