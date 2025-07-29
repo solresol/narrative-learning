@@ -1257,7 +1257,10 @@ def _compute_ensemble_data(
             continue
         inv_id = row[0]
         cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
-        preds.append(get_predictions_for_round(cfg, r_id, validation=False))
+        use_decodex = "decodex" in cfg.columns
+        preds.append(
+            get_predictions_for_round(cfg, r_id, validation=False, use_decodex=use_decodex)
+        )
         matrix = cfg.get_confusion_matrix(
             r_id, example_count=1, on_holdout_data=True, on_test_data=True
         )
