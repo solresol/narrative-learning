@@ -26,6 +26,11 @@ from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
 from modules.metrics import accuracy_to_kt
 from modules.investigation_status import lookup_incomplete_investigations
+from results_ensembling import (
+    get_predictions_for_round,
+    ensemble_predictions,
+    calculate_metrics,
+)
 import math
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -1231,6 +1236,116 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
     return stats
 
 
+def _compute_ensemble_data(
+    conn,
+    dataset: str,
+    cfg_file: str,
+    models: list[str],
+    rounds: list[int],
+) -> tuple[dict, float, float, float, float, list[tuple[str, str]]]:
+    """Return confusion matrix and metrics for an ensemble along with model narratives."""
+    preds: list[pd.DataFrame] = []
+    narratives: list[tuple[str, str]] = []
+    for model, r_id in zip(models, rounds):
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM investigations WHERE dataset=%s AND model=%s",
+            (dataset, model),
+        )
+        row = cur.fetchone()
+        if not row:
+            continue
+        inv_id = row[0]
+        cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
+        preds.append(get_predictions_for_round(cfg, r_id, validation=False))
+        matrix = cfg.get_confusion_matrix(
+            r_id, example_count=1, on_holdout_data=True, on_test_data=True
+        )
+        narratives.append(
+            (model, cfg.get_printable_confusion_matrix_and_examples(r_id, matrix))
+        )
+
+    if not preds:
+        return ({"TP": 0, "FP": 0, "TN": 0, "FN": 0}, 0, 0, 0, 0, narratives)
+
+    ens_df = ensemble_predictions(preds, "ens")
+    metrics = calculate_metrics(ens_df, "ens")
+    cm = metrics["confusion_matrix"]
+    acc = metrics["accuracy"]
+    prec = cm["TP"] / (cm["TP"] + cm["FP"]) if (cm["TP"] + cm["FP"]) > 0 else 0
+    rec = cm["TP"] / (cm["TP"] + cm["FN"]) if (cm["TP"] + cm["FN"]) > 0 else 0
+    f1 = (2 * prec * rec) / (prec + rec) if (prec + rec) > 0 else 0
+    return cm, acc, prec, rec, f1, narratives
+
+
+def generate_ensemble_page(
+    conn,
+    dataset: str,
+    cfg_file: str,
+    models: list[str],
+    rounds: list[int],
+    out_dir: str,
+) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cm, acc, prec, rec, f1, narratives = _compute_ensemble_data(
+        conn, dataset, cfg_file, models, rounds
+    )
+
+    body = [f"<p>Dataset: {dataset}</p>"]
+    body.append("<h2>Models</h2><ul>")
+    for m in models:
+        body.append(f"<li><a href='../../model/{m}/index.html'>{m}</a></li>")
+    body.append("</ul>")
+    if narratives:
+        body.append("<h2>Model Narratives</h2>")
+        for m, txt in narratives:
+            body.append(f"<h3>{m}</h3><pre>{html.escape(txt)}</pre>")
+    body.append("<h2>Ensemble Confusion Matrix</h2>")
+    body.append("<table border='1'>")
+    body.append(
+        "<tr><th></th><th>Predicted +</th><th>Predicted -</th></tr>"
+    )
+    body.append(
+        f"<tr><th>Actual +</th><td>{cm['TP']}</td><td>{cm['FN']}</td></tr>"
+    )
+    body.append(
+        f"<tr><th>Actual -</th><td>{cm['FP']}</td><td>{cm['TN']}</td></tr>"
+    )
+    body.append("</table>")
+    body.append(
+        f"<p>Accuracy {acc:.3f}, Precision {prec:.3f}, Recall {rec:.3f}, F1 {f1:.3f}</p>"
+    )
+    write_page(os.path.join(out_dir, "index.html"), "Ensemble", "\n".join(body))
+
+
+def generate_best_ensemble_pages(conn, dataset_lookup: dict[str, str], out_dir: str) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT dataset, models, model_names, model_rounds
+          FROM ensemble_results
+         WHERE best_yet
+         ORDER BY dataset, release_date
+        """
+    )
+    rows = cur.fetchall()
+    index_rows = ["<table border='1'>", "<tr><th>Dataset</th><th>Ensemble</th></tr>"]
+    for dataset, models_str, model_names, rounds_str in rows:
+        cfg_file = dataset_lookup.get(dataset)
+        models = (model_names or models_str).split(",")
+        rounds = [int(r) for r in rounds_str.split(",")]
+        slug = models_str.replace("/", "_").replace(",", "_")
+        page_dir = os.path.join(out_dir, dataset, slug)
+        generate_ensemble_page(conn, dataset, cfg_file, models, rounds, page_dir)
+        rel = f"{dataset}/{slug}/index.html"
+        index_rows.append(
+            f"<tr><td>{dataset}</td><td><a href='{rel}'>{html.escape(models_str)}</a></td></tr>"
+        )
+    index_rows.append("</table>")
+    write_page(os.path.join(out_dir, "index.html"), "Best Ensembles", "\n".join(index_rows))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Export investigation results as static HTML"
@@ -1300,6 +1415,8 @@ def main() -> None:
 
     generate_model_index_page(conn, dataset_lookup, rows, os.path.join(base_dir, "model", "index.html"))
 
+    generate_best_ensemble_pages(conn, dataset_lookup, os.path.join(base_dir, "ensemble"))
+
     index_body_parts = [
         "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
         "<p>This site serves as an observatory to track progress and compare ensembles to traditional explainable models.</p>",
@@ -1333,7 +1450,7 @@ def main() -> None:
             f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
         )
     index_body_parts.append(
-        "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a></p>"
+        "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a> | <a href='ensemble/index.html'>Ensembles</a></p>"
     )
     index_body = "\n".join(index_body_parts)
 
