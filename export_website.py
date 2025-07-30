@@ -406,8 +406,8 @@ def generate_investigation_page(
     body.append("<table border='1'>")
     body.append(
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed"
-        + "</th><th>Train Acc</th><th>Train KT"
-        + "</th><th>Val Acc</th><th>Val KT" 
+        + "</th><th>Train Acc</th><th>Train KT</th>"
+        + "<th>Val Acc</th><th>Val KT</th>"
         + "<th>Test Acc</th><th>Test KT</th></tr>"
     )
     for (
@@ -593,8 +593,8 @@ def generate_dataset_page(
         body.append(
             "<tr><th>Model</th><th>Run Name</th><th>Investigation</th><th>Release Date"
             + "</th><th>Examples</th><th>Patience</th><th>Rounds</th>"
-            + "<th>Train Acc</th><th>Train KT" 
-            + "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+            + "<th>Train Acc</th><th>Train KT</th>"
+            + "<th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
         )
         for m, d_, run_name, inv_id, ex, patience in df[
             [
@@ -618,7 +618,7 @@ def generate_dataset_page(
                 test_acc = cfg.get_test_metric_for_best_validation_round(
                     split_id, "accuracy"
                 )
-            except Exception:
+            except (KeyError, IndexError):
                 train_acc = val_acc = test_acc = None
             train_acc_disp = f"{train_acc:.3f}" if train_acc is not None else "n/a"
             train_kt = (
