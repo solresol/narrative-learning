@@ -284,6 +284,7 @@ def generate_round_page(
     if not row:
         return
     (uuid, prompt, train_acc, val_acc, test_acc, completed, created) = row
+    dataset_size = cfg.get_data_point_count()
     cfg._execute(
         cur,
         f"SELECT COUNT(*), MIN(creation_time), MAX(creation_time) FROM {inf_table} WHERE round_id = ? AND investigation_id = ?",
@@ -300,13 +301,19 @@ def generate_round_page(
     body.append(f"<li>Last inference: {last_inf if last_inf else 'n/a'}</li>")
     body.append(f"<li>Completed: {'yes' if completed else 'no'}</li>")
     body.append(
-        f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}</li>"
+        f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}"
+        f" (KT {accuracy_to_kt(train_acc, dataset_size):.3f})" if train_acc is not None else ""
+        "</li>"
     )
     body.append(
-        f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}</li>"
+        f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}"
+        f" (KT {accuracy_to_kt(val_acc, dataset_size):.3f})" if val_acc is not None else ""
+        "</li>"
     )
     body.append(
-        f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}</li>"
+        f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}"
+        f" (KT {accuracy_to_kt(test_acc, dataset_size):.3f})" if test_acc is not None else ""
+        "</li>"
     )
     body.append("</ul>")
     write_page(
@@ -399,7 +406,9 @@ def generate_investigation_page(
     body.append("<table border='1'>")
     body.append(
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed"
-        + "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+        + "</th><th>Train Acc</th><th>Train KT"
+        + "</th><th>Val Acc</th><th>Val KT" 
+        + "<th>Test Acc</th><th>Test KT</th></tr>"
     )
     for (
         r_id,
@@ -413,6 +422,11 @@ def generate_investigation_page(
     ) in rounds:
         link = f"round/{r_id}/index.html"
         highlight = " style='background-color:#ffffcc'" if best_round == r_id else ""
+        if train_acc is not None:
+            train_acc_disp = f"{train_acc:.3f}"
+            train_kt = f"{accuracy_to_kt(train_acc, dataset_size):.3f}"
+        else:
+            train_acc_disp = train_kt = "n/a"
         if v_acc is not None:
             v_acc_disp = f"{v_acc:.3f}"
             v_kt = f"{accuracy_to_kt(v_acc, dataset_size):.3f}"
@@ -424,7 +438,7 @@ def generate_investigation_page(
         else:
             t_acc_disp = t_kt = "n/a"
         body.append(
-            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
+            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{train_acc_disp}</td><td>{train_kt}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
         )
         generate_round_page(
             cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id))
@@ -578,8 +592,9 @@ def generate_dataset_page(
         body.append("<h2>Model Scores</h2><table border='1'>")
         body.append(
             "<tr><th>Model</th><th>Run Name</th><th>Investigation</th><th>Release Date"
-            + "</th><th>Examples</th><th>Patience</th><th>Rounds</th><th>Val Acc"
-            + "</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+            + "</th><th>Examples</th><th>Patience</th><th>Rounds</th>"
+            + "<th>Train Acc</th><th>Train KT" 
+            + "</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
         )
         for m, d_, run_name, inv_id, ex, patience in df[
             [
@@ -597,12 +612,20 @@ def generate_dataset_page(
             try:
                 best_round = cfg.get_best_round_id(split_id, "accuracy")
                 val_df = cfg.generate_metrics_data(split_id, "accuracy", "validation")
+                train_df = cfg.generate_metrics_data(split_id, "accuracy", "train")
                 val_acc = val_df[val_df.round_id == best_round].metric.iloc[0]
+                train_acc = train_df[train_df.round_id == best_round].metric.iloc[0]
                 test_acc = cfg.get_test_metric_for_best_validation_round(
                     split_id, "accuracy"
                 )
             except Exception:
-                val_acc = test_acc = None
+                train_acc = val_acc = test_acc = None
+            train_acc_disp = f"{train_acc:.3f}" if train_acc is not None else "n/a"
+            train_kt = (
+                f"{accuracy_to_kt(train_acc, dataset_size):.3f}"
+                if train_acc is not None
+                else "n/a"
+            )
             val_acc_disp = f"{val_acc:.3f}" if val_acc is not None else "n/a"
             val_kt = (
                 f"{accuracy_to_kt(val_acc, dataset_size):.3f}"
@@ -622,6 +645,7 @@ def generate_dataset_page(
                 f"<tr><td>{m}</td><td>{run_name.rstrip('.')}</td>"
                 f"<td><a href='investigation/{inv_id}/index.html'>{label}</a></td>"
                 f"<td>{d_.date()}</td><td>{ex}</td><td>{patience}</td><td>{round_count}</td>"
+                f"<td>{train_acc_disp}</td><td>{train_kt}</td>"
                 f"<td><a href='investigation/{inv_id}/round/{best_round}/index.html'>{val_acc_disp}</a></td>"
                 f"<td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
             )
