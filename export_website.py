@@ -511,6 +511,9 @@ def generate_dataset_page(
     cfg = DatasetConfig(conn, cfg_file, dataset)
     dataset_size = cfg.get_data_point_count()
 
+    train_scores: list[float] = []
+    val_scores: list[float] = []
+
     scatter_path = os.path.join(out_dir, "feature_scatter.png")
     if plot_feature_scatter(cfg, scatter_path):
         body = [
@@ -620,6 +623,9 @@ def generate_dataset_page(
                 )
             except (KeyError, IndexError):
                 train_acc = val_acc = test_acc = None
+            else:
+                train_scores.append(train_acc)
+                val_scores.append(val_acc)
             train_acc_disp = f"{train_acc:.3f}" if train_acc is not None else "n/a"
             train_kt = (
                 f"{accuracy_to_kt(train_acc, dataset_size):.3f}"
@@ -650,6 +656,47 @@ def generate_dataset_page(
                 f"<td>{val_kt}</td><td>{test_acc_disp}</td><td>{test_kt}</td></tr>"
             )
         body.append("</table>")
+
+        if train_scores and val_scores:
+            # Scatter plot: training accuracy vs validation accuracy
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.scatter(train_scores, val_scores, marker="o")
+            if len(train_scores) > 1:
+                slope1, intercept1, _r, pval1, _std = linregress(train_scores, val_scores)
+                xs = np.linspace(min(train_scores), max(train_scores), 100)
+                ax.plot(xs, intercept1 + slope1 * xs, "--", c="red")
+            else:
+                slope1 = intercept1 = pval1 = float("nan")
+            ax.set_xlabel("Train Accuracy")
+            ax.set_ylabel("Validation Accuracy")
+            ax.set_title("Train vs Validation")
+            fig.tight_layout()
+            tv_path = os.path.join(out_dir, "train_vs_validation.png")
+            plt.savefig(tv_path)
+            plt.close(fig)
+            body.append("<h2>Train vs Validation</h2>")
+            body.append("<img src='train_vs_validation.png' alt='train vs validation'>")
+            body.append(f"<p>Regression slope: {slope1:.4f}, intercept: {intercept1:.4f}, p-value: {pval1:.5g}</p>")
+
+            # Scatter plot: validation accuracy vs training accuracy
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.scatter(val_scores, train_scores, marker="o")
+            if len(val_scores) > 1:
+                slope2, intercept2, _r, pval2, _std = linregress(val_scores, train_scores)
+                xs = np.linspace(min(val_scores), max(val_scores), 100)
+                ax.plot(xs, intercept2 + slope2 * xs, "--", c="red")
+            else:
+                slope2 = intercept2 = pval2 = float("nan")
+            ax.set_xlabel("Validation Accuracy")
+            ax.set_ylabel("Train Accuracy")
+            ax.set_title("Validation vs Train")
+            fig.tight_layout()
+            vt_path = os.path.join(out_dir, "validation_vs_train.png")
+            plt.savefig(vt_path)
+            plt.close(fig)
+            body.append("<h2>Validation vs Train</h2>")
+            body.append("<img src='validation_vs_train.png' alt='validation vs train'>")
+            body.append(f"<p>Regression slope: {slope2:.4f}, intercept: {intercept2:.4f}, p-value: {pval2:.5g}</p>")
 
         ens_df = get_interesting_ensembles(conn, dataset)
         if ens_df.empty:
