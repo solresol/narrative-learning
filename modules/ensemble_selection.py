@@ -21,7 +21,7 @@ def get_interesting_ensembles(conn, dataset: str) -> pd.DataFrame:
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT release_date, validation_accuracy, validation_correct,
+        SELECT release_date, train_accuracy, validation_accuracy, validation_correct,
                validation_total, test_correct, test_total, model_names
           FROM ensemble_results
          WHERE dataset = %s
@@ -47,6 +47,7 @@ def get_interesting_ensembles(conn, dataset: str) -> pd.DataFrame:
         rows,
         columns=[
             "release_date",
+            "train_accuracy",
             "validation_accuracy",
             "validation_correct",
             "validation_total",
@@ -63,11 +64,13 @@ def get_interesting_ensembles(conn, dataset: str) -> pd.DataFrame:
     best_so_far = -1.0
     keep_rows = []
     for idx, row in df.iterrows():
+        train_acc = row["train_accuracy"]
         val_acc = row["validation_accuracy"]
-        if val_acc is None:
+        if val_acc is None or train_acc is None:
             continue
-        if val_acc > best_so_far:
-            best_so_far = val_acc
+        combo = min(train_acc, val_acc)
+        if combo > best_so_far:
+            best_so_far = combo
             keep_rows.append(idx)
 
     return df.loc[keep_rows]

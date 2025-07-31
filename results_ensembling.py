@@ -17,13 +17,13 @@ import sys
 from datetime import datetime
 from statsmodels.stats.proportion import proportion_confint
 
-def get_predictions_for_round(config, round_id, validation=False, use_decodex=True):
+def get_predictions_for_round(config, round_id, data_type="validation", use_decodex=True):
     """Get predictions and ground truth for a specific round.
-    
+
     Args:
         config: The dataset configuration.
         round_id: The round ID to get predictions for.
-        validation: If True, get validation data; if False, get test data.
+        data_type: Which dataset split to fetch (``train``, ``validation`` or ``test``).
     """
     conn = config.conn
     cur = conn.cursor()
@@ -33,11 +33,10 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
     decodex_column = "decodex" if use_decodex else config.primary_key
     
     # Query to get predictions for the specified round_id
-    # When validation=True, get validation set data (validation=1)
-    # When validation=False, get test set data (holdout=1, validation=0)
+    # ``data_type`` chooses between training, validation and test splits
     inf_table = f"{config.dataset}_inferences" if config.dataset else "inferences"
 
-    if validation:
+    if data_type == "validation":
         query = f"""
             SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
             FROM {inf_table} i
@@ -47,7 +46,7 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
             AND s.split_id = %s
             AND s.validation = TRUE
         """
-    else:
+    elif data_type == "test":
         query = f"""
             SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
             FROM {inf_table} i
@@ -57,6 +56,16 @@ def get_predictions_for_round(config, round_id, validation=False, use_decodex=Tr
             AND s.split_id = %s
             AND s.holdout = TRUE
             AND s.validation = FALSE
+        """
+    else:  # train
+        query = f"""
+            SELECT m.{decodex_column}, m.{config.target_field}, i.prediction
+            FROM {inf_table} i
+            JOIN {config.table_name} m ON i.{config.primary_key} = m.{config.primary_key}
+            JOIN {config.splits_table} s ON (s.{config.primary_key} = i.{config.primary_key})
+            WHERE i.round_id = %s
+            AND s.split_id = %s
+            AND s.holdout = FALSE
         """
     
     cur.execute(query, (int(round_id), int(split_id)))
@@ -173,6 +182,7 @@ def process_investigation_combinations(conn, dataset, config_path, investigation
         if verbose:
             print(f"\nEvaluating combination: {combo_investigations}")
 
+        train_predictions_list = []
         val_predictions_list = []
         test_predictions_list = []
         models_info = []
@@ -193,16 +203,16 @@ def process_investigation_combinations(conn, dataset, config_path, investigation
             # Investigation/model identifier
             model_name_from_env = combo_models[i]
 
-            # Get validation predictions for determining best combinations
-            val_predictions_df = get_predictions_for_round(config, best_round_id, validation=True, use_decodex=use_decodex)
-
-            # Get test predictions for final evaluation
-            test_predictions_df = get_predictions_for_round(config, best_round_id, validation=False, use_decodex=use_decodex)
+            # Get training, validation and test predictions
+            train_predictions_df = get_predictions_for_round(config, best_round_id, data_type="train", use_decodex=use_decodex)
+            val_predictions_df = get_predictions_for_round(config, best_round_id, data_type="validation", use_decodex=use_decodex)
+            test_predictions_df = get_predictions_for_round(config, best_round_id, data_type="test", use_decodex=use_decodex)
 
             if verbose:
                 print(f"investigation={inv_id} val:{val_predictions_df.shape=} test:{test_predictions_df.shape=}")
 
-            if not val_predictions_df.empty and not test_predictions_df.empty:
+            if not val_predictions_df.empty and not test_predictions_df.empty and not train_predictions_df.empty:
+                train_predictions_list.append(train_predictions_df)
                 val_predictions_list.append(val_predictions_df)
                 test_predictions_list.append(test_predictions_df)
                 models_info.append({
@@ -225,9 +235,11 @@ def process_investigation_combinations(conn, dataset, config_path, investigation
         
         # Combine validation predictions to determine best combinations
         ensemble_name = "ensemble"
+        train_ensemble_df = ensemble_predictions(train_predictions_list, ensemble_name)
         val_ensemble_df = ensemble_predictions(val_predictions_list, ensemble_name)
         
         # Calculate validation metrics
+        train_metrics = calculate_metrics(train_ensemble_df, ensemble_name)
         val_metrics = calculate_metrics(val_ensemble_df, ensemble_name)
         
         # Add to validation results
@@ -235,6 +247,11 @@ def process_investigation_combinations(conn, dataset, config_path, investigation
             'models': [model['model_name_from_env'] for model in models_info],
             'model_names': [model['model_name_from_env'] for model in models_info],
             'model_rounds': [model['best_round_id'] for model in models_info],
+            'train_accuracy': train_metrics['accuracy'],
+            'train_lower_bound': train_metrics['lower_bound'],
+            'train_upper_bound': train_metrics['upper_bound'],
+            'train_total': train_metrics['total'],
+            'train_correct': train_metrics['correct'],
             'accuracy': val_metrics['accuracy'],
             'lower_bound': val_metrics['lower_bound'],
             'upper_bound': val_metrics['upper_bound'],
@@ -644,15 +661,22 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
             """
             INSERT INTO ensemble_results (
                 dataset, k, models, model_names, model_rounds, release_date,
+                train_accuracy, train_lower_bound, train_upper_bound,
+                train_total, train_correct,
                 validation_accuracy, validation_lower_bound, validation_upper_bound,
                 validation_total, validation_correct,
                 test_accuracy, test_lower_bound, test_upper_bound,
                 test_total, test_correct, best_yet
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (dataset, k, models) DO UPDATE SET
                 model_names=EXCLUDED.model_names,
                 model_rounds=EXCLUDED.model_rounds,
                 release_date=EXCLUDED.release_date,
+                train_accuracy=EXCLUDED.train_accuracy,
+                train_lower_bound=EXCLUDED.train_lower_bound,
+                train_upper_bound=EXCLUDED.train_upper_bound,
+                train_total=EXCLUDED.train_total,
+                train_correct=EXCLUDED.train_correct,
                 validation_accuracy=EXCLUDED.validation_accuracy,
                 validation_lower_bound=EXCLUDED.validation_lower_bound,
                 validation_upper_bound=EXCLUDED.validation_upper_bound,
@@ -673,6 +697,11 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
                 ','.join(val_res.get('model_names', [])),
                 ','.join(map(str, val_res['model_rounds'])),
                 max_date.strftime('%Y-%m-%d') if max_date else None,
+                float(val_res['train_accuracy']),
+                float(val_res['train_lower_bound']),
+                float(val_res['train_upper_bound']),
+                int(val_res['train_total']),
+                int(val_res['train_correct']),
                 float(val_res['accuracy']),
                 float(val_res['lower_bound']),
                 float(val_res['upper_bound']),
@@ -689,14 +718,14 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
 
     conn.commit()
 
-    # Mark ensembles that improve on previous validation accuracy
+    # Mark ensembles that improve on previous min(train, validation) accuracy
     cur.execute(
         "UPDATE ensemble_results SET best_yet = FALSE WHERE dataset = %s",
         (dataset,)
     )
     cur.execute(
         """
-        SELECT k, models, release_date, validation_accuracy
+        SELECT k, models, release_date, train_accuracy, validation_accuracy
           FROM ensemble_results
          WHERE dataset = %s AND release_date IS NOT NULL
          ORDER BY release_date
@@ -705,13 +734,15 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
     )
     rows = cur.fetchall()
     best_val = None
-    for k_val, models_val, rel_date, val_acc in rows:
-        if best_val is None or val_acc > best_val:
+    for k_val, models_val, rel_date, train_acc, val_acc in rows:
+        combo = min(train_acc if train_acc is not None else 0,
+                    val_acc if val_acc is not None else 0)
+        if best_val is None or combo > best_val:
             cur.execute(
                 "UPDATE ensemble_results SET best_yet = TRUE WHERE dataset=%s AND k=%s AND models=%s",
                 (dataset, k_val, models_val),
             )
-            best_val = val_acc
+            best_val = combo
 
     conn.commit()
 
