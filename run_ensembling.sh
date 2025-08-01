@@ -12,5 +12,5 @@ psql -d narrative -Atc \
 while IFS= read -r models; do
     [ -z "$models" ] && continue
     echo "Running lexicostatistics for $models"
-    uv run lexicostatistics.py "$models" || exit 1
+    uv run lexicostatistics.py --overwrite "$models" || exit 1
 done
