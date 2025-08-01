@@ -1329,8 +1329,11 @@ def _compute_ensemble_data(
         inv_id = row[0]
         cfg = DatasetConfig(conn, cfg_file, dataset, inv_id)
         use_decodex = "decodex" in cfg.columns
+        # Use test predictions to match the confusion matrix statistics
         preds.append(
-            get_predictions_for_round(cfg, r_id, validation=False, use_decodex=use_decodex)
+            get_predictions_for_round(
+                cfg, r_id, data_type="test", use_decodex=use_decodex
+            )
         )
         matrix = cfg.get_confusion_matrix(
             r_id, example_count=1, on_holdout_data=True, on_test_data=True
