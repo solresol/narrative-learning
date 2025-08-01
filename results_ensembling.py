@@ -667,7 +667,7 @@ def store_results_in_db(conn, dataset: str, k: int, validation_results, test_res
                 validation_total, validation_correct,
                 test_accuracy, test_lower_bound, test_upper_bound,
                 test_total, test_correct, best_yet
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (dataset, k, models) DO UPDATE SET
                 model_names=EXCLUDED.model_names,
                 model_rounds=EXCLUDED.model_rounds,
