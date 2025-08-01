@@ -497,14 +497,20 @@ class DatasetConfig:
         relevant_rounds = rounds[-(patience + 1):]
         oldest_round = relevant_rounds[0]
 
-        # Calculate metric for oldest round
-        oldest_matrix = self.get_confusion_matrix(oldest_round, on_holdout_data=on_validation)
-        best_score = self.calculate_metric(oldest_matrix, metric)
+        # Calculate combined metric for oldest round
+        train_matrix = self.get_confusion_matrix(oldest_round)
+        val_matrix = self.get_confusion_matrix(oldest_round, on_holdout_data=on_validation)
+        train_score = self.calculate_metric(train_matrix, metric)
+        val_score = self.calculate_metric(val_matrix, metric)
+        best_score = min(train_score, val_score)
 
         # Check if any later round beat this score
         for round_id in relevant_rounds[1:]:
-            matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_validation)
-            score = self.calculate_metric(matrix, metric)
+            train_matrix = self.get_confusion_matrix(round_id)
+            val_matrix = self.get_confusion_matrix(round_id, on_holdout_data=on_validation)
+            train_score = self.calculate_metric(train_matrix, metric)
+            val_score = self.calculate_metric(val_matrix, metric)
+            score = min(train_score, val_score)
             if score > best_score:
                 return False
 
@@ -538,24 +544,24 @@ class DatasetConfig:
 
     def get_best_round_id(self, split_id: int, metric: str = 'accuracy') -> int:
         """
-        Find the round with the best validation performance for a given metric.
+        Find the round with the best combined train/validation performance.
 
         Args:
             split_id: The split ID to analyze
             metric: The metric to calculate ('accuracy', 'precision', 'recall', 'f1')
 
         Returns:
-            Round ID with the best metric on validation data
+            Round ID with the highest ``min(train_score, validation_score)``
 
         Raises:
             ValueError: If no processed rounds are found
         """
-        temp_df = self.generate_metrics_data(int(split_id), metric, 'validation')
-        if temp_df.empty:
+        df = self.create_metrics_dataframe(split_id, metric, ['train', 'validation'])
+        if df.empty:
             raise NoProcessedRoundsException(split_id, self.database_path)
 
-        temp_df.set_index('round_id', inplace=True)
-        return temp_df.metric.idxmax()
+        df['combined'] = df[[f'train {metric}', f'validation {metric}']].min(axis=1)
+        return df['combined'].idxmax()
 
     def get_test_metric_for_best_validation_round(self, split_id: int,
                                                validation_metric: str = 'accuracy',
