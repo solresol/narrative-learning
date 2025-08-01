@@ -408,6 +408,7 @@ def generate_investigation_page(
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed"
         + "</th><th>Train Acc</th><th>Train KT</th>"
         + "<th>Val Acc</th><th>Val KT</th>"
+        + "<th>Min Train/Val</th>"
         + "<th>Test Acc</th><th>Test KT</th></tr>"
     )
     for (
@@ -432,13 +433,18 @@ def generate_investigation_page(
             v_kt = f"{accuracy_to_kt(v_acc, dataset_size):.3f}"
         else:
             v_acc_disp = v_kt = "n/a"
+        if train_acc is not None and v_acc is not None:
+            combo = min(train_acc, v_acc)
+            combo_disp = f"{combo:.3f}"
+        else:
+            combo_disp = "n/a"
         if t_acc is not None:
             t_acc_disp = f"{t_acc:.3f}"
             t_kt = f"{accuracy_to_kt(t_acc, dataset_size):.3f}"
         else:
             t_acc_disp = t_kt = "n/a"
         body.append(
-            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{train_acc_disp}</td><td>{train_kt}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
+            f"<tr{highlight}><td><a href='{link}'>{r_id}</a></td><td>{r_uuid}</td><td>{r_start:%Y-%m-%d}</td><td>{r_completed if r_completed else 'in progress'}</td><td>{train_acc_disp}</td><td>{train_kt}</td><td>{v_acc_disp}</td><td>{v_kt}</td><td>{combo_disp}</td><td>{t_acc_disp}</td><td>{t_kt}</td></tr>"
         )
         generate_round_page(
             cfg, inv_id, r_id, os.path.join(inv_dir, "round", str(r_id))
@@ -452,14 +458,19 @@ def generate_investigation_page(
         .sort_values("round_start")
         .reset_index(drop=True)
     )
+    plot_df["min_acc"] = plot_df.apply(
+        lambda r: min(r["train_acc"], r["val_acc"]) if pd.notna(r["train_acc"]) else np.nan,
+        axis=1,
+    )
     plot_df["rank"] = plot_df.index + 1
     best_rank = int(plot_df["val_acc"].idxmax()) + 1 if not plot_df.empty else None
-    for col in ["train_acc", "val_acc", "test_acc"]:
+    for col in ["train_acc", "val_acc", "test_acc", "min_acc"]:
         plot_df[col] = plot_df[col].apply(lambda x: -accuracy_to_kt(x, dataset_size))
     plt.figure(figsize=(8, 4))
     plt.plot(plot_df["rank"], plot_df["train_acc"], label="train")
     plt.plot(plot_df["rank"], plot_df["val_acc"], label="validation")
     plt.plot(plot_df["rank"], plot_df["test_acc"], label="test")
+    plt.plot(plot_df["rank"], plot_df["min_acc"], label="min(train,val)")
     if len(plot_df) > 20:
         ticks = plot_df["rank"]
         labels = [
@@ -707,26 +718,39 @@ def generate_dataset_page(
         ens_df["validation_kt"] = ens_df["validation_accuracy"].apply(
             lambda x: accuracy_to_kt(x, dataset_size)
         )
+        ens_df["train_kt"] = ens_df["train_accuracy"].apply(
+            lambda x: accuracy_to_kt(x, dataset_size)
+        )
         ens_df["test_accuracy"] = ens_df["test_correct"] / ens_df["test_total"]
         ens_df["test_kt"] = ens_df["test_accuracy"].apply(
             lambda x: accuracy_to_kt(x, dataset_size)
         )
+        ens_df["min_train_val"] = (
+            ens_df[["train_accuracy", "validation_accuracy"]].min(axis=1)
+        )
         body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
         body.append(
-            "<tr><th>Release Date</th><th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+            "<tr><th>Release Date</th><th>Train Acc</th><th>Train KT</th>"
+            + "<th>Val Acc</th><th>Val KT</th><th>Min Train/Val</th>"
+            + "<th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
         )
-        for d_, v_acc, v_kt, t_acc, t_kt, names in ens_df[
+        for d_, train_acc, train_kt, v_acc, v_kt, min_tv, t_acc, t_kt, names in ens_df[
             [
                 "Release Date",
+                "train_accuracy",
+                "train_kt",
                 "validation_accuracy",
                 "validation_kt",
+                "min_train_val",
                 "test_accuracy",
                 "test_kt",
                 "model_names",
             ]
         ].itertuples(index=False):
             body.append(
-                f"<tr><td>{d_.date()}</td><td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
+                f"<tr><td>{d_.date()}</td><td>{train_acc:.3f}</td><td>{train_kt:.3f}</td>"
+                f"<td>{v_acc:.3f}</td><td>{v_kt:.3f}</td><td>{min_tv:.3f}</td>"
+                f"<td>{t_acc:.3f}</td><td>{t_kt:.3f}</td><td>{html.escape(names)}</td></tr>"
             )
         body.append("</table>")
 
