@@ -85,3 +85,9 @@ CREATE TABLE dataset_provenance (
     dataset TEXT PRIMARY KEY REFERENCES datasets(dataset),
     provenance TEXT NOT NULL
 );
+
+CREATE TABLE incomplete_investigation_counts (
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    total INTEGER NOT NULL,
+    hosted_only INTEGER NOT NULL
+);
