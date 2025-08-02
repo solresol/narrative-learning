@@ -6,18 +6,38 @@ import datasetconfig
 from modules.postgres import get_connection
 
 
-def gather_incomplete_investigations(conn) -> dict[str, list[tuple[int, str]]]:
-    """Return investigations that appear incomplete grouped by dataset."""
+def gather_incomplete_investigations(
+    conn, hosted_only: bool = False
+) -> dict[str, list[tuple[int, str]]]:
+    """Return investigations that appear incomplete grouped by dataset.
+
+    If *hosted_only* is True, restrict the search to investigations whose
+    training model is **not** marked as ``ollama_hosted`` in the
+    ``language_models`` table.
+    """
     cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT i.id, i.dataset, d.config_file, m.patience
-          FROM investigations i
-          JOIN datasets d ON i.dataset = d.dataset
-          JOIN models m ON i.model = m.model
-         ORDER BY i.dataset, i.id
-        """
-    )
+    if hosted_only:
+        cur.execute(
+            """
+            SELECT i.id, i.dataset, d.config_file, m.patience
+              FROM investigations i
+              JOIN datasets d ON i.dataset = d.dataset
+              JOIN models m ON i.model = m.model
+              JOIN language_models lm ON m.training_model = lm.training_model
+             WHERE NOT lm.ollama_hosted
+             ORDER BY i.dataset, i.id
+            """
+        )
+    else:
+        cur.execute(
+            """
+            SELECT i.id, i.dataset, d.config_file, m.patience
+              FROM investigations i
+              JOIN datasets d ON i.dataset = d.dataset
+              JOIN models m ON i.model = m.model
+             ORDER BY i.dataset, i.id
+            """
+        )
     rows = cur.fetchall()
     results: dict[str, list[tuple[int, str]]] = {}
     for inv_id, dataset, cfg_path, patience in rows:
@@ -35,7 +55,9 @@ def gather_incomplete_investigations(conn) -> dict[str, list[tuple[int, str]]]:
         # expected and not an error.
         if not cfg.check_early_stopping(split_id, "accuracy", patience):
             if len(processed) < len(rounds):
-                results.setdefault(dataset, []).append((inv_id, "missing inferences"))
+                results.setdefault(dataset, []).append(
+                    (inv_id, "missing inferences")
+                )
                 continue
             results.setdefault(dataset, []).append((inv_id, "should continue"))
     return results
