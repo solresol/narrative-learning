@@ -1395,7 +1395,7 @@ def generate_ensemble_page(
     body = [f"<p>Dataset: {dataset}</p>"]
     body.append("<h2>Models</h2><ul>")
     for m in models:
-        body.append(f"<li><a href='../../model/{m}/index.html'>{m}</a></li>")
+        body.append(f"<li><a href='../../../model/{m}/index.html'>{m}</a></li>")
     body.append("</ul>")
     if narratives:
         body.append("<h2>Model Narratives</h2>")
