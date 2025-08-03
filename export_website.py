@@ -25,7 +25,10 @@ from datasetconfig import DatasetConfig
 from chartutils import draw_baselines
 from modules.ensemble_selection import get_interesting_ensembles
 from modules.metrics import accuracy_to_kt
-from modules.investigation_status import lookup_incomplete_investigations
+from modules.investigation_status import (
+    lookup_incomplete_investigations,
+    gather_incomplete_investigations,
+)
 from results_ensembling import (
     get_predictions_for_round,
     ensemble_predictions,
@@ -1447,6 +1450,49 @@ def generate_best_ensemble_pages(conn, dataset_lookup: dict[str, str], out_dir: 
     write_page(os.path.join(out_dir, "index.html"), "Best Ensembles", "\n".join(index_rows))
 
 
+def generate_incomplete_page(conn, out_dir: str) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT recorded_at, total, hosted_only FROM incomplete_investigation_counts ORDER BY recorded_at"
+    )
+    rows = cur.fetchall()
+    body = []
+    if rows:
+        df = pd.DataFrame(rows, columns=["recorded_at", "total", "hosted_only"])
+        plt.figure(figsize=(6, 4))
+        plt.plot(df["recorded_at"], df["total"], label="all")
+        plt.plot(df["recorded_at"], df["hosted_only"], label="hosted")
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        plt.xticks(rotation=45)
+        plt.ylabel("Incomplete investigations")
+        plt.legend()
+        plt.tight_layout()
+        chart_path = os.path.join(out_dir, "trend.png")
+        plt.savefig(chart_path)
+        plt.close()
+        body.append("<h2>Trend</h2>")
+        body.append("<img src='trend.png' alt='incomplete investigations trend'>")
+    body.append("<h2>Current Incomplete Investigations</h2>")
+    grouped = gather_incomplete_investigations(conn)
+    if not grouped:
+        body.append("<p>All investigations appear complete.</p>")
+    else:
+        for dataset, entries in sorted(grouped.items()):
+            body.append(f"<h3>{dataset}</h3><ul>")
+            for inv_id, reason in entries:
+                body.append(
+                    f"<li><a href='../dataset/{dataset}/investigation/{inv_id}/index.html'>"
+                    f"{inv_id}</a> - {html.escape(reason)}</li>"
+                )
+            body.append("</ul>")
+    write_page(
+        os.path.join(out_dir, "index.html"),
+        "Incomplete Investigations",
+        "\n".join(body),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Export investigation results as static HTML"
@@ -1517,6 +1563,7 @@ def main() -> None:
     generate_model_index_page(conn, dataset_lookup, rows, os.path.join(base_dir, "model", "index.html"))
 
     generate_best_ensemble_pages(conn, dataset_lookup, os.path.join(base_dir, "ensemble"))
+    generate_incomplete_page(conn, os.path.join(base_dir, "incomplete"))
 
     index_body_parts = [
         "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
@@ -1551,7 +1598,7 @@ def main() -> None:
             f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
         )
     index_body_parts.append(
-        "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a> | <a href='ensemble/index.html'>Ensembles</a></p>"
+        "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a> | <a href='ensemble/index.html'>Ensembles</a> | <a href='incomplete/index.html'>Incomplete</a></p>"
     )
     index_body = "\n".join(index_body_parts)
 
