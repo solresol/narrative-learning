@@ -1,16 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-export PGUSER="root"
-export PGDATABASE="narrative"
-
 # Update repository
 git pull -q
 
 # Record incomplete investigation counts
-all_count=$(uv run find_incomplete_investigations.py | grep -E '^ ' | wc -l)
-hosted_count=$(uv run find_incomplete_investigations.py --hosted-only | grep -E '^ ' | wc -l)
-psql -c "INSERT INTO incomplete_investigation_counts(recorded_at, total, hosted_only) VALUES (now(), $all_count, $hosted_count)"
+all_count=$(uv run find_incomplete_investigations.py | grep -c '^ ')
+hosted_count=$(uv run find_incomplete_investigations.py --hosted-only | grep -c '^ ')
+psql narrative -c "INSERT INTO incomplete_investigation_counts(recorded_at, total, hosted_only) VALUES (now(), $all_count, $hosted_count)"
 
 # Run ensembling
 ./run_ensembling.sh
