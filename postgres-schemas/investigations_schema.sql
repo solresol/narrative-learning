@@ -20,7 +20,8 @@ CREATE TABLE investigations (
     round_tracking_file TEXT,
     dump_file TEXT,
     round_number INTEGER,
-    round_uuid UUID
+    round_uuid UUID,
+    ignore BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE baseline_results (

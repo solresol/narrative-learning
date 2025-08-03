@@ -4,16 +4,12 @@
 The script verifies that all processed rounds have inference results and
 that early stopping conditions were met.  Early stopping is evaluated
 before flagging missing inference data so investigations that legitimately
-halted early are not reported as incomplete.
+halted early are not reported as incomplete. Investigations marked with
+``ignore`` are skipped.
 """
 import argparse
 from modules.postgres import get_connection
 from modules.investigation_status import gather_incomplete_investigations
-
-
-def gather_missing(conn, hosted_only: bool = False):
-    """Deprecated wrapper for backward compatibility."""
-    return gather_incomplete_investigations(conn, hosted_only=hosted_only)
 
 
 def main() -> None:
@@ -31,7 +27,7 @@ def main() -> None:
     args = parser.parse_args()
 
     conn = get_connection()
-    missing = gather_missing(conn, hosted_only=args.hosted_only)
+    missing = gather_incomplete_investigations(conn, hosted_only=args.hosted_only)
     conn.close()
 
     if not missing:

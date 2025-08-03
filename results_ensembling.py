@@ -776,6 +776,7 @@ if __name__ == '__main__':
           FROM investigations i
           JOIN models m ON i.model = m.model
          WHERE i.dataset = %s
+           AND NOT i.ignore
          ORDER BY i.id
         """,
         (args.dataset,),
