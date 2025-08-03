@@ -1480,12 +1480,28 @@ def generate_incomplete_page(conn, out_dir: str) -> None:
     if not grouped:
         body.append("<p>All investigations appear complete.</p>")
     else:
+        inv_ids = [inv_id for entries in grouped.values() for inv_id, _ in entries]
+        cur.execute(
+            """
+            SELECT i.id, i.model, lm.vendor, m.training_model
+              FROM investigations i
+              JOIN models m ON i.model = m.model
+              JOIN language_models lm ON m.training_model = lm.training_model
+             WHERE i.id = ANY(%s)
+            """,
+            (inv_ids,),
+        )
+        details = {
+            inv_id: (model, vendor, training_model)
+            for inv_id, model, vendor, training_model in cur.fetchall()
+        }
         for dataset, entries in sorted(grouped.items()):
             body.append(f"<h3>{dataset}</h3><ul>")
             for inv_id, reason in entries:
+                model, vendor, training_model = details.get(inv_id, ("?", "?", "?"))
                 body.append(
-                    f"<li><a href='../dataset/{dataset}/investigation/{inv_id}/index.html'>"
-                    f"{inv_id}</a> - {html.escape(reason)}</li>"
+                    f"<li><a href='../dataset/{dataset}/investigation/{inv_id}/index.html'>{inv_id}</a> - "
+                    f"{html.escape(model)} ({html.escape(vendor)} {html.escape(training_model)}) - {html.escape(reason)}</li>"
                 )
             body.append("</ul>")
     write_page(
