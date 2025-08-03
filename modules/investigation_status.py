@@ -25,6 +25,7 @@ def gather_incomplete_investigations(
               JOIN models m ON i.model = m.model
               JOIN language_models lm ON m.training_model = lm.training_model
              WHERE NOT lm.ollama_hosted
+               AND NOT i.ignore
              ORDER BY i.dataset, i.id
             """
         )
@@ -35,6 +36,7 @@ def gather_incomplete_investigations(
               FROM investigations i
               JOIN datasets d ON i.dataset = d.dataset
               JOIN models m ON i.model = m.model
+             WHERE NOT i.ignore
              ORDER BY i.dataset, i.id
             """
         )

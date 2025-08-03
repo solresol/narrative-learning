@@ -517,6 +517,7 @@ def generate_dataset_page(
           FROM investigations i
           JOIN models m ON i.model = m.model
          WHERE i.dataset = %s
+           AND NOT i.ignore
          ORDER BY i.id
         """,
         (dataset,),
@@ -969,7 +970,8 @@ def generate_model_page(
         return
     training_model, inference_model = row
     cur.execute(
-        "SELECT id, dataset FROM investigations WHERE model = %s ORDER BY id", (model,)
+        "SELECT id, dataset FROM investigations WHERE model = %s AND NOT ignore ORDER BY id",
+        (model,),
     )
     investigations = cur.fetchall()
     perf_rows: List[Tuple[str, str, str]] = []
@@ -1347,7 +1349,7 @@ def _compute_ensemble_data(
     for model, r_id in zip(models, rounds):
         cur = conn.cursor()
         cur.execute(
-            "SELECT id FROM investigations WHERE dataset=%s AND model=%s",
+            "SELECT id FROM investigations WHERE dataset=%s AND model=%s AND NOT ignore",
             (dataset, model),
         )
         row = cur.fetchone()
