@@ -169,7 +169,8 @@ def openai_batch_predict(
             raise
         except json.decoder.JSONDecodeError:
             print(f"Decode failure: {arguments_str}", file=sys.stderr)
-            raise
+            continue
+            # raise
         usage = record["response"]["body"]["usage"]
         entity_id = record["custom_id"]
         if dry_run:
