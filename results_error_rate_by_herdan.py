@@ -83,14 +83,14 @@ def analyze_error_rate_by_herdan(conn, table, dataset, image_output=None,
     
     # Add regression line
     x_range = np.linspace(
-        filtered_df['Herdan Coefficient'].min() - 0.05, 
-        filtered_df['Herdan Coefficient'].max() + 0.25, 
+        filtered_df['Herdan Coefficient'].min() - 0.05,
+        filtered_df['Herdan Coefficient'].max(),
         100
     )
     plt.plot(
-        x_range, 
-        intercept + slope * x_range, 
-        'k--', 
+        x_range,
+        intercept + slope * x_range,
+        'k--',
         linewidth=2,
         label=f'Trend: y = {slope:.4f}x + {intercept:.4f}'
     )

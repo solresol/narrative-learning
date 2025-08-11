@@ -27,13 +27,13 @@ def draw_baselines(ax, df, xpos=None, dataset_size=None, debug=None):
         None, modifies ax in-place
     """
     colours = {
-        "logistic regression": "teal",
-        "decision trees": "gold",
         "dummy": "orange",
+        "decision trees": "green",
         "rulefit": "purple",
+        "logistic regression": "teal",
+        "ebm": "gray",
         "bayesian rule list": "brown",
         "corels": "pink",
-        "ebm": "gray",
     }
 
     names = [m for m in colours if m in df.columns]
