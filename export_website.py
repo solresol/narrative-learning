@@ -102,26 +102,32 @@ def plot_release_chart(
     row = cur.fetchone()
     best_baseline_y = None
     if row:
-        cols_db = [
-            "logistic_regression",
-            "decision_trees",
-            "dummy",
-            "rulefit",
-            "bayesian_rule_list",
-            "corels",
-            "ebm",
-        ]
-        cols_df = [
-            "logistic regression",
-            "decision trees",
-            "dummy",
-            "rulefit",
-            "bayesian rule list",
-            "corels",
-            "ebm",
+        baseline_map = dict(
+            zip(
+                [
+                    "logistic_regression",
+                    "decision_trees",
+                    "dummy",
+                    "rulefit",
+                    "bayesian_rule_list",
+                    "corels",
+                    "ebm",
+                ],
+                row,
+            )
+        )
+        order = [
+            ("dummy", "dummy"),
+            ("decision_trees", "decision trees"),
+            ("rulefit", "rulefit"),
+            ("logistic_regression", "logistic regression"),
+            ("ebm", "ebm"),
+            ("bayesian_rule_list", "bayesian rule list"),
+            ("corels", "corels"),
         ]
         baseline_vals = []
-        for col_db, col_df, val in zip(cols_db, cols_df, row):
+        for col_db, col_df in order:
+            val = baseline_map.get(col_db)
             df[col_df] = val
             if val is not None:
                 baseline_vals.append(-accuracy_to_kt(val, dataset_size))
@@ -195,7 +201,7 @@ def plot_release_chart(
         ax.axvline(cross_date, linestyle=":", color="gray")
         ax.annotate(
             cross_date.strftime("%Y-%m-%d"),
-            xy=(cross_date, best_baseline_y),
+            xy=(cross_date, best_baseline_y - 0.1),
             xytext=(0, 5),
             textcoords="offset points",
             rotation=90,
@@ -1163,15 +1169,14 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
         y = df[col]
         x0 = x_num.min()
         slope, intercept, r, pval, std = linregress(x_num - x0, y)
-        end_date = datetime(2027, 1, 1)
-        x_end = mdates.date2num(end_date)
+        end_date = df["Release Date"].max()
+        x_end = x_num.max()
         xs = np.linspace(x0, x_end, 100)
         ax.plot(
             mdates.num2date(xs),
             intercept + slope * (xs - x0),
             "--",
         )
-        # ax.set_xlim(df["Release Date"].min(), end_date)
         if law == "Herdan":
             lines = {
                 0.5: "Children's speech (~0.5–0.6)",
@@ -1281,11 +1286,10 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
         y = ens_df[col]
         x0 = x_num.min()
         slope, intercept, r, pval, std = linregress(x_num - x0, y)
-        end_date = datetime(2027, 1, 1)
-        x_end = mdates.date2num(end_date)
+        end_date = ens_df["Release Date"].max()
+        x_end = x_num.max()
         xs = np.linspace(x0, x_end, 100)
         ax.plot(mdates.num2date(xs), intercept + slope * (xs - x0), "--")
-        # ax.set_xlim(ens_df["Release Date"].min(), end_date)
         if title == "Herdan":
             lines = {
                 0.5: "Children's speech (~0.5–0.6)",
