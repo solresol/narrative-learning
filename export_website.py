@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import html
 import argparse
+import shutil
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
@@ -37,6 +38,7 @@ from results_ensembling import (
 import math
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+BASE_DIR = "website"
 _env = Environment(
     loader=FileSystemLoader(TEMPLATES_DIR),
     autoescape=select_autoescape(["html", "xml"]),
@@ -46,7 +48,12 @@ _page_template = _env.get_template("page.html")
 
 def write_page(path: str, title: str, body: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    html_content = _page_template.render(title=title, body=body)
+    style_path = os.path.relpath(
+        os.path.join(BASE_DIR, "style.css"), os.path.dirname(path)
+    )
+    html_content = _page_template.render(
+        title=title, body=body, style_path=style_path
+    )
     with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
@@ -1524,8 +1531,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    base_dir = "website"
-    os.makedirs(base_dir, exist_ok=True)
+    os.makedirs(BASE_DIR, exist_ok=True)
+    shutil.copy(
+        os.path.join(TEMPLATES_DIR, "style.css"), os.path.join(BASE_DIR, "style.css")
+    )
     conn = get_connection()
     incomplete_lookup = lookup_incomplete_investigations(conn)
     cur = conn.cursor()
@@ -1548,7 +1557,7 @@ def main() -> None:
     for row in dataset_iter:
         dataset, cfg_file, *rest = row
         summary = rest[0] if rest else None
-        dataset_dir = os.path.join(base_dir, "dataset", dataset)
+        dataset_dir = os.path.join(BASE_DIR, "dataset", dataset)
         stats = generate_dataset_page(
             conn,
             dataset,
@@ -1561,12 +1570,14 @@ def main() -> None:
         dataset_stats[dataset] = stats
 
     generate_dataset_index_page(
-        dataset_rows, os.path.join(base_dir, "dataset", "index.html")
+        dataset_rows, os.path.join(BASE_DIR, "dataset", "index.html")
     )
     dataset_names = [d for d, _ in dataset_rows]
 
     # generate lexicostatistics page before building the index body
-    lex_stats = generate_lexicostatistics_page(conn, os.path.join(base_dir, "lexicostatistics"))
+    lex_stats = generate_lexicostatistics_page(
+        conn, os.path.join(BASE_DIR, "lexicostatistics")
+    )
 
     cur.execute(
         """
@@ -1579,13 +1590,15 @@ def main() -> None:
     rows = cur.fetchall()
 
     for vendor, release_date, training_model, model, ex in rows:
-        model_dir = os.path.join(base_dir, "model", model)
+        model_dir = os.path.join(BASE_DIR, "model", model)
         generate_model_page(conn, model, model_dir, dataset_lookup, incomplete_lookup)
 
-    generate_model_index_page(conn, dataset_lookup, rows, os.path.join(base_dir, "model", "index.html"))
+    generate_model_index_page(
+        conn, dataset_lookup, rows, os.path.join(BASE_DIR, "model", "index.html")
+    )
 
-    generate_best_ensemble_pages(conn, dataset_lookup, os.path.join(base_dir, "ensemble"))
-    generate_incomplete_page(conn, os.path.join(base_dir, "incomplete"))
+    generate_best_ensemble_pages(conn, dataset_lookup, os.path.join(BASE_DIR, "ensemble"))
+    generate_incomplete_page(conn, os.path.join(BASE_DIR, "incomplete"))
 
     index_body_parts = [
         "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
@@ -1624,7 +1637,7 @@ def main() -> None:
     )
     index_body = "\n".join(index_body_parts)
 
-    write_page(os.path.join(base_dir, "index.html"), "Narrative Learning", index_body)
+    write_page(os.path.join(BASE_DIR, "index.html"), "Narrative Learning", index_body)
     conn.close()
 
 
