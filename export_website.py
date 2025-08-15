@@ -153,13 +153,6 @@ def plot_release_chart(
     actions.append(f"scatter models: {coords}")
     ax.set_xlabel("Model release date")
     ax.set_ylabel("-log10 KT accuracy")
-    draw_baselines(
-        ax,
-        df,
-        xpos=df["Release Date"].max(),
-        dataset_size=dataset_size,
-        debug=actions,
-    )
 
     ens_df = ens_df.copy()
     ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"], utc=True)
@@ -204,15 +197,27 @@ def plot_release_chart(
     ax.set_xlim(xlim_min, xlim_max)
     actions.append(f"xlim_max {xlim_max.date()}")
 
+    trend_improving = slope > 0
+    draw_baselines(
+        ax,
+        df,
+        dataset_size=dataset_size,
+        debug=actions,
+        best_only=True,
+        trend_improving=trend_improving,
+    )
+
+    y_min, _ = ax.get_ylim()
+
     if cross_date is not None and xlim_min <= cross_date <= xlim_max:
         ax.axvline(cross_date, linestyle=":", color="gray")
         ax.annotate(
             cross_date.strftime("%Y-%m-%d"),
-            xy=(cross_date, best_baseline_y - 0.1),
-            xytext=(0, 5),
+            xy=(cross_date, y_min),
+            xytext=(-5, 0),
             textcoords="offset points",
             rotation=90,
-            ha="center",
+            ha="right",
             va="bottom",
         )
         actions.append("mark baseline crossing")
