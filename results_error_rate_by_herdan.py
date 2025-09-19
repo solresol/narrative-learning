@@ -92,7 +92,7 @@ def analyze_error_rate_by_herdan(conn, table, dataset, image_output=None,
         intercept + slope * x_range,
         'k--',
         linewidth=2,
-        label=f'Trend: y = {slope:.4f}x + {intercept:.4f}'
+        label=f'Trend: y = {slope:.6f}x + {intercept:.4f}'
     )
     
     # Add baseline lines
@@ -100,7 +100,7 @@ def analyze_error_rate_by_herdan(conn, table, dataset, image_output=None,
     
     # Add equation and statistics
     equation_text = (
-        f"y = {slope:.4f}x + {intercept:.4f}\n"
+        f"y = {slope:.6f}x + {intercept:.4f}\n"
         f"R² = {r_value**2:.4f}, p = {p_value:.4f}"
     )
     plt.annotate(
@@ -195,7 +195,7 @@ if __name__ == '__main__':
         
         print(f"Analysis completed successfully:")
         print(f"P-value: {p_value:.4f}")
-        print(f"Slope: {slope:.4f}")
+        print(f"Slope: {slope:.6f}")
         print(f"Data points: {len(filtered_df)}")
         
         if args.show:
