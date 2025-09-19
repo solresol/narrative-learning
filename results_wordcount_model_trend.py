@@ -177,12 +177,12 @@ def analyze_model_size_vs_wordcount(conn, table, datasets, wordcount_type='promp
         intercept + slope * x_range, 
         'k--', 
         linewidth=2,
-        label=f'Trend: y = {slope:.4f}x + {intercept:.4f}'
+        label=f'Trend: y = {slope:.6f}x + {intercept:.4f}'
     )
     
     # Add equation and statistics
     equation_text = (
-        f"y = {slope:.4f}x + {intercept:.4f}\n"
+        f"y = {slope:.6f}x + {intercept:.4f}\n"
         f"R² = {r_value**2:.4f}, p = {p_value:.4f}"
     )
     plt.annotate(
@@ -251,7 +251,7 @@ def analyze_model_size_vs_wordcount(conn, table, datasets, wordcount_type='promp
     if latex_output:
         with open(latex_output, 'w') as f:
             # Size trend (slope)
-            f.write(f"\\newcommand{{\\{latex_prefix}sizetrend}}{{{slope:.3f}}}\n")
+            f.write(f"\\newcommand{{\\{latex_prefix}sizetrend}}{{{slope:.6f}}}\n")
             
             # P-value of the trend
             if p_value < 0.001:

@@ -34,7 +34,7 @@ def plot_log_model_size_vs_log_error(df, output_prefix, dataset_name, pvalue_fil
     intercept = model.params['const']
     p_value = model.pvalues['Log_Model_Size']
     r_squared = model.rsquared
-    print(f"Slope: {slope:.4f}, p-value: {p_value:.4f}")
+    print(f"Slope: {slope:.6f}, p-value: {p_value:.4f}")
     print(f"Intercept: {intercept:.4f}")
     print(f"R-squared: {r_squared:.4f}")
     

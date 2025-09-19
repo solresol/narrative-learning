@@ -607,7 +607,7 @@ def generate_dataset_page(
         if stats is not None:
             slope, intercept, pval = stats
             body.append(
-                f"<p>Regression slope: {slope:.4f}, intercept: {intercept:.4f}, p-value: {pval:.5g}</p>"
+                f"<p>Regression slope: {slope:.6f}, intercept: {intercept:.4f}, p-value: {pval:.5g}</p>"
             )
         if debug_actions:
             body.append("<h3>Debug</h3>")
@@ -709,7 +709,7 @@ def generate_dataset_page(
             plt.close(fig)
             body.append("<h2>Train vs Validation</h2>")
             body.append("<img src='train_vs_validation.png' alt='train vs validation'>")
-            body.append(f"<p>Regression slope: {slope1:.4f}, intercept: {intercept1:.4f}, p-value: {pval1:.5g}</p>")
+            body.append(f"<p>Regression slope: {slope1:.6f}, intercept: {intercept1:.4f}, p-value: {pval1:.5g}</p>")
 
             # Scatter plot: validation accuracy vs training accuracy
             fig, ax = plt.subplots(figsize=(6, 4))
@@ -729,7 +729,7 @@ def generate_dataset_page(
             plt.close(fig)
             body.append("<h2>Validation vs Train</h2>")
             body.append("<img src='validation_vs_train.png' alt='validation vs train'>")
-            body.append(f"<p>Regression slope: {slope2:.4f}, intercept: {intercept2:.4f}, p-value: {pval2:.5g}</p>")
+            body.append(f"<p>Regression slope: {slope2:.6f}, intercept: {intercept2:.4f}, p-value: {pval2:.5g}</p>")
 
         ens_df = get_interesting_ensembles(conn, dataset)
         if ens_df.empty:
@@ -1228,7 +1228,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
         alt_title = f"{law}'s Law ({section})"
         body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
         body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
+            f"<p>Slope {slope:.6f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
         )
         stats[fname] = (slope, intercept, pval)
 
@@ -1343,7 +1343,7 @@ def generate_lexicostatistics_page(conn, out_dir: str) -> dict[str, tuple[float,
         alt_title = f"{law_title} Law ({section})"
         body.append(f"<img src='{fname}' alt='{alt_title} over time'>")
         body.append(
-            f"<p>Slope {slope:.4f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
+            f"<p>Slope {slope:.6f}, intercept {intercept:.4f}, p={pval:.5g}</p>"
         )
         stats[fname] = (slope, intercept, pval)
 
@@ -1618,7 +1618,7 @@ def main() -> None:
         if stats:
             s, i, p = stats
             index_body_parts.append(
-                f"<p>Slope {s:.4f}, intercept {i:.4f}, p={p:.5g}</p>"
+                f"<p>Slope {s:.6f}, intercept {i:.4f}, p={p:.5g}</p>"
             )
     index_body_parts.append("<h2>Lexicostatistics</h2>")
     index_body_parts.append(
@@ -1627,7 +1627,7 @@ def main() -> None:
     s = lex_stats.get("ensemble_prompt_herdan.png") if lex_stats else None
     if s:
         index_body_parts.append(
-            f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
+            f"<p>Slope {s[0]:.6f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
         )
     index_body_parts.append(
         "<img src='lexicostatistics/ensemble_reasoning_herdan.png' alt='Reasoning vocabulary trend'>"
@@ -1635,7 +1635,7 @@ def main() -> None:
     s = lex_stats.get("ensemble_reasoning_herdan.png") if lex_stats else None
     if s:
         index_body_parts.append(
-            f"<p>Slope {s[0]:.4f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
+            f"<p>Slope {s[0]:.6f}, intercept {s[1]:.4f}, p={s[2]:.5g}</p>"
         )
     index_body_parts.append(
         "<p><a href='dataset/index.html'>Datasets</a> | <a href='model/index.html'>Models</a> | <a href='lexicostatistics/index.html'>Lexicostatistics</a> | <a href='ensemble/index.html'>Ensembles</a> | <a href='incomplete/index.html'>Incomplete</a></p>"
