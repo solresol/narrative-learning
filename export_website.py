@@ -606,8 +606,11 @@ def generate_dataset_page(
         )
         if stats is not None:
             slope, intercept, pval = stats
+            slope_per_year = slope * 365.25
             body.append(
-                f"<p>Regression slope: {slope:.6f}, intercept: {intercept:.4f}, p-value: {pval:.5g}</p>"
+                "<p>Regression slope: "
+                f"{slope:.6f} per day (≈ {slope_per_year:.6f} per year), "
+                f"intercept: {intercept:.4f}, p-value: {pval:.5g}</p>"
             )
         if debug_actions:
             body.append("<h3>Debug</h3>")
@@ -709,7 +712,10 @@ def generate_dataset_page(
             plt.close(fig)
             body.append("<h2>Train vs Validation</h2>")
             body.append("<img src='train_vs_validation.png' alt='train vs validation'>")
-            body.append(f"<p>Regression slope: {slope1:.6f}, intercept: {intercept1:.4f}, p-value: {pval1:.5g}</p>")
+            body.append(
+                f"<p>Regression slope (Δvalidation acc/Δtrain acc): {slope1:.6f}, "
+                f"intercept: {intercept1:.4f}, p-value: {pval1:.5g}</p>"
+            )
 
             # Scatter plot: validation accuracy vs training accuracy
             fig, ax = plt.subplots(figsize=(6, 4))
@@ -729,7 +735,10 @@ def generate_dataset_page(
             plt.close(fig)
             body.append("<h2>Validation vs Train</h2>")
             body.append("<img src='validation_vs_train.png' alt='validation vs train'>")
-            body.append(f"<p>Regression slope: {slope2:.6f}, intercept: {intercept2:.4f}, p-value: {pval2:.5g}</p>")
+            body.append(
+                f"<p>Regression slope (Δtrain acc/Δvalidation acc): {slope2:.6f}, "
+                f"intercept: {intercept2:.4f}, p-value: {pval2:.5g}</p>"
+            )
 
         ens_df = get_interesting_ensembles(conn, dataset)
         if ens_df.empty:
