@@ -35,7 +35,6 @@ from results_ensembling import (
     ensemble_predictions,
     calculate_metrics,
 )
-import math
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 BASE_DIR = "website"
@@ -1568,6 +1567,7 @@ def main() -> None:
 
         dataset_iter = tqdm.tqdm(datasets, desc="datasets")
     dataset_stats: dict[str, tuple[float, float, float] | None] = {}
+    dataset_sizes: dict[str, int] = {}
     for row in dataset_iter:
         dataset, cfg_file, *rest = row
         summary = rest[0] if rest else None
@@ -1582,11 +1582,83 @@ def main() -> None:
         )
         dataset_rows.append((dataset, summary))
         dataset_stats[dataset] = stats
+        try:
+            cfg_for_size = DatasetConfig(conn, cfg_file, dataset)
+        except Exception:
+            dataset_sizes[dataset] = 0
+        else:
+            try:
+                dataset_sizes[dataset] = cfg_for_size.get_data_point_count()
+            except Exception:
+                dataset_sizes[dataset] = 0
 
     generate_dataset_index_page(
         dataset_rows, os.path.join(BASE_DIR, "dataset", "index.html")
     )
     dataset_names = [d for d, _ in dataset_rows]
+
+    baseline_rows = [
+        ("Logistic regression", "logistic_regression"),
+        ("Decision trees", "decision_trees"),
+        ("Dummy", "dummy"),
+        ("RuleFit", "rulefit"),
+        ("Bayesian Rule List", "bayesian_rule_list"),
+        ("CORELS", "corels"),
+        ("EBM", "ebm"),
+    ]
+    ensemble_label = "Most recent successful narrative learning ensemble"
+
+    kt_table: dict[str, dict[str, float]] = {
+        label: {} for label, _ in baseline_rows
+    }
+    accuracy_table: dict[str, dict[str, float]] = {
+        label: {} for label, _ in baseline_rows
+    }
+    kt_table[ensemble_label] = {}
+    accuracy_table[ensemble_label] = {}
+
+    if dataset_names:
+        cur.execute(
+            """
+            SELECT dataset, logistic_regression, decision_trees, dummy, rulefit,
+                   bayesian_rule_list, corels, ebm
+              FROM baseline_results
+             WHERE dataset = ANY(%s)
+            """,
+            (tuple(dataset_names),),
+        )
+        for row in cur.fetchall():
+            dataset = row[0]
+            values = row[1:]
+            dataset_size = dataset_sizes.get(dataset) or 0
+            for (label, _), val in zip(baseline_rows, values):
+                if val is None:
+                    continue
+                accuracy_table[label][dataset] = val
+                if dataset_size:
+                    kt_table[label][dataset] = accuracy_to_kt(val, dataset_size)
+
+        for dataset in dataset_names:
+            dataset_size = dataset_sizes.get(dataset) or 0
+            if not dataset_size:
+                continue
+            ens_df = get_interesting_ensembles(conn, dataset)
+            if ens_df.empty:
+                continue
+            ens_df = ens_df.sort_values("release_date")
+            latest = ens_df.iloc[-1]
+            test_total = latest.get("test_total")
+            test_correct = latest.get("test_correct")
+            acc = None
+            if test_total and pd.notna(test_total) and pd.notna(test_correct):
+                if test_total > 0:
+                    acc = test_correct / test_total
+            if acc is None and pd.notna(latest.get("validation_accuracy")):
+                acc = latest.get("validation_accuracy")
+            if acc is None:
+                continue
+            accuracy_table[ensemble_label][dataset] = acc
+            kt_table[ensemble_label][dataset] = accuracy_to_kt(acc, dataset_size)
 
     # generate lexicostatistics page before building the index body
     lex_stats = generate_lexicostatistics_page(
@@ -1618,6 +1690,40 @@ def main() -> None:
         "<p>Narrative Learning studies the iterative training of reasoning models that explain their answers.</p>",
         "<p>This site serves as an observatory to track progress and compare ensembles to traditional explainable models.</p>",
     ]
+    if dataset_names:
+        def _format_cell(val: float | None) -> str:
+            if val is None or pd.isna(val):
+                return "n/a"
+            return f"{float(val):.3f}"
+
+        header_cells = "".join(
+            f"<th>{html.escape(d)}</th>" for d in dataset_names
+        )
+
+        display_labels = [label for label, _ in baseline_rows] + [ensemble_label]
+
+        index_body_parts.append("<h2>KT scores</h2>")
+        index_body_parts.append("<table class='score-table'>")
+        index_body_parts.append(f"<tr><th>Model</th>{header_cells}</tr>")
+        for label in display_labels:
+            row_cells = [f"<td>{html.escape(label)}</td>"]
+            for dataset in dataset_names:
+                val = kt_table.get(label, {}).get(dataset)
+                row_cells.append(f"<td>{_format_cell(val)}</td>")
+            index_body_parts.append("<tr>" + "".join(row_cells) + "</tr>")
+        index_body_parts.append("</table>")
+
+        index_body_parts.append("<h2>Accuracy scores</h2>")
+        index_body_parts.append("<table class='score-table'>")
+        index_body_parts.append(f"<tr><th>Model</th>{header_cells}</tr>")
+        for label in display_labels:
+            row_cells = [f"<td>{html.escape(label)}</td>"]
+            for dataset in dataset_names:
+                val = accuracy_table.get(label, {}).get(dataset)
+                row_cells.append(f"<td>{_format_cell(val)}</td>")
+            index_body_parts.append("<tr>" + "".join(row_cells) + "</tr>")
+        index_body_parts.append("</table>")
+
     for d in dataset_names:
         index_body_parts.append(f"<h2>{d}</h2>")
         index_body_parts.append(

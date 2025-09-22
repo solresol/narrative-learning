@@ -28,3 +28,22 @@ img {
     display: block;
     margin: 1rem auto;
 }
+
+table.score-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.score-table th,
+.score-table td {
+    border: 1px solid #d0d7de;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.score-table th:first-child,
+.score-table td:first-child {
+    text-align: left;
+}
