@@ -1634,7 +1634,7 @@ def main() -> None:
               FROM baseline_results
              WHERE dataset = ANY(%s)
             """,
-            (tuple(dataset_names),),
+            (dataset_names,),
         )
         for row in cur.fetchall():
             dataset = row[0]
