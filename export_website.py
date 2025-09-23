@@ -45,13 +45,22 @@ _env = Environment(
 _page_template = _env.get_template("page.html")
 
 
+GENERATION_TIME = datetime.now(timezone.utc)
+GENERATION_TIME_DISPLAY = GENERATION_TIME.astimezone(timezone.utc).strftime(
+    "%Y-%m-%d %H:%M:%S %Z"
+)
+
+
 def write_page(path: str, title: str, body: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     style_path = os.path.relpath(
         os.path.join(BASE_DIR, "style.css"), os.path.dirname(path)
     )
     html_content = _page_template.render(
-        title=title, body=body, style_path=style_path
+        title=title,
+        body=body,
+        style_path=style_path,
+        generated_at=GENERATION_TIME_DISPLAY,
     )
     with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
