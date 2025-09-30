@@ -103,7 +103,7 @@ def plot_release_chart(
     df["Release Date"] = pd.to_datetime(df["Release Date"], utc=True)
     df.sort_values("Release Date", inplace=True)
     df["KT"] = df["Accuracy"].apply(lambda x: accuracy_to_kt(x, dataset_size))
-    actions.append("compute KT and sort")
+    actions.append("compute Krichevsky-Trofimov accuracy and sort")
 
     cur.execute(
         """
@@ -160,7 +160,7 @@ def plot_release_chart(
     coords = list(zip(df["Release Date"].dt.date, (-df["KT"]).tolist()))
     actions.append(f"scatter models: {coords}")
     ax.set_xlabel("Model release date")
-    ax.set_ylabel("-log10 KT accuracy")
+    ax.set_ylabel("-log10 Krichevsky-Trofimov accuracy")
 
     ens_df = ens_df.copy()
     ens_df["Release Date"] = pd.to_datetime(ens_df["release_date"], utc=True)
@@ -331,17 +331,17 @@ def generate_round_page(
     body.append(f"<li>Completed: {'yes' if completed else 'no'}</li>")
     body.append(
         f"<li>Train accuracy: {train_acc if train_acc is not None else 'n/a'}"
-        f" (KT {accuracy_to_kt(train_acc, dataset_size):.3f})" if train_acc is not None else ""
+        f" (Krichevsky-Trofimov {accuracy_to_kt(train_acc, dataset_size):.3f})" if train_acc is not None else ""
         "</li>"
     )
     body.append(
         f"<li>Validation accuracy: {val_acc if val_acc is not None else 'n/a'}"
-        f" (KT {accuracy_to_kt(val_acc, dataset_size):.3f})" if val_acc is not None else ""
+        f" (Krichevsky-Trofimov {accuracy_to_kt(val_acc, dataset_size):.3f})" if val_acc is not None else ""
         "</li>"
     )
     body.append(
         f"<li>Test accuracy: {test_acc if test_acc is not None else 'n/a'}"
-        f" (KT {accuracy_to_kt(test_acc, dataset_size):.3f})" if test_acc is not None else ""
+        f" (Krichevsky-Trofimov {accuracy_to_kt(test_acc, dataset_size):.3f})" if test_acc is not None else ""
         "</li>"
     )
     body.append("</ul>")
@@ -435,10 +435,10 @@ def generate_investigation_page(
     body.append("<table border='1'>")
     body.append(
         "<tr><th>Round</th><th>UUID</th><th>Started</th><th>Completed"
-        + "</th><th>Train Acc</th><th>Train KT</th>"
-        + "<th>Val Acc</th><th>Val KT</th>"
+        + "</th><th>Train Acc</th><th>Train Krichevsky-Trofimov</th>"
+        + "<th>Val Acc</th><th>Val Krichevsky-Trofimov</th>"
         + "<th>Min Train/Val</th>"
-        + "<th>Test Acc</th><th>Test KT</th></tr>"
+        + "<th>Test Acc</th><th>Test Krichevsky-Trofimov</th></tr>"
     )
     for (
         r_id,
@@ -510,7 +510,7 @@ def generate_investigation_page(
     else:
         plt.xticks(plot_df["rank"], plot_df["round_id"])
     plt.xlabel("Round")
-    plt.ylabel("Negative log10 KT score")
+    plt.ylabel("Negative log10 Krichevsky-Trofimov score")
     plt.title("Round Scores")
     plt.legend()
     plt.tight_layout()
@@ -640,8 +640,8 @@ def generate_dataset_page(
         body.append(
             "<tr><th>Model</th><th>Run Name</th><th>Investigation</th><th>Release Date"
             + "</th><th>Examples</th><th>Patience</th><th>Rounds</th>"
-            + "<th>Train Acc</th><th>Train KT</th>"
-            + "<th>Val Acc</th><th>Val KT</th><th>Test Acc</th><th>Test KT</th></tr>"
+            + "<th>Train Acc</th><th>Train Krichevsky-Trofimov</th>"
+            + "<th>Val Acc</th><th>Val Krichevsky-Trofimov</th><th>Test Acc</th><th>Test Krichevsky-Trofimov</th></tr>"
         )
         for m, d_, run_name, inv_id, ex, patience in df[
             [
@@ -769,9 +769,9 @@ def generate_dataset_page(
         )
         body.append("<h2>Ensemble Max Scores</h2><table border='1'>")
         body.append(
-            "<tr><th>Release Date</th><th>Train Acc</th><th>Train KT</th>"
-            + "<th>Val Acc</th><th>Val KT</th><th>Min Train/Val</th>"
-            + "<th>Test Acc</th><th>Test KT</th><th>Ensemble</th></tr>"
+            "<tr><th>Release Date</th><th>Train Acc</th><th>Train Krichevsky-Trofimov</th>"
+            + "<th>Val Acc</th><th>Val Krichevsky-Trofimov</th><th>Min Train/Val</th>"
+            + "<th>Test Acc</th><th>Test Krichevsky-Trofimov</th><th>Ensemble</th></tr>"
         )
         for d_, train_acc, train_kt, v_acc, v_kt, min_tv, t_acc, t_kt, names in ens_df[
             [
@@ -814,7 +814,7 @@ def generate_dataset_page(
             "EBM",
         ]
         body.append("<h2>Baseline</h2><table border='1'>")
-        body.append("<tr><th>Model</th><th>Accuracy</th><th>KT</th></tr>")
+        body.append("<tr><th>Model</th><th>Accuracy</th><th>Krichevsky-Trofimov</th></tr>")
         for name, val in zip(names, row):
             if val is not None:
                 kt = accuracy_to_kt(val, dataset_size)
@@ -1091,12 +1091,12 @@ def generate_model_index_page(
         df_list.append(df)
     if df_list:
         full_df = pd.concat(df_list, ignore_index=True)
-        full_df["Neg Log KT"] = full_df.apply(
+        full_df["Neg Log Krichevsky-Trofimov"] = full_df.apply(
             lambda r: -accuracy_to_kt(r["Accuracy"], r["Data Points"]) if r["Accuracy"] is not None else np.nan,
             axis=1,
         )
         pivot = full_df.pivot_table(
-            index=["Task", "Model"], columns="Sampler", values="Neg Log KT"
+            index=["Task", "Model"], columns="Sampler", values="Neg Log Krichevsky-Trofimov"
         )
         plot_df = pivot.dropna(subset=[3, 10])
         if not plot_df.empty:
@@ -1105,8 +1105,8 @@ def generate_model_index_page(
             lo = min(plot_df[3].min(), plot_df[10].min())
             hi = max(plot_df[3].max(), plot_df[10].max())
             ax.plot([lo, hi], [lo, hi], "r--")
-            ax.set_xlabel("-log10 KT (examples=3)")
-            ax.set_ylabel("-log10 KT (examples=10)")
+            ax.set_xlabel("-log10 Krichevsky-Trofimov (examples=3)")
+            ax.set_ylabel("-log10 Krichevsky-Trofimov (examples=10)")
             fig.tight_layout()
             scatter_file = os.path.join(os.path.dirname(out_path), "examples_scatter.png")
             plt.savefig(scatter_file)
@@ -1115,7 +1115,7 @@ def generate_model_index_page(
             diff = plot_df[10] - plot_df[3]
             fig, ax = plt.subplots(figsize=(6, 4))
             ax.hist(diff, bins=10, edgecolor="black")
-            ax.set_xlabel("Difference in -log10 KT")
+            ax.set_xlabel("Difference in -log10 Krichevsky-Trofimov")
             ax.set_ylabel("Frequency")
             fig.tight_layout()
             hist_file = os.path.join(os.path.dirname(out_path), "examples_diff_hist.png")
@@ -1711,7 +1711,7 @@ def main() -> None:
 
         display_labels = [label for label, _ in baseline_rows] + [ensemble_label]
 
-        index_body_parts.append("<h2>KT scores</h2>")
+        index_body_parts.append("<h2>Krichevsky-Trofimov scores</h2>")
         index_body_parts.append("<table class='score-table'>")
         index_body_parts.append(f"<tr><th>Model</th>{header_cells}</tr>")
         for label in display_labels:
