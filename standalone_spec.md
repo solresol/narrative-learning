@@ -30,6 +30,9 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
 4. **TUI Layer**
    - Built with `textual` or `rich` to provide panels for dataset info, current prompt, progress bars, and logs.
    - Keyboard shortcuts: `n` for next round, `r` to regenerate, `q` to quit, `s` to save snapshot.
+   - Async event loop keeps UI responsive while models train and evaluate, enabling concurrent interaction and progress updates.
+   - Overseer panel summarises baseline explainable model metrics (accuracy and Kendall Tau) and colour-codes data point outcomes (correct, incorrect, mixed region).
+   - Underling panel tracks active hypothesis evaluation with a progress bar, colour legend, and scrollable coordinate list highlighting the currently processed item.
 
 ## 5. User Workflow
 1. Launch `python standalone.py --dataset data/demo.csv`.
@@ -38,8 +41,11 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
    - User triggers next round (`n`).
    - TUI displays spinner/progress bar while the model evaluates both features on validation split.
    - Results panel updates with accuracy, misclassified examples, and narrative prompt adjustments.
+   - Baseline explainable models run alongside the primary model; their accuracy and Kendall Tau scores appear in a comparative table with coloured correctness markers.
+   - Underling view shows progress through hypothesis evaluation, including coordinates of the points being processed.
 4. **History Browsing**:
    - Left sidebar lists past rounds; selecting one shows stored prompt, metrics, and example breakdown.
+   - Overseer history logs every proposed hypothesis; selecting one recolours dataset points to reflect evaluation status (correct, incorrect, not yet evaluated).
 5. **Completion**:
    - User exits via `q`; final summary written to stdout and stored in SQLite.
 
