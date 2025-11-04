@@ -38,6 +38,9 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None  # type: ignore[assignment]
 
 from rich.markdown import Markdown as RichMarkdown
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import LabelEncoder
 from textual import log
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -520,30 +523,52 @@ def compute_metrics(examples: Sequence[RoundExample], notes: str) -> RoundMetric
 
 
 def calculate_baseline_metrics(split: DatasetSplit) -> List[BaselineMetrics]:
-    """Compute simple baseline metrics for display."""
+    """Compute baseline metrics using traditional ML models for display."""
+    import numpy as np
 
-    def majority_label(rows: Sequence[DatasetRow]) -> str:
-        labels = [row.label for row in rows]
-        mode = max(set(labels), key=labels.count)
-        return mode
+    # Prepare training data
+    X_train = np.array([[float(row.feature_a), float(row.feature_b)] for row in split.train])
+    y_train = np.array([row.label for row in split.train])
+
+    # Prepare validation data
+    X_val = np.array([[float(row.feature_a), float(row.feature_b)] for row in split.validation])
+    y_val = [row.label for row in split.validation]
+
+    # Encode labels
+    le = LabelEncoder()
+    y_train_encoded = le.fit_transform(y_train)
 
     baseline_predictions = []
-    majority = majority_label(split.train)
+
+    # 1. Majority Label (Dummy Classifier)
+    majority = max(set(y_train), key=list(y_train).count)
     baseline_predictions.append(("Majority Label", [majority for _ in split.validation]))
 
-    # A deterministic heuristic baseline using feature parity
-    def parity(row: DatasetRow) -> str:
-        parity_value = (len(row.feature_a) + len(row.feature_b)) % 2
-        return "positive" if parity_value == 0 else "negative"
+    # 2. Logistic Regression
+    try:
+        lr = LogisticRegression(max_iter=1000, random_state=42)
+        lr.fit(X_train, y_train)
+        lr_predictions = lr.predict(X_val)
+        baseline_predictions.append(("Logistic Regression", list(lr_predictions)))
+    except Exception as e:
+        log(f"Logistic Regression failed: {e}")
 
-    baseline_predictions.append(("Feature Parity", [parity(row) for row in split.validation]))
+    # 3. Decision Tree
+    try:
+        dt = DecisionTreeClassifier(max_depth=5, random_state=42)
+        dt.fit(X_train, y_train)
+        dt_predictions = dt.predict(X_val)
+        baseline_predictions.append(("Decision Tree", list(dt_predictions)))
+    except Exception as e:
+        log(f"Decision Tree failed: {e}")
 
+    # Calculate metrics for all baselines
     metrics: List[BaselineMetrics] = []
-    labels = [row.label for row in split.validation]
     for name, predictions in baseline_predictions:
-        accuracy = sum(1 for truth, pred in zip(labels, predictions) if truth == pred) / len(labels)
-        tau = kendall_tau(labels, predictions)
+        accuracy = sum(1 for truth, pred in zip(y_val, predictions) if truth == pred) / len(y_val)
+        tau = kendall_tau(y_val, predictions)
         metrics.append(BaselineMetrics(name=name, accuracy=accuracy, kendall_tau=tau))
+
     return metrics
 
 
@@ -691,6 +716,7 @@ class BaselinePanel(DataTable):
     def populate(self, metrics: Sequence[BaselineMetrics]) -> None:
         self.clear()
         for metric in metrics:
+            log(f"Adding baseline row: {metric.name} | {metric.accuracy:.2%} | {metric.kendall_tau:.2f}")
             self.add_row(metric.name, f"{metric.accuracy:.2%}", f"{metric.kendall_tau:.2f}")
 
 
@@ -862,6 +888,10 @@ class StandaloneApp(App[None]):
     #right {
         width: 30%;
     }
+    #baseline-panel {
+        height: auto;
+        max-height: 8;
+    }
     #prompt-editor {
         padding: 2;
         width: 80%;
@@ -932,7 +962,7 @@ class StandaloneApp(App[None]):
                     round_detail = RoundDetail(id="round-detail")
                     yield round_detail
                 with Vertical(id="right"):
-                    baseline = BaselinePanel()
+                    baseline = BaselinePanel(id="baseline-panel")
                     yield baseline
                     log_widget = EventLog(id="event-log")
                     yield log_widget
