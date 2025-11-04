@@ -814,7 +814,7 @@ class EventLog(RichLog):
     """Colour-coded log of application events."""
 
     def __init__(self, **kwargs: Any) -> None:
-        super().__init__(highlight=True, max_lines=200, **kwargs)
+        super().__init__(highlight=True, markup=True, max_lines=200, **kwargs)
 
     def info(self, message: str) -> None:
         self.write(f"[green]INFO[/green] {message}")
