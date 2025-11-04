@@ -55,8 +55,8 @@ from textual.widgets import (
     ListItem,
     ListView,
     ProgressBar,
+    RichLog,
     Static,
-    TextLog,
 )
 
 try:  # Textual 0.29+
@@ -734,12 +734,11 @@ class PromptPanel(Static):
         self.update(RichMarkdown(f"### Active Prompt\n{prompt}"))
 
 
-class EventLog(TextLog):
+class EventLog(RichLog):
     """Colour-coded log of application events."""
 
     def __init__(self) -> None:
-        super().__init__(highlight=True)
-        self.max_lines = 200
+        super().__init__(highlight=True, max_lines=200)
 
     def info(self, message: str) -> None:
         self.write(f"[green]INFO[/green] {message}")
