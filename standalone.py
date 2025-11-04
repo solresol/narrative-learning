@@ -22,6 +22,7 @@ import os
 import random
 import sqlite3
 import textwrap
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -222,7 +223,10 @@ class StandaloneDatabase:
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._conn = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES)
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(
+            path, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False
+        )
         self._conn.row_factory = sqlite3.Row
         self.initialise()
 
@@ -231,128 +235,135 @@ class StandaloneDatabase:
         return self._conn
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def initialise(self) -> None:
-        cur = self.conn.cursor()
-        cur.executescript(
-            """
-            PRAGMA journal_mode=WAL;
-            CREATE TABLE IF NOT EXISTS dataset(
-                feature_a TEXT NOT NULL,
-                feature_b TEXT NOT NULL,
-                label TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS rounds(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TIMESTAMP NOT NULL,
-                prompt TEXT NOT NULL,
-                accuracy REAL NOT NULL,
-                notes TEXT
-            );
-            CREATE TABLE IF NOT EXISTS examples(
-                round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
-                feature_a TEXT NOT NULL,
-                feature_b TEXT NOT NULL,
-                label TEXT NOT NULL,
-                prediction TEXT NOT NULL,
-                correct INTEGER NOT NULL
-            );
-            """
-        )
-        cur.close()
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.executescript(
+                """
+                PRAGMA journal_mode=WAL;
+                CREATE TABLE IF NOT EXISTS dataset(
+                    feature_a TEXT NOT NULL,
+                    feature_b TEXT NOT NULL,
+                    label TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS rounds(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TIMESTAMP NOT NULL,
+                    prompt TEXT NOT NULL,
+                    accuracy REAL NOT NULL,
+                    notes TEXT
+                );
+                CREATE TABLE IF NOT EXISTS examples(
+                    round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
+                    feature_a TEXT NOT NULL,
+                    feature_b TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    prediction TEXT NOT NULL,
+                    correct INTEGER NOT NULL
+                );
+                """
+            )
+            cur.close()
 
     def store_dataset(self, rows: Sequence[DatasetRow]) -> None:
-        cur = self.conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM dataset")
-        if cur.fetchone()[0]:
-            return
-        cur.executemany(
-            "INSERT INTO dataset(feature_a, feature_b, label) VALUES (?, ?, ?)",
-            ((row.feature_a, row.feature_b, row.label) for row in rows),
-        )
-        self.conn.commit()
-        cur.close()
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM dataset")
+            if cur.fetchone()[0]:
+                cur.close()
+                return
+            cur.executemany(
+                "INSERT INTO dataset(feature_a, feature_b, label) VALUES (?, ?, ?)",
+                ((row.feature_a, row.feature_b, row.label) for row in rows),
+            )
+            self.conn.commit()
+            cur.close()
 
     def fetch_rounds(self) -> List[RoundRecord]:
-        cur = self.conn.cursor()
-        rows = cur.execute(
-            "SELECT id, created_at, prompt, accuracy, notes FROM rounds ORDER BY id"
-        ).fetchall()
-        records: List[RoundRecord] = []
-        for row in rows:
-            examples = self.fetch_examples(row["id"])
-            metrics = compute_metrics(examples, row["notes"] or "")
-            metrics = dataclasses.replace(metrics, accuracy=row["accuracy"])
-            created_at = row["created_at"]
-            if isinstance(created_at, str):
-                created_at = dt.datetime.fromisoformat(created_at)
-            records.append(
-                RoundRecord(
-                    id=row["id"],
-                    created_at=created_at,
-                    prompt=row["prompt"],
-                    metrics=metrics,
-                    examples=examples,
+        with self._lock:
+            cur = self.conn.cursor()
+            rows = cur.execute(
+                "SELECT id, created_at, prompt, accuracy, notes FROM rounds ORDER BY id"
+            ).fetchall()
+            records: List[RoundRecord] = []
+            for row in rows:
+                examples = self.fetch_examples(row["id"])
+                metrics = compute_metrics(examples, row["notes"] or "")
+                metrics = dataclasses.replace(metrics, accuracy=row["accuracy"])
+                created_at = row["created_at"]
+                if isinstance(created_at, str):
+                    created_at = dt.datetime.fromisoformat(created_at)
+                records.append(
+                    RoundRecord(
+                        id=row["id"],
+                        created_at=created_at,
+                        prompt=row["prompt"],
+                        metrics=metrics,
+                        examples=examples,
+                    )
                 )
-            )
-        cur.close()
-        return records
+            cur.close()
+            return records
 
     def fetch_examples(self, round_id: int) -> List[RoundExample]:
-        cur = self.conn.cursor()
-        entries = cur.execute(
-            """
-            SELECT feature_a, feature_b, label, prediction, correct
-            FROM examples
-            WHERE round_id = ?
-            ORDER BY rowid
-            """,
-            (round_id,),
-        ).fetchall()
-        examples = [
-            RoundExample(
-                feature_a=row["feature_a"],
-                feature_b=row["feature_b"],
-                label=row["label"],
-                prediction=row["prediction"],
-                correct=bool(row["correct"]),
-            )
-            for row in entries
-        ]
-        cur.close()
-        return examples
+        with self._lock:
+            cur = self.conn.cursor()
+            entries = cur.execute(
+                """
+                SELECT feature_a, feature_b, label, prediction, correct
+                FROM examples
+                WHERE round_id = ?
+                ORDER BY rowid
+                """,
+                (round_id,),
+            ).fetchall()
+            examples = [
+                RoundExample(
+                    feature_a=row["feature_a"],
+                    feature_b=row["feature_b"],
+                    label=row["label"],
+                    prediction=row["prediction"],
+                    correct=bool(row["correct"]),
+                )
+                for row in entries
+            ]
+            cur.close()
+            return examples
 
     def insert_round(
         self, prompt: str, metrics: RoundMetrics, examples: Sequence[RoundExample]
     ) -> Tuple[int, dt.datetime]:
-        cur = self.conn.cursor()
-        created_at = dt.datetime.utcnow()
-        cur.execute(
-            "INSERT INTO rounds(created_at, prompt, accuracy, notes) VALUES (?, ?, ?, ?)",
-            (created_at, prompt, metrics.accuracy, metrics.notes),
-        )
-        round_id = cur.lastrowid
-        cur.executemany(
-            """
-            INSERT INTO examples(round_id, feature_a, feature_b, label, prediction, correct)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
+        with self._lock:
+            cur = self.conn.cursor()
+            created_at = dt.datetime.utcnow()
+            cur.execute(
+                "INSERT INTO rounds(created_at, prompt, accuracy, notes) VALUES (?, ?, ?, ?)",
+                (created_at, prompt, metrics.accuracy, metrics.notes),
+            )
+            round_id = cur.lastrowid
+            cur.executemany(
+                """
+                INSERT INTO examples(round_id, feature_a, feature_b, label, prediction, correct)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
                 (
-                    round_id,
-                    ex.feature_a,
-                    ex.feature_b,
-                    ex.label,
-                    ex.prediction,
-                    int(ex.correct),
-                )
-                for ex in examples
-            ),
-        )
-        self.conn.commit()
-        cur.close()
-        return int(round_id), created_at
+                    (
+                        round_id,
+                        ex.feature_a,
+                        ex.feature_b,
+                        ex.label,
+                        ex.prediction,
+                        int(ex.correct),
+                    )
+                    for ex in examples
+                ),
+            )
+            self.conn.commit()
+            cur.close()
+            return int(round_id), created_at
 
     def export_json(self, destination: Path) -> None:
         payload = []
