@@ -289,19 +289,24 @@ class StandaloneDatabase:
                     label TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS rounds(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    created_at TIMESTAMP NOT NULL,
+                    round_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    round_uuid TEXT,
+                    round_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     prompt TEXT NOT NULL,
-                    accuracy REAL NOT NULL,
-                    notes TEXT
+                    reasoning_for_this_prompt TEXT,
+                    train_accuracy REAL,
+                    validation_accuracy REAL NOT NULL,
+                    round_completed TIMESTAMP
                 );
-                CREATE TABLE IF NOT EXISTS examples(
-                    round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
-                    feature_a TEXT NOT NULL,
-                    feature_b TEXT NOT NULL,
-                    label TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS inferences(
+                    round_id INTEGER NOT NULL REFERENCES rounds(round_id) ON DELETE CASCADE,
+                    creation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    data_id TEXT NOT NULL,
+                    narrative_text TEXT,
+                    llm_stderr TEXT,
                     prediction TEXT NOT NULL,
-                    correct INTEGER NOT NULL
+                    correct INTEGER NOT NULL,
+                    PRIMARY KEY (round_id, data_id)
                 );
                 """
             )
@@ -325,19 +330,20 @@ class StandaloneDatabase:
         with self._lock:
             cur = self.conn.cursor()
             rows = cur.execute(
-                "SELECT id, created_at, prompt, accuracy, notes FROM rounds ORDER BY id"
+                "SELECT round_id, round_start, prompt, reasoning_for_this_prompt, validation_accuracy FROM rounds ORDER BY round_id"
             ).fetchall()
             records: List[RoundRecord] = []
             for row in rows:
-                examples = self.fetch_examples(row["id"])
-                metrics = compute_metrics(examples, row["notes"] or "")
-                metrics = dataclasses.replace(metrics, accuracy=row["accuracy"])
-                created_at = row["created_at"]
+                examples = self.fetch_examples(row["round_id"])
+                notes = row["reasoning_for_this_prompt"] or ""
+                metrics = compute_metrics(examples, notes)
+                metrics = dataclasses.replace(metrics, accuracy=row["validation_accuracy"])
+                created_at = row["round_start"]
                 if isinstance(created_at, str):
                     created_at = dt.datetime.fromisoformat(created_at)
                 records.append(
                     RoundRecord(
-                        id=row["id"],
+                        id=row["round_id"],
                         created_at=created_at,
                         prompt=row["prompt"],
                         metrics=metrics,
@@ -352,23 +358,27 @@ class StandaloneDatabase:
             cur = self.conn.cursor()
             entries = cur.execute(
                 """
-                SELECT feature_a, feature_b, label, prediction, correct
-                FROM examples
+                SELECT data_id, prediction, correct
+                FROM inferences
                 WHERE round_id = ?
-                ORDER BY rowid
+                ORDER BY creation_time
                 """,
                 (round_id,),
             ).fetchall()
-            examples = [
-                RoundExample(
-                    feature_a=row["feature_a"],
-                    feature_b=row["feature_b"],
-                    label=row["label"],
-                    prediction=row["prediction"],
-                    correct=bool(row["correct"]),
-                )
-                for row in entries
-            ]
+            examples = []
+            for row in entries:
+                # data_id format is "feature_a,feature_b,label"
+                parts = row["data_id"].split(",", 2)
+                if len(parts) == 3:
+                    examples.append(
+                        RoundExample(
+                            feature_a=parts[0],
+                            feature_b=parts[1],
+                            label=parts[2],
+                            prediction=row["prediction"],
+                            correct=bool(row["correct"]),
+                        )
+                    )
             cur.close()
             return examples
 
@@ -377,23 +387,25 @@ class StandaloneDatabase:
     ) -> Tuple[int, dt.datetime]:
         with self._lock:
             cur = self.conn.cursor()
-            created_at = dt.datetime.utcnow()
+            import uuid
+            round_start = dt.datetime.utcnow()
+            round_uuid = str(uuid.uuid4())
             cur.execute(
-                "INSERT INTO rounds(created_at, prompt, accuracy, notes) VALUES (?, ?, ?, ?)",
-                (created_at, prompt, metrics.accuracy, metrics.notes),
+                """INSERT INTO rounds(round_uuid, round_start, prompt, reasoning_for_this_prompt,
+                   validation_accuracy, round_completed)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (round_uuid, round_start, prompt, metrics.notes, metrics.accuracy, round_start),
             )
             round_id = cur.lastrowid
             cur.executemany(
                 """
-                INSERT INTO examples(round_id, feature_a, feature_b, label, prediction, correct)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO inferences(round_id, data_id, prediction, correct)
+                VALUES (?, ?, ?, ?)
                 """,
                 (
                     (
                         round_id,
-                        ex.feature_a,
-                        ex.feature_b,
-                        ex.label,
+                        f"{ex.feature_a},{ex.feature_b},{ex.label}",
                         ex.prediction,
                         int(ex.correct),
                     )
@@ -402,7 +414,7 @@ class StandaloneDatabase:
             )
             self.conn.commit()
             cur.close()
-            return int(round_id), created_at
+            return int(round_id), round_start
 
     def export_json(self, destination: Path) -> None:
         payload = []
@@ -796,8 +808,7 @@ class PromptEditor(ModalScreen[str]):
         super().__init__()
         self.initial = initial
         if TextArea is not None:
-            self.editor: Any = TextArea(code=False)
-            self.editor.value = initial
+            self.editor: Any = TextArea(text=initial)
         else:  # pragma: no cover - fallback for older Textual
             self.editor = Input(value=initial, placeholder="Edit narrative prompt…", password=False)
 
@@ -815,7 +826,8 @@ class PromptEditor(ModalScreen[str]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "prompt-save":
-            value = getattr(self.editor, "value", self.initial)
+            # TextArea uses .text, Input uses .value
+            value = getattr(self.editor, "text", getattr(self.editor, "value", self.initial))
             self.dismiss(value)
         else:
             self.dismiss(None)
@@ -1096,7 +1108,7 @@ def bootstrap(argv: Optional[Sequence[str]] = None) -> StandaloneApp:
     database = StandaloneDatabase(db_path)
     database.store_dataset(dataset)
     model = StubModelAdapter(config.model_name, config.temperature)
-    prompt_manager = PromptManager("Start with a descriptive hypothesis about the relationship between features and labels.")
+    prompt_manager = PromptManager("Choose randomly")
     baseline_metrics = calculate_baseline_metrics(split)
     export_path = args.export_json
     app = StandaloneApp(
