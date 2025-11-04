@@ -542,14 +542,14 @@ def calculate_baseline_metrics(split: DatasetSplit) -> List[BaselineMetrics]:
 
     # 1. Majority Label (Dummy Classifier)
     majority = max(set(y_train), key=list(y_train).count)
-    baseline_predictions.append(("Majority Label", [majority for _ in split.validation]))
+    baseline_predictions.append(("Majority", [majority for _ in split.validation]))
 
     # 2. Logistic Regression
     try:
         lr = LogisticRegression(max_iter=1000, random_state=42)
         lr.fit(X_train, y_train)
         lr_predictions = lr.predict(X_val)
-        baseline_predictions.append(("Logistic Regression", list(lr_predictions)))
+        baseline_predictions.append(("Logistic", list(lr_predictions)))
     except Exception as e:
         log(f"Logistic Regression failed: {e}")
 
@@ -558,7 +558,7 @@ def calculate_baseline_metrics(split: DatasetSplit) -> List[BaselineMetrics]:
         dt = DecisionTreeClassifier(max_depth=5, random_state=42)
         dt.fit(X_train, y_train)
         dt_predictions = dt.predict(X_val)
-        baseline_predictions.append(("Decision Tree", list(dt_predictions)))
+        baseline_predictions.append(("DecTree", list(dt_predictions)))
     except Exception as e:
         log(f"Decision Tree failed: {e}")
 
@@ -710,13 +710,12 @@ class BaselinePanel(DataTable):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(zebra_stripes=True, **kwargs)
-        self.add_columns("Model", "Accuracy", "Kendall Tau")
+        self.add_columns("Model", "Acc", "τ")
         self.cursor_type = "none"
 
     def populate(self, metrics: Sequence[BaselineMetrics]) -> None:
         self.clear()
         for metric in metrics:
-            log(f"Adding baseline row: {metric.name} | {metric.accuracy:.2%} | {metric.kendall_tau:.2f}")
             self.add_row(metric.name, f"{metric.accuracy:.2%}", f"{metric.kendall_tau:.2f}")
 
 
@@ -880,13 +879,13 @@ class StandaloneApp(App[None]):
         height: 1fr;
     }
     #left {
-        width: 30%;
+        width: 25%;
     }
     #center {
         width: 40%;
     }
     #right {
-        width: 30%;
+        width: 35%;
     }
     #baseline-panel {
         height: auto;
