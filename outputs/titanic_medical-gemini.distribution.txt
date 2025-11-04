@@ -1,0 +1,14 @@
+Fitted Distribution Summary
+==========================
+
+Data: 11 accuracy values
+Range: 0.3439 to 0.6259
+Mean: 0.5415
+Standard Deviation: 0.0923
+
+              sumsquare_error         aic         bic  kl_div  ks_statistic  ks_pvalue
+johnsonsu        10467.057876  -83.440852  -81.849271     inf      0.150832   0.932564
+norminvgauss     10500.958782  -86.143145  -84.551564     inf      0.175236   0.831855
+genextreme       10528.275215 -134.054344 -132.860658     inf      0.160719   0.896909
+pearson3         10531.688581  -83.620751  -82.427065     inf      0.232382   0.518884
+jf_skew_t        10535.034966  -59.186068  -57.594487     inf      0.168351   0.864295

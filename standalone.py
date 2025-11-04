@@ -6,7 +6,9 @@ guided by the specification in ``standalone_spec.md`` and focuses on
 supporting a single language-model backend with lightweight SQLite
 persistence.
 
-Run the application with ``uv run standalone.py --dataset path/to.csv``.
+Run the application with:
+    uv run standalone.py --dataset path/to.csv
+    uv run standalone.py --dataset path/to.sqlite --table tablename
 """
 
 from __future__ import annotations
@@ -170,7 +172,7 @@ class AppConfig:
 ###############################################################################
 
 
-def load_dataset(path: Path) -> List[DatasetRow]:
+def load_dataset_csv(path: Path) -> List[DatasetRow]:
     """Load dataset rows from a CSV file.
 
     The CSV must contain the columns ``feature_a, feature_b, label`` in that
@@ -196,6 +198,103 @@ def load_dataset(path: Path) -> List[DatasetRow]:
     if not rows:
         raise ValueError("Dataset is empty; supply at least one row")
     return rows
+
+
+def load_dataset_datapainter(path: Path, table_name: Optional[str] = None) -> List[DatasetRow]:
+    """Load dataset rows from a DataPainter SQLite file.
+
+    DataPainter files contain a metadata table with information about available
+    data tables, and separate tables containing (x, y, target) data points.
+
+    Args:
+        path: Path to the DataPainter SQLite database file
+        table_name: Optional name of the table to load. If None, uses the first
+                   table found in metadata.
+
+    Returns:
+        List of DatasetRow objects with x/y coordinates as feature_a/feature_b
+
+    Raises:
+        ValueError: If the file is not a valid DataPainter database or table not found
+    """
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+
+    try:
+        # Check for metadata table to verify this is a DataPainter file
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'"
+        )
+        if not cursor.fetchone():
+            raise ValueError(
+                f"{path} does not appear to be a DataPainter file (no metadata table)"
+            )
+
+        # Get available tables from metadata
+        cursor.execute("SELECT table_name FROM metadata")
+        available_tables = [row["table_name"] for row in cursor.fetchall()]
+
+        if not available_tables:
+            raise ValueError(f"No tables found in metadata table of {path}")
+
+        # Determine which table to use
+        if table_name is None:
+            table_name = available_tables[0]
+        elif table_name not in available_tables:
+            raise ValueError(
+                f"Table {table_name!r} not found. Available tables: {available_tables}"
+            )
+
+        # Load data from the specified table
+        cursor.execute(f"SELECT x, y, target FROM {table_name} ORDER BY id")
+        rows: List[DatasetRow] = []
+        for row in cursor.fetchall():
+            rows.append(
+                DatasetRow(
+                    feature_a=str(row["x"]),
+                    feature_b=str(row["y"]),
+                    label=str(row["target"]),
+                )
+            )
+
+        if not rows:
+            raise ValueError(f"Table {table_name!r} is empty; supply at least one row")
+
+        return rows
+
+    finally:
+        conn.close()
+
+
+def load_dataset(path: Path, table_name: Optional[str] = None) -> List[DatasetRow]:
+    """Load dataset from either CSV or DataPainter SQLite format.
+
+    Automatically detects the file format based on extension:
+    - .csv: CSV format with feature_a, feature_b, label columns
+    - .sqlite, .sqlite3, .db: DataPainter format with metadata and data tables
+
+    Args:
+        path: Path to the dataset file
+        table_name: For DataPainter files, optional table name to load
+
+    Returns:
+        List of DatasetRow objects
+
+    Raises:
+        ValueError: If format is unrecognized or file is invalid
+    """
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        return load_dataset_csv(path)
+    elif suffix in {".sqlite", ".sqlite3", ".db"}:
+        return load_dataset_datapainter(path, table_name)
+    else:
+        raise ValueError(
+            f"Unsupported dataset format: {suffix}. "
+            "Use .csv or .sqlite/.sqlite3/.db"
+        )
 
 
 def split_dataset(rows: Sequence[DatasetRow], seed: int, ratio: float = 0.8) -> DatasetSplit:
@@ -1029,7 +1128,8 @@ class LockFile:
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Standalone Narrative Learning demo")
     parser.add_argument("--config", type=Path, help="Path to config TOML/YAML file", default=None)
-    parser.add_argument("--dataset", type=Path, help="Dataset CSV path", default=None)
+    parser.add_argument("--dataset", type=Path, help="Dataset path (CSV or DataPainter SQLite)", default=None)
+    parser.add_argument("--table", type=str, help="Table name for DataPainter SQLite files", default=None)
     parser.add_argument("--database", type=Path, help="SQLite database path", default=None)
     parser.add_argument("--export-json", dest="export_json", type=Path, help="Export JSON destination", default=None)
     parser.add_argument("--shuffle-seed", type=int, default=13, help="Dataset shuffle seed")
@@ -1051,7 +1151,7 @@ def bootstrap(argv: Optional[Sequence[str]] = None) -> StandaloneApp:
     args = parse_args(argv)
     config = AppConfig.load(args.config)
     dataset_path, db_path = determine_paths(config, args)
-    dataset = load_dataset(dataset_path)
+    dataset = load_dataset(dataset_path, table_name=args.table)
     split = split_dataset(dataset, args.shuffle_seed)
     database = StandaloneDatabase(db_path)
     database.store_dataset(dataset)

@@ -1,0 +1,14 @@
+Fitted Distribution Summary
+==========================
+
+Data: 75 accuracy values
+Range: 0.4906 to 1.0000
+Mean: 0.6382
+Standard Deviation: 0.0804
+
+               sumsquare_error         aic         bic  kl_div  ks_statistic     ks_pvalue
+genhyperbolic       569.238236   97.756052  109.343492     inf      0.726604  7.609919e-41
+dgamma              585.680058  177.940328  184.892793     inf      0.104786  3.575255e-01
+gennorm             612.149851  132.775451  139.727915     inf      0.114699  2.569611e-01
+dweibull            686.568618   57.821243   64.773708     inf      0.117494  2.327418e-01
+foldcauchy          691.162162  114.282083  121.234547     inf      0.085167  6.173035e-01

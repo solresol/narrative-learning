@@ -46,6 +46,14 @@ INSERT INTO models(model,training_model,inference_model,example_count,patience) 
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('llamaphi','llama3.3:latest','phi4:latest',3,3) ON CONFLICT DO NOTHING;
 INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('random','random','random',3,3) ON CONFLICT DO NOTHING;
 
+
+
+INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('gpt-4o-legacy','gpt-4o-2025-01-29', 'gpt-4o-mini', 3,3) on conflict do nothing;
+INSERT INTO models(model,training_model,inference_model,example_count,patience) VALUES ('gpt-4o-legacy10','gpt-4o-2025-01-29', 'gpt-4o-mini', 10,3) on conflict do nothing;
+
+
+
+
 -- investigation inserts
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('espionage','anthropic','results/espionage-anthropic.sqlite','.round-tracking-file.espionage.anthropic','dumps/espionage-anthropic.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('espionage','anthropic10','results/espionage-anthropic10.sqlite','.round-tracking-file.espionage.anthropic10','dumps/espionage-anthropic10.sql') ON CONFLICT DO NOTHING;
@@ -115,8 +123,8 @@ INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dum
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','geminipro','results/sgc_coral-geminipro.sqlite','.round-tracking-file.sgc.geminipro','dumps/sgc_coral-geminipro.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','geminipro10','results/sgc_coral-geminipro10.sqlite','.round-tracking-file.sgc.geminipro10','dumps/sgc_coral-geminipro10.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','gemma','results/sgc_coral-gemma.sqlite','.round-tracking-file.southgermancredit.gemma','dumps/sgc_coral-gemma.sql') ON CONFLICT DO NOTHING;
-INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','openai','results/sgc_coral-openai.sqlite','.round-tracking-file.sgc.openai','dumps/sgc_coral-openai.sql') ON CONFLICT DO NOTHING;
-INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','openai10','results/sgc_coral-openai10.sqlite','.round-tracking-file.sgc.openai10','dumps/sgc_coral-openai10.sql') ON CONFLICT DO NOTHING;
+INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','gpt-4o-legacy','results/sgc_coral-openai.sqlite','.round-tracking-file.sgc.openai','dumps/sgc_coral-openai.sql') ON CONFLICT DO NOTHING;
+INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','gpt-4o-legacy10','results/sgc_coral-openai10.sqlite','.round-tracking-file.sgc.openai10','dumps/sgc_coral-openai10.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','openai10o1','results/sgc_coral-openai10o1.sqlite','.round-tracking-file.sgc.openai10o1','dumps/sgc_coral-openai10o1.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','openai35','results/sgc_coral-openai35.sqlite','.round-tracking-file.sgc35.openai','dumps/sgc_coral-openai35.sql') ON CONFLICT DO NOTHING;
 INSERT INTO investigations(dataset,model,sqlite_database,round_tracking_file,dump_file) VALUES ('southgermancredit','openai41','results/sgc_coral-openai41.sqlite','.round-tracking-file.sgc.openai41','dumps/sgc_coral-openai41.sql') ON CONFLICT DO NOTHING;
