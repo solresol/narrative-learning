@@ -762,7 +762,10 @@ class HistoryList(ListView):
     """List of completed rounds."""
 
     def set_rounds(self, rounds: Sequence[RoundRecord]) -> None:
-        self.clear()
+        # Remove all existing children to avoid ID conflicts
+        for child in list(self.children):
+            child.remove()
+        # Add new items
         for record in rounds:
             created = record.created_at.strftime("%H:%M:%S")
             subtitle = f"Accuracy {record.metrics.accuracy:.1%}"
