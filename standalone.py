@@ -798,8 +798,8 @@ class UnderlingPanel(Static):
 
     progress_text = reactive("Idle")
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self.progress_bar = ProgressBar(total=1)
         self.coordinates = ListView(id="underling-coordinates")
 
