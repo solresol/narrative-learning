@@ -7,7 +7,7 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
 - Offer an interactive demo that mirrors the core loop of the PostgreSQL-based investigation runner.
 - Require minimal environment setup: Python 3.11+, `sqlite3`, and TUI/LLM client libraries.
 - Showcase progress updates, intermediate metrics, and narrative model evolution inside the terminal.
-- Support importing a small CSV dataset, running iterative rounds, and viewing results for exactly one preconfigured model.
+- Support importing datasets from DataPainter SQLite files, running iterative rounds, and viewing results for exactly one preconfigured model.
 
 ## 3. Out of Scope
 - Managing multiple simultaneous models, ensembles, or PostgreSQL integrations.
@@ -35,7 +35,7 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
    - Underling panel tracks active hypothesis evaluation with a progress bar, colour legend, and scrollable coordinate list highlighting the currently processed item.
 
 ## 5. User Workflow
-1. Launch `python standalone.py --dataset data/demo.csv`.
+1. Launch `uv run standalone.py --dataset data/demo.sqlite --table tablename`.
 2. **Landing Screen**: shows dataset summary (row count, label distribution), active model, and instructions.
 3. **Round Execution**:
    - User triggers next round (`n`).
@@ -55,7 +55,9 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
 - **Event Log**: scrolling panel with colour-coded entries (info, warning, error).
 
 ## 7. Dataset Handling
-- CSV ingestion limited to header `feature_a,feature_b,label`.
+- DataPainter SQLite database ingestion with automatic metadata reading.
+- Dataset format: tables with (x, y, target) columns representing two-dimensional labeled data.
+- Table selection via `--table` argument; defaults to first table in metadata if not specified.
 - 80/20 train-validation split performed deterministically.
 - Option `--shuffle-seed` controls reproducibility.
 - Validation results persisted; training subset fed to prompt builder.
@@ -67,7 +69,7 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
 
 ## 9. Error Handling & Resilience
 - Graceful handling of API failures with retry UI feedback and ability to switch to stub mode on the fly.
-- Validation preventing dataset load if columns missing or >2 features supplied.
+- Validation preventing dataset load if metadata table is missing or specified table doesn't exist.
 - Integrity checks ensure only one concurrent run; lock file in same directory as SQLite database.
 
 ## 10. Extensibility Hooks
@@ -83,4 +85,5 @@ The `standalone.py` program provides a colourful terminal user interface (TUI) t
 ## 12. Deployment & Distribution
 - Package as a self-contained script runnable via `uv run standalone.py`.
 - Document environment variables required for API access.
-- Provide demo dataset and stub model credentials for offline showcases.
+- Provide demo DataPainter dataset and stub model credentials for offline showcases.
+- DataPainter format documentation available in `DATAPAINTER_FORMAT.md` and `DATAPAINTER_USAGE.md`.

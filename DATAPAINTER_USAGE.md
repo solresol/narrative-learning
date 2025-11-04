@@ -22,10 +22,9 @@ uv run standalone.py --dataset /tmp/1.sqlite --table hamsters
 
 ## How It Works
 
-### File Format Detection
-The tool automatically detects the file format based on file extension:
-- `.csv` → CSV format (feature_a, feature_b, label columns)
-- `.sqlite`, `.sqlite3`, `.db` → DataPainter SQLite format
+### File Format
+The tool only supports DataPainter SQLite format with the following extensions:
+- `.sqlite`, `.sqlite3`, `.db`
 
 ### DataPainter Format
 DataPainter files contain:
@@ -52,8 +51,8 @@ uv run python -m unittest test_standalone -v
 ## Command-Line Options
 
 ```
---dataset PATH        Path to dataset file (CSV or DataPainter SQLite)
---table NAME          Table name for DataPainter files (optional)
+--dataset PATH        Path to DataPainter SQLite database file
+--table NAME          Table name (defaults to first table in metadata)
 --database PATH       Path for results database (defaults to dataset.sqlite3)
 --export-json PATH    Export results to JSON file
 --shuffle-seed INT    Random seed for train/val split (default: 13)
@@ -84,7 +83,7 @@ sqlite3 file.sqlite "SELECT * FROM tablename LIMIT 10"
 from pathlib import Path
 from standalone import load_dataset
 
-# Auto-detect format and load
+# Load with default (first) table
 rows = load_dataset(Path("/tmp/1.sqlite"))
 
 # Specify table explicitly
@@ -97,7 +96,7 @@ for row in rows[:5]:
 
 ## Data Conversion
 
-DataPainter stores coordinates as `REAL` (floating-point) values, but standalone.py converts them to strings to maintain compatibility with the CSV format. The conversion is transparent and maintains precision:
+DataPainter stores coordinates as `REAL` (floating-point) values, but standalone.py converts them to strings. The conversion is transparent and maintains precision:
 
 ```
 Database: x=4.55696, y=6.95652, target="male"

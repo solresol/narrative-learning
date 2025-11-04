@@ -6,8 +6,7 @@ guided by the specification in ``standalone_spec.md`` and focuses on
 supporting a single language-model backend with lightweight SQLite
 persistence.
 
-Run the application with:
-    uv run standalone.py --dataset path/to.csv
+Datasets must be in DataPainter SQLite format. Run the application with:
     uv run standalone.py --dataset path/to.sqlite --table tablename
 """
 
@@ -16,7 +15,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import csv
 import dataclasses
 import datetime as dt
 import json
@@ -172,35 +170,7 @@ class AppConfig:
 ###############################################################################
 
 
-def load_dataset_csv(path: Path) -> List[DatasetRow]:
-    """Load dataset rows from a CSV file.
-
-    The CSV must contain the columns ``feature_a, feature_b, label`` in that
-    order.  Extra columns trigger a validation error.
-    """
-
-    rows: List[DatasetRow] = []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        expected_fields = ["feature_a", "feature_b", "label"]
-        if reader.fieldnames != expected_fields:
-            raise ValueError(
-                f"CSV header must be exactly {expected_fields}, received {reader.fieldnames!r}"
-            )
-        for entry in reader:
-            rows.append(
-                DatasetRow(
-                    feature_a=str(entry["feature_a"]),
-                    feature_b=str(entry["feature_b"]),
-                    label=str(entry["label"]),
-                )
-            )
-    if not rows:
-        raise ValueError("Dataset is empty; supply at least one row")
-    return rows
-
-
-def load_dataset_datapainter(path: Path, table_name: Optional[str] = None) -> List[DatasetRow]:
+def load_dataset(path: Path, table_name: Optional[str] = None) -> List[DatasetRow]:
     """Load dataset rows from a DataPainter SQLite file.
 
     DataPainter files contain a metadata table with information about available
@@ -265,36 +235,6 @@ def load_dataset_datapainter(path: Path, table_name: Optional[str] = None) -> Li
 
     finally:
         conn.close()
-
-
-def load_dataset(path: Path, table_name: Optional[str] = None) -> List[DatasetRow]:
-    """Load dataset from either CSV or DataPainter SQLite format.
-
-    Automatically detects the file format based on extension:
-    - .csv: CSV format with feature_a, feature_b, label columns
-    - .sqlite, .sqlite3, .db: DataPainter format with metadata and data tables
-
-    Args:
-        path: Path to the dataset file
-        table_name: For DataPainter files, optional table name to load
-
-    Returns:
-        List of DatasetRow objects
-
-    Raises:
-        ValueError: If format is unrecognized or file is invalid
-    """
-    suffix = path.suffix.lower()
-
-    if suffix == ".csv":
-        return load_dataset_csv(path)
-    elif suffix in {".sqlite", ".sqlite3", ".db"}:
-        return load_dataset_datapainter(path, table_name)
-    else:
-        raise ValueError(
-            f"Unsupported dataset format: {suffix}. "
-            "Use .csv or .sqlite/.sqlite3/.db"
-        )
 
 
 def split_dataset(rows: Sequence[DatasetRow], seed: int, ratio: float = 0.8) -> DatasetSplit:
@@ -1128,9 +1068,9 @@ class LockFile:
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Standalone Narrative Learning demo")
     parser.add_argument("--config", type=Path, help="Path to config TOML/YAML file", default=None)
-    parser.add_argument("--dataset", type=Path, help="Dataset path (CSV or DataPainter SQLite)", default=None)
-    parser.add_argument("--table", type=str, help="Table name for DataPainter SQLite files", default=None)
-    parser.add_argument("--database", type=Path, help="SQLite database path", default=None)
+    parser.add_argument("--dataset", type=Path, help="Path to DataPainter SQLite database file", default=None)
+    parser.add_argument("--table", type=str, help="Table name (defaults to first table in metadata)", default=None)
+    parser.add_argument("--database", type=Path, help="SQLite database path for results", default=None)
     parser.add_argument("--export-json", dest="export_json", type=Path, help="Export JSON destination", default=None)
     parser.add_argument("--shuffle-seed", type=int, default=13, help="Dataset shuffle seed")
     parser.add_argument("--max-rounds", type=int, default=None, help="Maximum allowed rounds")

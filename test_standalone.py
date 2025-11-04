@@ -5,7 +5,7 @@ import unittest
 import sqlite3
 import tempfile
 from pathlib import Path
-from standalone import load_dataset_datapainter, load_dataset, DatasetRow
+from standalone import load_dataset, DatasetRow
 
 
 class TestDataPainterLoading(unittest.TestCase):
@@ -37,7 +37,7 @@ class TestDataPainterLoading(unittest.TestCase):
 
     def test_load_datapainter_default_table(self):
         """Test loading a DataPainter file without specifying table name."""
-        rows = load_dataset_datapainter(self.db_path)
+        rows = load_dataset(self.db_path)
 
         # Should load the first table in metadata (hamsters)
         self.assertGreater(len(rows), 0)
@@ -55,7 +55,7 @@ class TestDataPainterLoading(unittest.TestCase):
 
     def test_load_datapainter_explicit_table(self):
         """Test loading a DataPainter file with explicit table name."""
-        rows = load_dataset_datapainter(self.db_path, table_name="hamsters")
+        rows = load_dataset(self.db_path, table_name="hamsters")
 
         self.assertGreater(len(rows), 0)
         self.assertEqual(len(rows), 31)  # From the sample database
@@ -63,7 +63,7 @@ class TestDataPainterLoading(unittest.TestCase):
     def test_load_datapainter_invalid_table(self):
         """Test that requesting a non-existent table raises ValueError."""
         with self.assertRaises(ValueError) as ctx:
-            load_dataset_datapainter(self.db_path, table_name="nonexistent")
+            load_dataset(self.db_path, table_name="nonexistent")
 
         self.assertIn("not found", str(ctx.exception))
         self.assertIn("hamsters", str(ctx.exception))
@@ -83,28 +83,21 @@ class TestDataPainterLoading(unittest.TestCase):
             conn.close()
 
             with self.assertRaises(ValueError) as ctx:
-                load_dataset_datapainter(temp_path)
+                load_dataset(temp_path)
 
             self.assertIn("not appear to be a DataPainter file", str(ctx.exception))
         finally:
             temp_path.unlink()
 
-    def test_load_dataset_auto_detect_sqlite(self):
-        """Test that load_dataset auto-detects SQLite format."""
-        rows = load_dataset(self.db_path)
-
-        self.assertGreater(len(rows), 0)
-        self.assertIsInstance(rows[0], DatasetRow)
-
-    def test_load_dataset_auto_detect_with_table(self):
-        """Test that load_dataset passes table_name to DataPainter loader."""
+    def test_load_dataset_with_table(self):
+        """Test that load_dataset accepts table_name parameter."""
         rows = load_dataset(self.db_path, table_name="hamsters")
 
         self.assertEqual(len(rows), 31)
 
     def test_datapainter_coordinates_as_strings(self):
         """Test that x/y coordinates are properly converted to strings."""
-        rows = load_dataset_datapainter(self.db_path)
+        rows = load_dataset(self.db_path)
 
         # All features should be strings (even though they're REAL in DB)
         for row in rows:
@@ -198,7 +191,7 @@ class TestDataPainterMetadata(unittest.TestCase):
 
     def test_load_first_table_by_default(self):
         """Test that without table_name, the first table in metadata is loaded."""
-        rows = load_dataset_datapainter(self.db_path)
+        rows = load_dataset(self.db_path)
 
         # Should load dataset1 (first in metadata)
         self.assertEqual(len(rows), 2)
@@ -207,7 +200,7 @@ class TestDataPainterMetadata(unittest.TestCase):
 
     def test_load_second_table_explicitly(self):
         """Test loading a specific table when multiple are available."""
-        rows = load_dataset_datapainter(self.db_path, table_name="dataset2")
+        rows = load_dataset(self.db_path, table_name="dataset2")
 
         self.assertEqual(len(rows), 3)
         labels = {row.label for row in rows}
@@ -231,7 +224,7 @@ class TestDataPainterMetadata(unittest.TestCase):
             conn.close()
 
             with self.assertRaises(ValueError) as ctx:
-                load_dataset_datapainter(temp_path)
+                load_dataset(temp_path)
 
             self.assertIn("No tables found in metadata", str(ctx.exception))
         finally:
