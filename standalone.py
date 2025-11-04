@@ -41,6 +41,9 @@ from rich.markdown import Markdown as RichMarkdown
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
+from sklearn.dummy import DummyClassifier
+from imodels import RuleFitClassifier, BayesianRuleListClassifier, OptimalRuleListClassifier
+from interpret.glassbox import ExplainableBoostingClassifier
 from textual import log
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -562,6 +565,42 @@ def calculate_baseline_metrics(split: DatasetSplit) -> List[BaselineMetrics]:
     except Exception as e:
         log(f"Decision Tree failed: {e}")
 
+    # 4. RuleFit
+    try:
+        rf = RuleFitClassifier()
+        rf.fit(X_train, y_train_encoded)
+        rf_predictions = le.inverse_transform(rf.predict(X_val).astype(int))
+        baseline_predictions.append(("RuleFit", list(rf_predictions)))
+    except Exception as e:
+        log(f"RuleFit failed: {e}")
+
+    # 5. Bayesian Rule List
+    try:
+        brl = BayesianRuleListClassifier(max_iter=500, n_chains=2)
+        brl.fit(X_train, y_train_encoded)
+        brl_predictions = le.inverse_transform(brl.predict(X_val).astype(int))
+        baseline_predictions.append(("BRL", list(brl_predictions)))
+    except Exception as e:
+        log(f"BayesianRuleList failed: {e}")
+
+    # 6. CORELS
+    try:
+        corels = OptimalRuleListClassifier(max_card=3, n_iter=5000, c=0.05)
+        corels.fit(X_train, y_train_encoded)
+        corels_predictions = le.inverse_transform(corels.predict(X_val).astype(int))
+        baseline_predictions.append(("CORELS", list(corels_predictions)))
+    except Exception as e:
+        log(f"CORELS failed: {e}")
+
+    # 7. EBM (Explainable Boosting Machine)
+    try:
+        ebm = ExplainableBoostingClassifier(interactions=10)
+        ebm.fit(X_train, y_train)
+        ebm_predictions = ebm.predict(X_val)
+        baseline_predictions.append(("EBM", list(ebm_predictions)))
+    except Exception as e:
+        log(f"EBM failed: {e}")
+
     # Calculate metrics for all baselines
     metrics: List[BaselineMetrics] = []
     for name, predictions in baseline_predictions:
@@ -889,7 +928,7 @@ class StandaloneApp(App[None]):
     }
     #baseline-panel {
         height: auto;
-        max-height: 8;
+        max-height: 10;
     }
     #prompt-editor {
         padding: 2;
