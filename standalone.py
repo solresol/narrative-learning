@@ -731,8 +731,8 @@ class DatasetPanel(Static):
 class BaselinePanel(DataTable):
     """Table summarising baseline models."""
 
-    def __init__(self) -> None:
-        super().__init__(zebra_stripes=True)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(zebra_stripes=True, **kwargs)
         self.add_columns("Model", "Accuracy", "Kendall Tau")
         self.cursor_type = "none"
 
@@ -836,8 +836,8 @@ class PromptPanel(Static):
 class EventLog(RichLog):
     """Colour-coded log of application events."""
 
-    def __init__(self) -> None:
-        super().__init__(highlight=True, max_lines=200)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(highlight=True, max_lines=200, **kwargs)
 
     def info(self, message: str) -> None:
         self.write(f"[green]INFO[/green] {message}")
