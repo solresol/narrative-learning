@@ -765,11 +765,11 @@ class HistoryList(ListView):
         # Remove all existing children to avoid ID conflicts
         for child in list(self.children):
             child.remove()
-        # Add new items
+        # Add new items (no IDs needed to avoid conflicts)
         for record in rounds:
             created = record.created_at.strftime("%H:%M:%S")
             subtitle = f"Accuracy {record.metrics.accuracy:.1%}"
-            self.append(ListItem(Label(f"Round {record.id} @ {created} — {subtitle}"), id=f"round-{record.id}"))
+            self.append(ListItem(Label(f"Round {record.id} @ {created} — {subtitle}")))
 
 
 class RoundDetail(Static):
