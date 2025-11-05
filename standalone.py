@@ -926,8 +926,6 @@ class RoundEngine:
 
         notes_log = [f"Processed {len(self.processed_indices)}/{len(all_rows)} data points"]
         metrics = compute_metrics(validation_examples, notes="\n".join(notes_log))
-        updated_prompt, feedback = self.prompt_manager.apply_feedback(validation_examples)
-        metrics.notes = feedback + "\n" + metrics.notes
 
         notify(RoundProgress("Saving", len(self.processed_indices), len(self.processed_indices), None))
         round_id, created_at = self.database.insert_round(
@@ -946,7 +944,7 @@ class RoundEngine:
         self.processed_indices.clear()
         self.predictions.clear()
 
-        log.info("Round complete, updated prompt to %s", updated_prompt)
+        log.info("Round complete, keeping prompt: %s", self.prompt_manager.current_prompt[:50])
         notify(RoundProgress("Complete", len(all_rows), len(all_rows), None))
         return record
 
