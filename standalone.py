@@ -38,6 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None  # type: ignore[assignment]
 
 from rich.markdown import Markdown as RichMarkdown
+from rich.text import Text
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
@@ -692,6 +693,25 @@ def calculate_baseline_metrics_incremental(split: DatasetSplit) -> Iterator[Base
         log(f"EBM failed: {e}")
 
 
+def format_sig_figs(value: str, n: int = 3) -> str:
+    """Format a numeric string to n significant figures."""
+    try:
+        num = float(value)
+        if num == 0:
+            return "0"
+        from math import log10, floor
+        magnitude = floor(log10(abs(num)))
+        rounded = round(num, -magnitude + n - 1)
+        # Format with appropriate decimal places
+        if magnitude >= n - 1:
+            return f"{int(rounded)}"
+        else:
+            decimals = max(0, n - magnitude - 1)
+            return f"{rounded:.{decimals}f}"
+    except (ValueError, TypeError):
+        return value
+
+
 def kendall_tau(labels: Sequence[str], predictions: Sequence[str]) -> float:
     """Lightweight Kendall Tau approximation for ordinal agreement.
 
@@ -724,11 +744,19 @@ def kendall_tau(labels: Sequence[str], predictions: Sequence[str]) -> float:
 class RoundProgress(Message):
     """Message carrying round progress updates to the UI."""
 
-    def __init__(self, stage: str, completed: int, total: int, current_index: Optional[int]) -> None:
+    def __init__(
+        self,
+        stage: str,
+        completed: int,
+        total: int,
+        current_index: Optional[int],
+        prediction: Optional[str] = None,
+    ) -> None:
         self.stage = stage
         self.completed = completed
         self.total = total
         self.current_index = current_index
+        self.prediction = prediction
         super().__init__()
 
 
@@ -766,12 +794,14 @@ class RoundEngine:
         predictions: List[str] = []
         notes_log: List[str] = []
         for idx, row in enumerate(self.split.validation):
-            notify(RoundProgress("Calling model", idx, len(self.split.validation), idx))
+            notify(RoundProgress("Calling model", idx, len(self.split.validation), idx, None))
             prediction = self.model.generate(prompt, [row])[0]
             predictions.append(prediction)
             notes_log.append(
                 f"Processed ({row.feature_a}, {row.feature_b}) -> {prediction}"
             )
+            # Notify with the prediction so UI can update
+            notify(RoundProgress("Calling model", idx + 1, len(self.split.validation), idx, prediction))
         notify(RoundProgress("Scoring", len(self.split.validation), len(self.split.validation), None))
 
         examples = []
@@ -905,20 +935,68 @@ class UnderlingPanel(Static):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.progress_bar = ProgressBar(total=1)
-        self.coordinates = ListView(id="underling-coordinates")
+        self.data_table = DataTable(id="underling-table", zebra_stripes=False)
+        self.data_table.cursor_type = "row"
+        self.validation_indices: set[int] = set()
+        self.validation_to_all_map: dict[int, int] = {}  # Maps validation index to all_rows index
 
     def compose(self) -> ComposeResult:
         yield Label("Underling Progress", id="underling-title")
         yield self.progress_bar
         yield Label(id="underling-status")
-        yield self.coordinates
+        yield self.data_table
 
-    def reset(self, rows: Sequence[DatasetRow]) -> None:
-        self.progress_bar.total = max(1, len(rows))
+    def reset(self, all_rows: Sequence[DatasetRow], validation_rows: Sequence[DatasetRow]) -> None:
+        """Reset the panel with all data, marking validation rows specially."""
+        # Build validation set for quick lookup
+        validation_set = {(r.feature_a, r.feature_b, r.label) for r in validation_rows}
+
+        self.progress_bar.total = max(1, len(validation_rows))
         self.progress_bar.progress = 0
-        self.coordinates.clear()
-        for idx, row in enumerate(rows, start=1):
-            self.coordinates.append(ListItem(Label(f"{idx:02d}. ({row.feature_a}, {row.feature_b})")))
+
+        # Clear and setup table
+        self.data_table.clear(columns=True)
+        self.data_table.add_columns("", "Feature A", "Feature B", "Truth", "Pred")
+
+        # Track which rows are validation
+        self.validation_indices.clear()
+        self.validation_to_all_map.clear()
+
+        # Build mapping from validation index to all_rows index
+        validation_idx = 0
+        for all_idx, row in enumerate(all_rows):
+            if (row.feature_a, row.feature_b, row.label) in validation_set:
+                self.validation_to_all_map[validation_idx] = all_idx
+                validation_idx += 1
+
+        # Add all rows
+        for idx, row in enumerate(all_rows):
+            is_validation = (row.feature_a, row.feature_b, row.label) in validation_set
+            if is_validation:
+                self.validation_indices.add(idx)
+                marker = Text("V", style="bold yellow on blue")
+                style = "on blue"
+            else:
+                marker = Text("T", style="dim")
+                style = ""
+
+            feat_a = format_sig_figs(row.feature_a)
+            feat_b = format_sig_figs(row.feature_b)
+
+            # Create styled cells for validation rows
+            if is_validation:
+                feat_a_text = Text(feat_a, style=style)
+                feat_b_text = Text(feat_b, style=style)
+                label_text = Text(row.label, style=style)
+                pred_text = Text("", style=style)
+            else:
+                feat_a_text = feat_a
+                feat_b_text = feat_b
+                label_text = row.label
+                pred_text = ""
+
+            self.data_table.add_row(marker, feat_a_text, feat_b_text, label_text, pred_text)
+
         status = self.query_one("#underling-status", Label)
         status.update("Awaiting round start…")
 
@@ -926,8 +1004,23 @@ class UnderlingPanel(Static):
         self.progress_bar.progress = message.completed
         status = self.query_one("#underling-status", Label)
         status.update(f"{message.stage} ({message.completed}/{message.total})")
-        if message.current_index is not None:
-            self.coordinates.index = message.current_index
+
+        # Update cursor and prediction if available
+        if message.current_index is not None and message.current_index in self.validation_to_all_map:
+            all_row_idx = self.validation_to_all_map[message.current_index]
+            self.data_table.move_cursor(row=all_row_idx)
+
+            # Update prediction column if we have a prediction
+            if message.prediction is not None:
+                row_key = self.data_table.get_row_at(all_row_idx)
+                if row_key is not None:
+                    # Update the prediction column (index 4)
+                    is_validation = all_row_idx in self.validation_indices
+                    if is_validation:
+                        pred_text = Text(message.prediction, style="on blue")
+                    else:
+                        pred_text = message.prediction
+                    self.data_table.update_cell_at((all_row_idx, 4), pred_text)
 
 
 class PromptPanel(Static):
@@ -1017,6 +1110,9 @@ class StandaloneApp(App[None]):
     #baseline-panel {
         height: auto;
         max-height: 10;
+    }
+    #underling-table {
+        height: 1fr;
     }
     #prompt-editor {
         padding: 2;
@@ -1111,7 +1207,9 @@ class StandaloneApp(App[None]):
         self.query_one(EventLog).info(
             f"Loaded dataset with {len(self.dataset)} rows; model {self.model.describe()}"
         )
-        self.query_one(UnderlingPanel).reset(self.split.validation)
+        # Show all data, highlighting validation rows
+        all_rows = self.split.train + self.split.validation
+        self.query_one(UnderlingPanel).reset(all_rows, self.split.validation)
         self.query_one(HistoryList).set_rounds(self.rounds)
         if self.rounds:
             self.current_round = self.rounds[-1]
@@ -1125,7 +1223,8 @@ class StandaloneApp(App[None]):
             self.query_one(EventLog).warning("Round already in progress")
             return
         underling = self.query_one(UnderlingPanel)
-        underling.reset(self.split.validation)
+        all_rows = self.split.train + self.split.validation
+        underling.reset(all_rows, self.split.validation)
         self.query_one(EventLog).info("Starting new round")
         loop = asyncio.get_running_loop()
 
