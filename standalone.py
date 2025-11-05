@@ -1676,15 +1676,10 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 self.query_one(EventLog).info("Prompt built successfully")
 
                 # Highlight the rows that are being used as examples
-                log.info("About to query UnderlingPanel")
-                underling = self.query_one(UnderlingPanel)
-                log.info(f"Got underling panel, about to highlight {len(shown_examples)} examples")
-                self.query_one(EventLog).info(f"About to highlight {len(shown_examples)} example rows...")
-
-                underling.highlight_examples(shown_examples)
-
-                log.info("Highlighting complete")
-                self.query_one(EventLog).info(f"Highlighting complete for {len(shown_examples)} rows")
+                # TODO: Fix highlighting - currently hangs at get_row_at()
+                # For now, skip highlighting to get GPT-5 call working
+                log.info(f"Skipping highlighting ({len(shown_examples)} examples would be highlighted)")
+                self.query_one(EventLog).info(f"Will analyze {len(shown_examples)} training examples (highlighting disabled temporarily)")
 
                 # Call gpt-5 to generate a new prompt
                 self.query_one(EventLog).info("Calling GPT-5 to generate new prompt...")
@@ -1703,10 +1698,6 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 new_prompt = new_prompt_data['updated_prompt']
                 reasoning = new_prompt_data.get('reasoning', '')
 
-                # Clear the highlighting
-                all_rows = self.engine.get_all_rows()
-                underling.clear_highlighting(all_rows)
-
                 # Update the prompt manager and display
                 self.prompt_manager.set_prompt(new_prompt)
                 self.query_one(PromptPanel).update_prompt(new_prompt)
@@ -1717,9 +1708,6 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                     self.query_one(EventLog).info(f"Reasoning: {reasoning[:100]}...")
 
             except Exception as e:
-                # Clear highlighting even on error
-                all_rows = self.engine.get_all_rows()
-                self.query_one(UnderlingPanel).clear_highlighting(all_rows)
                 self.query_one(EventLog).error(f"Failed to generate prompt: {e}")
                 log.exception("Prompt generation failed")
                 import traceback
