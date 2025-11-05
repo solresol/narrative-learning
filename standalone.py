@@ -124,7 +124,8 @@ class RoundRecord:
     created_at: dt.datetime
     prompt: str
     metrics: RoundMetrics
-    examples: List[RoundExample]
+    examples: List[RoundExample]  # Validation examples (for display/metrics)
+    training_examples: Optional[List[RoundExample]] = None  # Training examples (for prompt generation)
 
 
 @dataclass(slots=True)
@@ -889,16 +890,31 @@ class RoundEngine:
 
         notify(RoundProgress("Scoring", len(self.processed_indices), len(self.processed_indices), None))
 
-        # Build examples from validation set only (for metrics)
         all_rows = self.get_all_rows()
         validation_start_idx = len(self.split.train)
 
-        examples = []
+        # Build training examples (for prompt generation)
+        training_examples = []
+        for train_idx, train_row in enumerate(self.split.train):
+            if train_idx in self.predictions:
+                pred = self.predictions[train_idx]
+                training_examples.append(
+                    RoundExample(
+                        feature_a=train_row.feature_a,
+                        feature_b=train_row.feature_b,
+                        label=train_row.label,
+                        prediction=pred,
+                        correct=pred == train_row.label,
+                    )
+                )
+
+        # Build validation examples (for metrics/display)
+        validation_examples = []
         for val_idx, val_row in enumerate(self.split.validation):
             all_idx = validation_start_idx + val_idx
             if all_idx in self.predictions:
                 pred = self.predictions[all_idx]
-                examples.append(
+                validation_examples.append(
                     RoundExample(
                         feature_a=val_row.feature_a,
                         feature_b=val_row.feature_b,
@@ -909,20 +925,21 @@ class RoundEngine:
                 )
 
         notes_log = [f"Processed {len(self.processed_indices)}/{len(all_rows)} data points"]
-        metrics = compute_metrics(examples, notes="\n".join(notes_log))
-        updated_prompt, feedback = self.prompt_manager.apply_feedback(examples)
+        metrics = compute_metrics(validation_examples, notes="\n".join(notes_log))
+        updated_prompt, feedback = self.prompt_manager.apply_feedback(validation_examples)
         metrics.notes = feedback + "\n" + metrics.notes
 
         notify(RoundProgress("Saving", len(self.processed_indices), len(self.processed_indices), None))
         round_id, created_at = self.database.insert_round(
-            prompt=self.prompt_manager.current_prompt, metrics=metrics, examples=examples
+            prompt=self.prompt_manager.current_prompt, metrics=metrics, examples=validation_examples
         )
         record = RoundRecord(
             id=round_id,
             created_at=created_at,
             prompt=self.prompt_manager.current_prompt,
             metrics=metrics,
-            examples=examples,
+            examples=validation_examples,
+            training_examples=training_examples,
         )
 
         # Reset for next round
@@ -1375,15 +1392,30 @@ class StandaloneApp(App[None]):
         self._worker = asyncio.create_task(worker())
 
     def _build_reprompt_prompt(self, record: RoundRecord) -> str:
-        """Build a prompt asking gpt-5 to improve the current prompt based on results."""
+        """Build a prompt asking gpt-5 to improve the current prompt based on results.
+
+        Uses TRAINING data only (not validation data) to avoid training on the test set.
+        """
+
+        # Use training examples for prompt generation
+        train_examples = record.training_examples or []
+        if not train_examples:
+            # Fallback to validation examples if training examples not available (old data)
+            train_examples = record.examples
 
         # Show incorrect examples (up to 5)
-        incorrect = [ex for ex in record.examples if not ex.correct]
-        correct = [ex for ex in record.examples if ex.correct]
+        incorrect = [ex for ex in train_examples if not ex.correct]
+        correct = [ex for ex in train_examples if ex.correct]
+
+        # Build confusion matrix from training data
+        train_confusion: Dict[Tuple[str, str], int] = {}
+        for ex in train_examples:
+            key = (ex.label, ex.prediction)
+            train_confusion[key] = train_confusion.get(key, 0) + 1
 
         # Build confusion matrix display
         matrix_lines = []
-        for (label, pred), count in sorted(record.metrics.confusion_matrix.items()):
+        for (label, pred), count in sorted(train_confusion.items()):
             matrix_lines.append(f"  {label!r} → {pred!r}: {count}")
 
         # Build examples display
@@ -1401,11 +1433,16 @@ class StandaloneApp(App[None]):
                 f"     Label: {ex.label!r} (predicted correctly)"
             )
 
+        # Calculate training accuracy
+        train_correct = len(correct)
+        train_total = len(train_examples)
+        train_accuracy = train_correct / train_total if train_total > 0 else 0.0
+
         prompt = f"""You are part of a program that is trying to learn inference rules on this dataset. At each round, a prompt is shown to an LLM together with one row of data at a time. It then attempts to predict the outcome based on the rules in the prompt. This process works well if the prompt has very explicit and clear rules: aim for unambiguous thresholds for values, clear criteria for labels and careful wording.
 
 We would like to improve the prompt that is being used.
 
-Please create a new prompt that will reduce the number of false positives and false negatives in this dataset. You can see the prompt that has been used previously, and how effective it was. There are also some examples of where the prompt did and didn't work.
+Please create a new prompt that will reduce the number of false positives and false negatives in this dataset. You can see the prompt that has been used previously, and how effective it was on the TRAINING data. There are also some examples of where the prompt did and didn't work.
 
 Remember: you need to create rules. Don't just waffle about what changes need to happen. Look at the examples where the previous prediction system got it wrong, and try to come up with at least one new rule that would handle one of those situations correctly.
 
@@ -1415,25 +1452,27 @@ Remember: you need to create rules. Don't just waffle about what changes need to
 
 {record.prompt}
 
-## Results
+## Training Results
 
-Validation Accuracy: {record.metrics.accuracy:.1%}
-Total validation examples: {len(record.examples)}
-Correct: {len(correct)}
+Training Accuracy: {train_accuracy:.1%}
+Total training examples: {train_total}
+Correct: {train_correct}
 Incorrect: {len(incorrect)}
 
-### Confusion Matrix
+(Note: Validation accuracy is {record.metrics.accuracy:.1%}, but we show TRAINING data below to avoid overfitting to the validation set.)
+
+### Confusion Matrix (Training Data)
 {chr(10).join(matrix_lines)}
 
-### Examples Where the Prompt FAILED
+### Examples Where the Prompt FAILED (Training Data)
 {chr(10).join(incorrect_examples) if incorrect_examples else "  (None - all predictions were correct!)"}
 
-### Examples Where the Prompt SUCCEEDED
+### Examples Where the Prompt SUCCEEDED (Training Data)
 {chr(10).join(correct_examples) if correct_examples else "  (None)"}
 
 ----------------------------
 
-Based on this analysis, please generate an improved prompt that will perform better on this dataset.
+Based on this analysis of the TRAINING data, please generate an improved prompt that will perform better on this dataset.
 """
         return prompt
 
