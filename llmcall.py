@@ -484,9 +484,9 @@ def openai_prediction(model, prompt, valid_predictions):
     elif 'o1' in model:
         cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
     elif 'gpt-5-mini' in model:
-        cost = (3 * prompt_tokens + 12 * completion_tokens) / 1000000  # Placeholder pricing
+        cost = (0.25 * prompt_tokens + 2 * completion_tokens) / 1000000
     elif 'gpt-5' in model:
-        cost = (20 * prompt_tokens + 80 * completion_tokens) / 1000000  # Placeholder pricing
+        cost = (1.25 * prompt_tokens + 10 * completion_tokens) / 1000000
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
@@ -555,9 +555,9 @@ def openai_reprompt(model, prompting_creation_prompt):
     elif 'o1' in model:
         cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
     elif 'gpt-5-mini' in model:
-        cost = (3 * prompt_tokens + 12 * completion_tokens) / 1000000  # Placeholder pricing
+        cost = (0.25 * prompt_tokens + 2 * completion_tokens) / 1000000
     elif 'gpt-5' in model:
-        cost = (20 * prompt_tokens + 80 * completion_tokens) / 1000000  # Placeholder pricing
+        cost = (1.25 * prompt_tokens + 10 * completion_tokens) / 1000000
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
