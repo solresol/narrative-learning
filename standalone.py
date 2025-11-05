@@ -1492,32 +1492,41 @@ class StandaloneApp(App[None]):
             Tuple of (prompt_text, examples_used) where examples_used are the specific
             examples shown in the prompt (for UI highlighting).
         """
+        log.info("_build_reprompt_prompt: Starting")
 
         # Use training examples for prompt generation
         train_examples = record.training_examples or []
+        log.info(f"_build_reprompt_prompt: training_examples has {len(train_examples)} items")
+
         if not train_examples:
             # Fallback to validation examples if training examples not available (old data)
             train_examples = record.examples
+            log.info(f"_build_reprompt_prompt: Falling back to validation examples: {len(train_examples)} items")
 
         # Show incorrect examples (up to 5) and correct examples (up to 3)
         incorrect = [ex for ex in train_examples if not ex.correct]
         correct = [ex for ex in train_examples if ex.correct]
+        log.info(f"_build_reprompt_prompt: Found {len(incorrect)} incorrect, {len(correct)} correct")
 
         # Track which examples we're actually showing
         shown_examples = incorrect[:5] + correct[:3]
+        log.info(f"_build_reprompt_prompt: Will show {len(shown_examples)} examples")
 
         # Build confusion matrix from training data
+        log.info("_build_reprompt_prompt: Building confusion matrix")
         train_confusion: Dict[Tuple[str, str], int] = {}
         for ex in train_examples:
             key = (ex.label, ex.prediction)
             train_confusion[key] = train_confusion.get(key, 0) + 1
 
         # Build confusion matrix display
+        log.info("_build_reprompt_prompt: Formatting confusion matrix")
         matrix_lines = []
         for (label, pred), count in sorted(train_confusion.items()):
             matrix_lines.append(f"  {label!r} → {pred!r}: {count}")
 
         # Build examples display
+        log.info("_build_reprompt_prompt: Building incorrect examples")
         incorrect_examples = []
         for idx, ex in enumerate(incorrect[:5], 1):
             incorrect_examples.append(
@@ -1525,6 +1534,7 @@ class StandaloneApp(App[None]):
                 f"     True label: {ex.label!r}, Predicted: {ex.prediction!r}"
             )
 
+        log.info("_build_reprompt_prompt: Building correct examples")
         correct_examples = []
         for idx, ex in enumerate(correct[:3], 1):
             correct_examples.append(
@@ -1533,10 +1543,12 @@ class StandaloneApp(App[None]):
             )
 
         # Calculate training accuracy
+        log.info("_build_reprompt_prompt: Calculating training accuracy")
         train_correct = len(correct)
         train_total = len(train_examples)
         train_accuracy = train_correct / train_total if train_total > 0 else 0.0
 
+        log.info("_build_reprompt_prompt: Building final prompt string")
         prompt = f"""You are part of a program that is trying to learn inference rules on this dataset. At each round, a prompt is shown to an LLM together with one row of data at a time. It then attempts to predict the outcome based on the rules in the prompt. This process works well if the prompt has very explicit and clear rules: aim for unambiguous thresholds for values, clear criteria for labels and careful wording.
 
 We would like to improve the prompt that is being used.
@@ -1573,6 +1585,7 @@ Incorrect: {len(incorrect)}
 
 Based on this analysis of the TRAINING data, please generate an improved prompt that will perform better on this dataset.
 """
+        log.info("_build_reprompt_prompt: Returning")
         return prompt, shown_examples
 
     async def action_generate_prompt(self) -> None:
@@ -1595,7 +1608,10 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
             try:
                 # Build the reprompt and get the examples that will be shown
                 self.query_one(EventLog).info("Building prompt for GPT-5...")
+                log.info("About to call _build_reprompt_prompt")
                 reprompt_prompt, shown_examples = self._build_reprompt_prompt(latest_round)
+                log.info("Returned from _build_reprompt_prompt")
+                self.query_one(EventLog).info("Prompt built successfully")
 
                 # Highlight the rows that are being used as examples
                 underling = self.query_one(UnderlingPanel)
