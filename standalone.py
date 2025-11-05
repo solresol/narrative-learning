@@ -1629,9 +1629,15 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 self.query_one(EventLog).info("Prompt built successfully")
 
                 # Highlight the rows that are being used as examples
+                log.info("About to query UnderlingPanel")
                 underling = self.query_one(UnderlingPanel)
+                log.info(f"Got underling panel, about to highlight {len(shown_examples)} examples")
+                self.query_one(EventLog).info(f"About to highlight {len(shown_examples)} example rows...")
+
                 underling.highlight_examples(shown_examples)
-                self.query_one(EventLog).info(f"Highlighting {len(shown_examples)} example rows for prompt generation")
+
+                log.info("Highlighting complete")
+                self.query_one(EventLog).info(f"Highlighting complete for {len(shown_examples)} rows")
 
                 # Call gpt-5 to generate a new prompt
                 self.query_one(EventLog).info("Calling GPT-5 to generate new prompt...")
