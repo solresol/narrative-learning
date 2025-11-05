@@ -25,7 +25,7 @@ import textwrap
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 
 try:  # Python 3.11+
     import tomllib  # type: ignore[attr-defined]
@@ -611,6 +611,87 @@ def calculate_baseline_metrics(split: DatasetSplit) -> List[BaselineMetrics]:
     return metrics
 
 
+def calculate_baseline_metrics_incremental(split: DatasetSplit) -> Iterator[BaselineMetrics]:
+    """Compute baseline metrics one at a time, yielding results as they complete."""
+    import numpy as np
+
+    # Prepare training data
+    X_train = np.array([[float(row.feature_a), float(row.feature_b)] for row in split.train])
+    y_train = np.array([row.label for row in split.train])
+
+    # Prepare validation data
+    X_val = np.array([[float(row.feature_a), float(row.feature_b)] for row in split.validation])
+    y_val = [row.label for row in split.validation]
+
+    # Encode labels
+    le = LabelEncoder()
+    y_train_encoded = le.fit_transform(y_train)
+
+    # Helper to calculate and yield a baseline
+    def calc_and_yield(name: str, predictions: List[str]) -> BaselineMetrics:
+        accuracy = sum(1 for truth, pred in zip(y_val, predictions) if truth == pred) / len(y_val)
+        tau = kendall_tau(y_val, predictions)
+        return BaselineMetrics(name=name, accuracy=accuracy, kendall_tau=tau)
+
+    # 1. Majority Label
+    majority = max(set(y_train), key=list(y_train).count)
+    yield calc_and_yield("Majority", [majority for _ in split.validation])
+
+    # 2. Logistic Regression
+    try:
+        lr = LogisticRegression(max_iter=1000, random_state=42)
+        lr.fit(X_train, y_train)
+        lr_predictions = lr.predict(X_val)
+        yield calc_and_yield("Logistic", list(lr_predictions))
+    except Exception as e:
+        log(f"Logistic Regression failed: {e}")
+
+    # 3. Decision Tree
+    try:
+        dt = DecisionTreeClassifier(max_depth=5, random_state=42)
+        dt.fit(X_train, y_train)
+        dt_predictions = dt.predict(X_val)
+        yield calc_and_yield("DecTree", list(dt_predictions))
+    except Exception as e:
+        log(f"Decision Tree failed: {e}")
+
+    # 4. RuleFit
+    try:
+        rf = RuleFitClassifier()
+        rf.fit(X_train, y_train_encoded)
+        rf_predictions = le.inverse_transform(rf.predict(X_val).astype(int))
+        yield calc_and_yield("RuleFit", list(rf_predictions))
+    except Exception as e:
+        log(f"RuleFit failed: {e}")
+
+    # 5. Bayesian Rule List
+    try:
+        brl = BayesianRuleListClassifier(max_iter=500, n_chains=2)
+        brl.fit(X_train, y_train_encoded)
+        brl_predictions = le.inverse_transform(brl.predict(X_val).astype(int))
+        yield calc_and_yield("BRL", list(brl_predictions))
+    except Exception as e:
+        log(f"BayesianRuleList failed: {e}")
+
+    # 6. CORELS
+    try:
+        corels = OptimalRuleListClassifier(max_card=3, n_iter=5000, c=0.05)
+        corels.fit(X_train, y_train_encoded)
+        corels_predictions = le.inverse_transform(corels.predict(X_val).astype(int))
+        yield calc_and_yield("CORELS", list(corels_predictions))
+    except Exception as e:
+        log(f"CORELS failed: {e}")
+
+    # 7. EBM (Explainable Boosting Machine)
+    try:
+        ebm = ExplainableBoostingClassifier(interactions=10)
+        ebm.fit(X_train, y_train)
+        ebm_predictions = ebm.predict(X_val)
+        yield calc_and_yield("EBM", list(ebm_predictions))
+    except Exception as e:
+        log(f"EBM failed: {e}")
+
+
 def kendall_tau(labels: Sequence[str], predictions: Sequence[str]) -> float:
     """Lightweight Kendall Tau approximation for ordinal agreement.
 
@@ -756,6 +837,10 @@ class BaselinePanel(DataTable):
         self.clear()
         for metric in metrics:
             self.add_row(metric.name, f"{metric.accuracy:.2%}", f"{metric.kendall_tau:.2f}")
+
+    def add_baseline(self, metric: BaselineMetrics) -> None:
+        """Add a single baseline result incrementally."""
+        self.add_row(metric.name, f"{metric.accuracy:.2%}", f"{metric.kendall_tau:.2f}")
 
 
 class HistoryList(ListView):
@@ -968,7 +1053,7 @@ class StandaloneApp(App[None]):
         database: StandaloneDatabase,
         model: ModelAdapter,
         prompt_manager: PromptManager,
-        baseline_metrics: List[BaselineMetrics],
+        baseline_metrics: Optional[List[BaselineMetrics]] = None,
         export_path: Optional[Path],
         max_rounds: Optional[int],
     ) -> None:
@@ -978,13 +1063,14 @@ class StandaloneApp(App[None]):
         self.database = database
         self.model = model
         self.prompt_manager = prompt_manager
-        self.baseline_metrics = baseline_metrics
+        self.baseline_metrics = baseline_metrics or []
         self.export_path = export_path
         self.max_rounds = max_rounds
         self.rounds: List[RoundRecord] = database.fetch_rounds()
         self.engine = RoundEngine(split, database, model, prompt_manager)
         self.current_round: Optional[RoundRecord] = None
         self._worker: Optional[asyncio.Task[None]] = None
+        self._baseline_worker: Optional[asyncio.Task[None]] = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -1014,7 +1100,14 @@ class StandaloneApp(App[None]):
         dataset_panel = self.query_one(DatasetPanel)
         dataset_panel.update_summary(self.dataset, self.split, len(self.rounds))
         self.query_one(PromptPanel).update_prompt(self.prompt_manager.current_prompt)
-        self.query_one(BaselinePanel).populate(self.baseline_metrics)
+
+        # Populate existing baselines or start calculating them
+        if self.baseline_metrics:
+            self.query_one(BaselinePanel).populate(self.baseline_metrics)
+        else:
+            self.query_one(EventLog).info("Calculating baseline models...")
+            self._baseline_worker = asyncio.create_task(self._calculate_baselines())
+
         self.query_one(EventLog).info(
             f"Loaded dataset with {len(self.dataset)} rows; model {self.model.describe()}"
         )
@@ -1078,6 +1171,28 @@ class StandaloneApp(App[None]):
             self.model.name = f"{self.model.name} (stub)"
             self.query_one(EventLog).info("Stub label restored.")
 
+    async def _calculate_baselines(self) -> None:
+        """Calculate baseline models in the background, updating UI as each completes."""
+        loop = asyncio.get_running_loop()
+
+        def run_calculations() -> List[BaselineMetrics]:
+            """Run baseline calculations in thread pool."""
+            results = []
+            for baseline in calculate_baseline_metrics_incremental(self.split):
+                results.append(baseline)
+                # Notify UI from the event loop
+                loop.call_soon_threadsafe(self._add_baseline_result, baseline)
+            return results
+
+        # Run calculations in thread pool to avoid blocking the UI
+        self.baseline_metrics = await loop.run_in_executor(None, run_calculations)
+        self.query_one(EventLog).info("All baseline models calculated.")
+
+    def _add_baseline_result(self, baseline: BaselineMetrics) -> None:
+        """Add a baseline result to the panel (called from thread)."""
+        self.query_one(BaselinePanel).add_baseline(baseline)
+        self.query_one(EventLog).info(f"Baseline {baseline.name}: {baseline.accuracy:.2%}")
+
     async def on_round_progress(self, message: RoundProgress) -> None:
         self.query_one(UnderlingPanel).update_progress(message)
 
@@ -1095,13 +1210,12 @@ class StandaloneApp(App[None]):
         )
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        if event.list_view.id == "history" and event.item.id:
-            round_id = int(event.item.id)
-            for record in self.rounds:
-                if record.id == round_id:
-                    self.current_round = record
-                    self.query_one(RoundDetail).show_round(record)
-                    break
+        if event.list_view.id == "history":
+            # Use the index to get the corresponding round
+            index = event.list_view.index
+            if index is not None and 0 <= index < len(self.rounds):
+                self.current_round = self.rounds[index]
+                self.query_one(RoundDetail).show_round(self.current_round)
 
     async def on_shutdown(self, event: App.Shutdown) -> None:
         if self.export_path is not None:
@@ -1180,15 +1294,14 @@ def bootstrap(argv: Optional[Sequence[str]] = None) -> StandaloneApp:
     database.store_dataset(dataset)
     model = StubModelAdapter(config.model_name, config.temperature)
     prompt_manager = PromptManager("Choose randomly")
-    baseline_metrics = calculate_baseline_metrics(split)
     export_path = args.export_json
+    # Baselines will be calculated asynchronously when the app starts
     app = StandaloneApp(
         dataset=dataset,
         split=split,
         database=database,
         model=model,
         prompt_manager=prompt_manager,
-        baseline_metrics=baseline_metrics,
         export_path=export_path,
         max_rounds=args.max_rounds,
     )
