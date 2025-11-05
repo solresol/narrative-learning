@@ -1606,6 +1606,23 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
 
         async def worker() -> None:
             try:
+                # Check if we have training or validation examples
+                has_train = latest_round.training_examples and len(latest_round.training_examples) > 0
+                has_val = latest_round.examples and len(latest_round.examples) > 0
+
+                if not has_train and not has_val:
+                    self.query_one(EventLog).error(
+                        f"Round {latest_round.id} has no examples. "
+                        "Please finalize a new round (SPACE then 'r') before generating a prompt."
+                    )
+                    return
+
+                if not has_train:
+                    self.query_one(EventLog).warning(
+                        f"Round {latest_round.id} has no training examples (old round format). "
+                        "Using validation examples instead. Consider finalizing a new round for better results."
+                    )
+
                 # Build the reprompt and get the examples that will be shown
                 self.query_one(EventLog).info("Building prompt for GPT-5...")
                 log.info("About to call _build_reprompt_prompt")
