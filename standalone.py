@@ -1237,6 +1237,7 @@ class StandaloneApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("space", "process_unprocessed", "Process data"),
         Binding("r", "finalize_round", "Finalize round"),
+        Binding("g", "generate_prompt", "Generate prompt"),
         Binding("s", "save_snapshot", "Export JSON"),
         Binding("p", "edit_prompt", "Edit prompt"),
         Binding("t", "toggle_stub", "Toggle stub"),
@@ -1370,6 +1371,115 @@ class StandaloneApp(App[None]):
         async def worker() -> None:
             record = await loop.run_in_executor(None, self.engine.run_round, notify)
             self.post_message(RoundFinished(record))
+
+        self._worker = asyncio.create_task(worker())
+
+    def _build_reprompt_prompt(self, record: RoundRecord) -> str:
+        """Build a prompt asking gpt-5 to improve the current prompt based on results."""
+
+        # Show incorrect examples (up to 5)
+        incorrect = [ex for ex in record.examples if not ex.correct]
+        correct = [ex for ex in record.examples if ex.correct]
+
+        # Build confusion matrix display
+        matrix_lines = []
+        for (label, pred), count in sorted(record.metrics.confusion_matrix.items()):
+            matrix_lines.append(f"  {label!r} → {pred!r}: {count}")
+
+        # Build examples display
+        incorrect_examples = []
+        for idx, ex in enumerate(incorrect[:5], 1):
+            incorrect_examples.append(
+                f"  {idx}. Feature A={ex.feature_a}, Feature B={ex.feature_b}\n"
+                f"     True label: {ex.label!r}, Predicted: {ex.prediction!r}"
+            )
+
+        correct_examples = []
+        for idx, ex in enumerate(correct[:3], 1):
+            correct_examples.append(
+                f"  {idx}. Feature A={ex.feature_a}, Feature B={ex.feature_b}\n"
+                f"     Label: {ex.label!r} (predicted correctly)"
+            )
+
+        prompt = f"""You are part of a program that is trying to learn inference rules on this dataset. At each round, a prompt is shown to an LLM together with one row of data at a time. It then attempts to predict the outcome based on the rules in the prompt. This process works well if the prompt has very explicit and clear rules: aim for unambiguous thresholds for values, clear criteria for labels and careful wording.
+
+We would like to improve the prompt that is being used.
+
+Please create a new prompt that will reduce the number of false positives and false negatives in this dataset. You can see the prompt that has been used previously, and how effective it was. There are also some examples of where the prompt did and didn't work.
+
+Remember: you need to create rules. Don't just waffle about what changes need to happen. Look at the examples where the previous prediction system got it wrong, and try to come up with at least one new rule that would handle one of those situations correctly.
+
+----------------------------
+
+## Current Prompt (Round {record.id})
+
+{record.prompt}
+
+## Results
+
+Validation Accuracy: {record.metrics.accuracy:.1%}
+Total validation examples: {len(record.examples)}
+Correct: {len(correct)}
+Incorrect: {len(incorrect)}
+
+### Confusion Matrix
+{chr(10).join(matrix_lines)}
+
+### Examples Where the Prompt FAILED
+{chr(10).join(incorrect_examples) if incorrect_examples else "  (None - all predictions were correct!)"}
+
+### Examples Where the Prompt SUCCEEDED
+{chr(10).join(correct_examples) if correct_examples else "  (None)"}
+
+----------------------------
+
+Based on this analysis, please generate an improved prompt that will perform better on this dataset.
+"""
+        return prompt
+
+    async def action_generate_prompt(self) -> None:
+        """Generate a new prompt using gpt-5 based on the latest round results (g key)."""
+        if self._worker and not self._worker.done():
+            self.query_one(EventLog).warning("Wait for processing to complete first")
+            return
+
+        if not self.rounds:
+            self.query_one(EventLog).warning("No rounds completed yet. Press SPACE to process data and 'r' to finalize a round first.")
+            return
+
+        # Use the most recent round
+        latest_round = self.rounds[-1]
+
+        self.query_one(EventLog).info(f"Generating new prompt with gpt-5 based on Round {latest_round.id}...")
+        loop = asyncio.get_running_loop()
+
+        async def worker() -> None:
+            try:
+                reprompt_prompt = self._build_reprompt_prompt(latest_round)
+
+                # Call gpt-5 to generate a new prompt
+                new_prompt_data, process_info = await loop.run_in_executor(
+                    None,
+                    llmcall.dispatch_reprompt_prompt,
+                    "gpt-5",
+                    reprompt_prompt
+                )
+
+                new_prompt = new_prompt_data['updated_prompt']
+                reasoning = new_prompt_data.get('reasoning', '')
+
+                # Update the prompt manager
+                self.prompt_manager.set_prompt(new_prompt)
+                self.query_one(PromptPanel).update_prompt(new_prompt)
+
+                # Log the update
+                self.query_one(EventLog).info(f"New prompt generated by gpt-5")
+                if reasoning:
+                    self.query_one(EventLog).info(f"Reasoning: {reasoning[:100]}...")
+
+            except Exception as e:
+                self.query_one(EventLog).error(f"Failed to generate prompt: {e}")
+                log.exception("Prompt generation failed")
 
         self._worker = asyncio.create_task(worker())
 
