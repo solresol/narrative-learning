@@ -1144,24 +1144,35 @@ class UnderlingPanel(Static):
 
     def highlight_examples(self, examples: List[RoundExample]) -> None:
         """Highlight rows that match the given examples (used for prompt generation)."""
+        log.info(f"highlight_examples: Starting with {len(examples)} examples")
+
         # Build a set of example signatures for quick lookup
         example_sigs = {(ex.feature_a, ex.feature_b, ex.label) for ex in examples}
+        log.info(f"highlight_examples: Built signature set with {len(example_sigs)} unique sigs")
 
         highlighted_count = 0
+
+        log.info(f"highlight_examples: About to iterate through {len(self.all_rows)} rows")
 
         # Iterate through stored rows and highlight matching ones
         for row_idx, row in enumerate(self.all_rows):
             # Check if this row matches any example (using original unformatted values)
             if (row.feature_a, row.feature_b, row.label) in example_sigs:
+                log.info(f"highlight_examples: Found match at row {row_idx}")
+
                 row_key = self.data_table.get_row_at(row_idx)
                 if row_key is None:
+                    log.info(f"highlight_examples: row_key is None for row {row_idx}, skipping")
                     continue
 
+                log.info(f"highlight_examples: Getting row data for row {row_idx}")
                 # Get the row data (columns: marker, feature_a, feature_b, label, prediction)
                 row_data = self.data_table.get_row(row_key)
                 if len(row_data) < 4:
+                    log.info(f"highlight_examples: row_data too short ({len(row_data)}), skipping")
                     continue
 
+                log.info(f"highlight_examples: Extracting cell values for row {row_idx}")
                 # Extract current display values
                 feat_a_cell = row_data[1]
                 feat_b_cell = row_data[2]
@@ -1174,22 +1185,30 @@ class UnderlingPanel(Static):
                 # Highlight this row with yellow background
                 highlight_style = "bold on yellow"
 
+                log.info(f"highlight_examples: About to update cells for row {row_idx}")
                 # Update all cells in the row with highlight
                 self.data_table.update_cell_at((row_idx, 0), row_data[0])  # Keep marker as is
+                log.info(f"highlight_examples: Updated cell 0")
                 self.data_table.update_cell_at((row_idx, 1), Text(feat_a, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 1")
                 self.data_table.update_cell_at((row_idx, 2), Text(feat_b, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 2")
                 self.data_table.update_cell_at((row_idx, 3), Text(label, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 3")
 
                 # Keep prediction styling if it exists
                 if len(row_data) > 4:
                     pred_cell = row_data[4]
                     pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
                     if pred_text:
+                        log.info(f"highlight_examples: About to update cell 4 with prediction")
                         self.data_table.update_cell_at((row_idx, 4), Text(pred_text, style=highlight_style))
+                        log.info(f"highlight_examples: Updated cell 4")
 
                 highlighted_count += 1
+                log.info(f"highlight_examples: Completed row {row_idx}, total highlighted: {highlighted_count}")
 
-        log.info(f"Highlighted {highlighted_count} rows out of {len(examples)} examples")
+        log.info(f"highlight_examples: Finished, highlighted {highlighted_count} rows out of {len(examples)} examples")
 
     def clear_highlighting(self, all_rows: Sequence[DatasetRow]) -> None:
         """Remove highlighting from all rows, restoring normal appearance."""
