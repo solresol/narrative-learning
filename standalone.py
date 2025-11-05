@@ -835,55 +835,102 @@ class RoundEngine:
         self.database = database
         self.model = model
         self.prompt_manager = prompt_manager
+        # Track which indices in the all_rows list have been processed
+        self.processed_indices: set[int] = set()
+        # Store predictions for each index
+        self.predictions: Dict[int, str] = {}
+
+    def get_all_rows(self) -> List[DatasetRow]:
+        """Get all data points (training + validation)."""
+        return self.split.train + self.split.validation
+
+    def process_unprocessed_points(
+        self,
+        notify: Callable[[RoundProgress], None],
+    ) -> int:
+        """Process all unprocessed data points incrementally.
+
+        Returns the number of points processed.
+        """
+        all_rows = self.get_all_rows()
+        prompt = self.prompt_manager.current_prompt
+
+        # Find unprocessed indices
+        unprocessed = [i for i in range(len(all_rows)) if i not in self.processed_indices]
+
+        if not unprocessed:
+            notify(RoundProgress("Complete", len(all_rows), len(all_rows), None))
+            return 0
+
+        processed_count = 0
+        for idx in unprocessed:
+            row = all_rows[idx]
+            total_processed = len(self.processed_indices)
+            notify(RoundProgress("Calling model", total_processed, len(all_rows), idx, None))
+
+            prediction = self.model.generate(prompt, [row])[0]
+            self.predictions[idx] = prediction
+            self.processed_indices.add(idx)
+            processed_count += 1
+
+            # Notify with the prediction so UI can update
+            notify(RoundProgress("Calling model", total_processed + 1, len(all_rows), idx, prediction))
+
+        notify(RoundProgress("Complete", len(self.processed_indices), len(all_rows), None))
+        return processed_count
 
     def run_round(
         self,
         notify: Callable[[RoundProgress], None],
     ) -> RoundRecord:
-        notify(RoundProgress("Preparing data", 0, len(self.split.validation), None))
-        prompt = self.prompt_manager.current_prompt
+        """Complete the current round by processing unprocessed points and saving results."""
+        # Process any remaining unprocessed points
+        self.process_unprocessed_points(notify)
 
-        # Stage 1: Generate predictions sequentially to allow progress updates.
-        predictions: List[str] = []
-        notes_log: List[str] = []
-        for idx, row in enumerate(self.split.validation):
-            notify(RoundProgress("Calling model", idx, len(self.split.validation), idx, None))
-            prediction = self.model.generate(prompt, [row])[0]
-            predictions.append(prediction)
-            notes_log.append(
-                f"Processed ({row.feature_a}, {row.feature_b}) -> {prediction}"
-            )
-            # Notify with the prediction so UI can update
-            notify(RoundProgress("Calling model", idx + 1, len(self.split.validation), idx, prediction))
-        notify(RoundProgress("Scoring", len(self.split.validation), len(self.split.validation), None))
+        notify(RoundProgress("Scoring", len(self.processed_indices), len(self.processed_indices), None))
+
+        # Build examples from validation set only (for metrics)
+        all_rows = self.get_all_rows()
+        validation_start_idx = len(self.split.train)
 
         examples = []
-        for row, pred in zip(self.split.validation, predictions):
-            examples.append(
-                RoundExample(
-                    feature_a=row.feature_a,
-                    feature_b=row.feature_b,
-                    label=row.label,
-                    prediction=pred,
-                    correct=pred == row.label,
+        for val_idx, val_row in enumerate(self.split.validation):
+            all_idx = validation_start_idx + val_idx
+            if all_idx in self.predictions:
+                pred = self.predictions[all_idx]
+                examples.append(
+                    RoundExample(
+                        feature_a=val_row.feature_a,
+                        feature_b=val_row.feature_b,
+                        label=val_row.label,
+                        prediction=pred,
+                        correct=pred == val_row.label,
+                    )
                 )
-            )
+
+        notes_log = [f"Processed {len(self.processed_indices)}/{len(all_rows)} data points"]
         metrics = compute_metrics(examples, notes="\n".join(notes_log))
         updated_prompt, feedback = self.prompt_manager.apply_feedback(examples)
         metrics.notes = feedback + "\n" + metrics.notes
-        notify(RoundProgress("Saving", len(self.split.validation), len(self.split.validation), None))
+
+        notify(RoundProgress("Saving", len(self.processed_indices), len(self.processed_indices), None))
         round_id, created_at = self.database.insert_round(
-            prompt=prompt, metrics=metrics, examples=examples
+            prompt=self.prompt_manager.current_prompt, metrics=metrics, examples=examples
         )
         record = RoundRecord(
             id=round_id,
             created_at=created_at,
-            prompt=prompt,
+            prompt=self.prompt_manager.current_prompt,
             metrics=metrics,
             examples=examples,
         )
-        log.info("Updated prompt to %s", updated_prompt)
-        notify(RoundProgress("Complete", len(self.split.validation), len(self.split.validation), None))
+
+        # Reset for next round
+        self.processed_indices.clear()
+        self.predictions.clear()
+
+        log.info("Round complete, updated prompt to %s", updated_prompt)
+        notify(RoundProgress("Complete", len(all_rows), len(all_rows), None))
         return record
 
 
@@ -1187,8 +1234,8 @@ class StandaloneApp(App[None]):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("n", "next_round", "Next round"),
-        Binding("r", "regenerate", "Regenerate"),
+        Binding("space", "process_unprocessed", "Process data"),
+        Binding("r", "finalize_round", "Finalize round"),
         Binding("s", "save_snapshot", "Export JSON"),
         Binding("p", "edit_prompt", "Edit prompt"),
         Binding("t", "toggle_stub", "Toggle stub"),
@@ -1268,17 +1315,52 @@ class StandaloneApp(App[None]):
             self.current_round = self.rounds[-1]
             self.query_one(RoundDetail).show_round(self.current_round)
 
-    async def action_next_round(self) -> None:
+    async def action_process_unprocessed(self) -> None:
+        """Process unprocessed data points (SPACE key)."""
+        if self._worker and not self._worker.done():
+            self.query_one(EventLog).warning("Processing already in progress")
+            return
+
+        # Initialize the underling panel if needed
+        underling = self.query_one(UnderlingPanel)
+        all_rows = self.engine.get_all_rows()
+        if len(self.engine.processed_indices) == 0:
+            # Starting fresh
+            underling.reset(all_rows, self.split.validation)
+            self.query_one(EventLog).info("Starting to process data points")
+
+        unprocessed_count = len(all_rows) - len(self.engine.processed_indices)
+        if unprocessed_count == 0:
+            self.query_one(EventLog).info("All data points already processed. Press 'r' to finalize round.")
+            return
+
+        self.query_one(EventLog).info(f"Processing {unprocessed_count} unprocessed data points")
+        loop = asyncio.get_running_loop()
+
+        def notify(message: RoundProgress) -> None:
+            self.post_message(message)
+
+        async def worker() -> None:
+            await loop.run_in_executor(None, self.engine.process_unprocessed_points, notify)
+            self.query_one(EventLog).info("Processing complete. Press 'r' to finalize round or 'p' to edit prompt.")
+
+        self._worker = asyncio.create_task(worker())
+
+    async def action_finalize_round(self) -> None:
+        """Finalize the current round and save results (r key)."""
+        if self._worker and not self._worker.done():
+            self.query_one(EventLog).warning("Wait for processing to complete first")
+            return
+
+        if len(self.engine.processed_indices) == 0:
+            self.query_one(EventLog).warning("No data points processed yet. Press SPACE to process data.")
+            return
+
         if self.max_rounds is not None and len(self.rounds) >= self.max_rounds:
             self.query_one(EventLog).warning("Max rounds reached; cannot create new round.")
             return
-        if self._worker and not self._worker.done():
-            self.query_one(EventLog).warning("Round already in progress")
-            return
-        underling = self.query_one(UnderlingPanel)
-        all_rows = self.split.train + self.split.validation
-        underling.reset(all_rows, self.split.validation)
-        self.query_one(EventLog).info("Starting new round")
+
+        self.query_one(EventLog).info("Finalizing round and saving results")
         loop = asyncio.get_running_loop()
 
         def notify(message: RoundProgress) -> None:
@@ -1289,14 +1371,6 @@ class StandaloneApp(App[None]):
             self.post_message(RoundFinished(record))
 
         self._worker = asyncio.create_task(worker())
-
-    async def action_regenerate(self) -> None:
-        if not self.rounds:
-            self.query_one(EventLog).warning("No previous round to regenerate.")
-            return
-        self.prompt_manager.set_prompt(self.rounds[-1].prompt)
-        self.query_one(PromptPanel).update_prompt(self.prompt_manager.current_prompt)
-        await self.action_next_round()
 
     async def action_save_snapshot(self) -> None:
         target = self.export_path or Path("standalone_export.json")
@@ -1313,15 +1387,15 @@ class StandaloneApp(App[None]):
             self.query_one(EventLog).info("Prompt updated by user")
 
     async def action_toggle_stub(self) -> None:
-        if not isinstance(self.model, StubModelAdapter):
-            self.query_one(EventLog).warning("Only stub mode is available in this build.")
-            return
-        if "(stub)" in self.model.name:
-            self.model.name = self.model.name.replace(" (stub)", "")
-            self.query_one(EventLog).info("Stub label hidden; behaviour unchanged.")
+        if isinstance(self.model, StubModelAdapter):
+            if "(stub)" in self.model.name:
+                self.model.name = self.model.name.replace(" (stub)", "")
+                self.query_one(EventLog).info("Stub label hidden; behaviour unchanged.")
+            else:
+                self.model.name = f"{self.model.name} (stub)"
+                self.query_one(EventLog).info("Stub label restored.")
         else:
-            self.model.name = f"{self.model.name} (stub)"
-            self.query_one(EventLog).info("Stub label restored.")
+            self.query_one(EventLog).info(f"Using real LLM: {self.model.name}")
 
     async def _calculate_baselines(self) -> None:
         """Calculate baseline models in the background, updating UI as each completes."""
