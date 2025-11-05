@@ -1106,8 +1106,9 @@ class UnderlingPanel(Static):
         status.update(f"{message.stage} ({message.completed}/{message.total})")
 
         # Update cursor and prediction if available
-        if message.current_index is not None and message.current_index in self.validation_to_all_map:
-            all_row_idx = self.validation_to_all_map[message.current_index]
+        # message.current_index is already an all_rows index
+        if message.current_index is not None:
+            all_row_idx = message.current_index
             self.data_table.move_cursor(row=all_row_idx)
 
             # Update prediction column if we have a prediction
