@@ -1075,7 +1075,7 @@ class UnderlingPanel(Static):
 
         # Clear and setup table
         self.data_table.clear(columns=True)
-        self.data_table.add_columns("", "Feature A", "Feature B", "Truth", "Pred")
+        self.data_table.add_columns("ID", "", "Feature A", "Feature B", "Truth", "Pred")
 
         # Track which rows are validation
         self.validation_indices.clear()
@@ -1103,7 +1103,9 @@ class UnderlingPanel(Static):
             feat_b = format_sig_figs(row.feature_b)
 
             # Create styled cells for validation rows
+            id_text = str(idx)
             if is_validation:
+                id_text = Text(str(idx), style=style)
                 feat_a_text = Text(feat_a, style=style)
                 feat_b_text = Text(feat_b, style=style)
                 label_text = Text(row.label, style=style)
@@ -1114,7 +1116,7 @@ class UnderlingPanel(Static):
                 label_text = row.label
                 pred_text = ""
 
-            self.data_table.add_row(marker, feat_a_text, feat_b_text, label_text, pred_text)
+            self.data_table.add_row(id_text, marker, feat_a_text, feat_b_text, label_text, pred_text)
 
         status = self.query_one("#underling-status", Label)
         status.update("Awaiting round start…")
@@ -1134,13 +1136,13 @@ class UnderlingPanel(Static):
             if message.prediction is not None:
                 row_key = self.data_table.get_row_at(all_row_idx)
                 if row_key is not None:
-                    # Update the prediction column (index 4)
+                    # Update the prediction column (index 5, after ID and marker)
                     is_validation = all_row_idx in self.validation_indices
                     if is_validation:
                         pred_text = Text(message.prediction, style="on blue")
                     else:
                         pred_text = message.prediction
-                    self.data_table.update_cell_at((all_row_idx, 4), pred_text)
+                    self.data_table.update_cell_at((all_row_idx, 5), pred_text)
 
     def highlight_examples(self, examples: List[RoundExample]) -> None:
         """Highlight rows that match the given examples (used for prompt generation)."""
@@ -1183,19 +1185,19 @@ class UnderlingPanel(Static):
                     continue
 
                 log.info(f"highlight_examples: Getting row data for row {row_idx}")
-                # Get the row data (columns: marker, feature_a, feature_b, label, prediction)
+                # Get the row data (columns: ID, marker, feature_a, feature_b, label, prediction)
                 row_data = self.data_table.get_row(row_key)
-                if len(row_data) < 4:
+                if len(row_data) < 5:
                     log.info(f"highlight_examples: row_data too short ({len(row_data)}), skipping")
                     if event_log:
                         event_log.warning(f"[DEBUG] row_data too short")
                     continue
 
                 log.info(f"highlight_examples: Extracting cell values for row {row_idx}")
-                # Extract current display values
-                feat_a_cell = row_data[1]
-                feat_b_cell = row_data[2]
-                label_cell = row_data[3]
+                # Extract current display values (accounting for new ID column)
+                feat_a_cell = row_data[2]
+                feat_b_cell = row_data[3]
+                label_cell = row_data[4]
 
                 feat_a = str(feat_a_cell.plain) if isinstance(feat_a_cell, Text) else str(feat_a_cell)
                 feat_b = str(feat_b_cell.plain) if isinstance(feat_b_cell, Text) else str(feat_b_cell)
@@ -1208,26 +1210,24 @@ class UnderlingPanel(Static):
                 if event_log:
                     event_log.info(f"[DEBUG] About to update cells for row {row_idx}")
 
-                # Update all cells in the row with highlight
-                self.data_table.update_cell_at((row_idx, 0), row_data[0])  # Keep marker as is
-                log.info(f"highlight_examples: Updated cell 0")
-                self.data_table.update_cell_at((row_idx, 1), Text(feat_a, style=highlight_style))
-                log.info(f"highlight_examples: Updated cell 1")
-                self.data_table.update_cell_at((row_idx, 2), Text(feat_b, style=highlight_style))
-                log.info(f"highlight_examples: Updated cell 2")
-                self.data_table.update_cell_at((row_idx, 3), Text(label, style=highlight_style))
-                log.info(f"highlight_examples: Updated cell 3")
+                # Update all cells in the row with highlight (ID and marker stay as is)
+                self.data_table.update_cell_at((row_idx, 2), Text(feat_a, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 2 (feat_a)")
+                self.data_table.update_cell_at((row_idx, 3), Text(feat_b, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 3 (feat_b)")
+                self.data_table.update_cell_at((row_idx, 4), Text(label, style=highlight_style))
+                log.info(f"highlight_examples: Updated cell 4 (label)")
                 if event_log:
-                    event_log.info(f"[DEBUG] Updated cells 0-3 for row {row_idx}")
+                    event_log.info(f"[DEBUG] Updated cells 2-4 for row {row_idx}")
 
                 # Keep prediction styling if it exists
-                if len(row_data) > 4:
-                    pred_cell = row_data[4]
+                if len(row_data) > 5:
+                    pred_cell = row_data[5]
                     pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
                     if pred_text:
-                        log.info(f"highlight_examples: About to update cell 4 with prediction")
-                        self.data_table.update_cell_at((row_idx, 4), Text(pred_text, style=highlight_style))
-                        log.info(f"highlight_examples: Updated cell 4")
+                        log.info(f"highlight_examples: About to update cell 5 with prediction")
+                        self.data_table.update_cell_at((row_idx, 5), Text(pred_text, style=highlight_style))
+                        log.info(f"highlight_examples: Updated cell 5")
 
                 highlighted_count += 1
                 log.info(f"highlight_examples: Completed row {row_idx}, total highlighted: {highlighted_count}")
@@ -1261,21 +1261,22 @@ class UnderlingPanel(Static):
                 feat_b_text = feat_b
                 label_text = row.label
 
-            self.data_table.update_cell_at((idx, 1), feat_a_text)
-            self.data_table.update_cell_at((idx, 2), feat_b_text)
-            self.data_table.update_cell_at((idx, 3), label_text)
+            # Update columns (accounting for ID column at position 0)
+            self.data_table.update_cell_at((idx, 2), feat_a_text)
+            self.data_table.update_cell_at((idx, 3), feat_b_text)
+            self.data_table.update_cell_at((idx, 4), label_text)
 
             # Preserve prediction column if it exists
             row_data = self.data_table.get_row(row_key)
-            if len(row_data) > 4:
-                pred_cell = row_data[4]
+            if len(row_data) > 5:
+                pred_cell = row_data[5]
                 pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
                 if pred_text:
                     # Restore prediction with appropriate styling
                     if is_validation:
-                        self.data_table.update_cell_at((idx, 4), Text(pred_text, style="on blue"))
+                        self.data_table.update_cell_at((idx, 5), Text(pred_text, style="on blue"))
                     else:
-                        self.data_table.update_cell_at((idx, 4), pred_text)
+                        self.data_table.update_cell_at((idx, 5), pred_text)
 
 
 class PromptPanel(Static):
