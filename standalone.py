@@ -1056,6 +1056,7 @@ class UnderlingPanel(Static):
         self.data_table.cursor_type = "row"
         self.validation_indices: set[int] = set()
         self.validation_to_all_map: dict[int, int] = {}  # Maps validation index to all_rows index
+        self.all_rows: List[DatasetRow] = []  # Store original data for matching
 
     def compose(self) -> ComposeResult:
         yield Label("Underling Progress", id="underling-title")
@@ -1065,6 +1066,9 @@ class UnderlingPanel(Static):
 
     def reset(self, all_rows: Sequence[DatasetRow], validation_rows: Sequence[DatasetRow]) -> None:
         """Reset the panel with all data, marking validation rows specially."""
+        # Store original data for later matching
+        self.all_rows = list(all_rows)
+
         # Build validation set for quick lookup
         validation_set = {(r.feature_a, r.feature_b, r.label) for r in validation_rows}
 
@@ -1145,31 +1149,31 @@ class UnderlingPanel(Static):
         # Build a set of example signatures for quick lookup
         example_sigs = {(ex.feature_a, ex.feature_b, ex.label) for ex in examples}
 
-        # Iterate through all rows and highlight matching ones
-        row_count = self.data_table.row_count
-        for row_idx in range(row_count):
-            row_key = self.data_table.get_row_at(row_idx)
-            if row_key is None:
-                continue
+        highlighted_count = 0
 
-            # Get the row data (columns: marker, feature_a, feature_b, label, prediction)
-            row_data = self.data_table.get_row(row_key)
-            if len(row_data) < 4:
-                continue
+        # Iterate through stored rows and highlight matching ones
+        for row_idx, row in enumerate(self.all_rows):
+            # Check if this row matches any example (using original unformatted values)
+            if (row.feature_a, row.feature_b, row.label) in example_sigs:
+                row_key = self.data_table.get_row_at(row_idx)
+                if row_key is None:
+                    continue
 
-            # Extract feature values (handling Text objects)
-            feat_a_cell = row_data[1]
-            feat_b_cell = row_data[2]
-            label_cell = row_data[3]
+                # Get the row data (columns: marker, feature_a, feature_b, label, prediction)
+                row_data = self.data_table.get_row(row_key)
+                if len(row_data) < 4:
+                    continue
 
-            feat_a = str(feat_a_cell.plain) if isinstance(feat_a_cell, Text) else str(feat_a_cell)
-            feat_b = str(feat_b_cell.plain) if isinstance(feat_b_cell, Text) else str(feat_b_cell)
-            label = str(label_cell.plain) if isinstance(label_cell, Text) else str(label_cell)
+                # Extract current display values
+                feat_a_cell = row_data[1]
+                feat_b_cell = row_data[2]
+                label_cell = row_data[3]
 
-            # Check if this row matches any example
-            if (feat_a, feat_b, label) in example_sigs:
+                feat_a = str(feat_a_cell.plain) if isinstance(feat_a_cell, Text) else str(feat_a_cell)
+                feat_b = str(feat_b_cell.plain) if isinstance(feat_b_cell, Text) else str(feat_b_cell)
+                label = str(label_cell.plain) if isinstance(label_cell, Text) else str(label_cell)
+
                 # Highlight this row with yellow background
-                is_validation = row_idx in self.validation_indices
                 highlight_style = "bold on yellow"
 
                 # Update all cells in the row with highlight
@@ -1184,6 +1188,10 @@ class UnderlingPanel(Static):
                     pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
                     if pred_text:
                         self.data_table.update_cell_at((row_idx, 4), Text(pred_text, style=highlight_style))
+
+                highlighted_count += 1
+
+        log.info(f"Highlighted {highlighted_count} rows out of {len(examples)} examples")
 
     def clear_highlighting(self, all_rows: Sequence[DatasetRow]) -> None:
         """Remove highlighting from all rows, restoring normal appearance."""
@@ -1586,6 +1594,7 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
         async def worker() -> None:
             try:
                 # Build the reprompt and get the examples that will be shown
+                self.query_one(EventLog).info("Building prompt for GPT-5...")
                 reprompt_prompt, shown_examples = self._build_reprompt_prompt(latest_round)
 
                 # Highlight the rows that are being used as examples
@@ -1594,12 +1603,18 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 self.query_one(EventLog).info(f"Highlighting {len(shown_examples)} example rows for prompt generation")
 
                 # Call gpt-5 to generate a new prompt
+                self.query_one(EventLog).info("Calling GPT-5 to generate new prompt...")
+                log.info(f"Calling dispatch_reprompt_prompt with model=gpt-5")
+
                 new_prompt_data, process_info = await loop.run_in_executor(
                     None,
                     llmcall.dispatch_reprompt_prompt,
                     "gpt-5",
                     reprompt_prompt
                 )
+
+                log.info(f"GPT-5 returned: {new_prompt_data}")
+                self.query_one(EventLog).info("GPT-5 response received")
 
                 new_prompt = new_prompt_data['updated_prompt']
                 reasoning = new_prompt_data.get('reasoning', '')
@@ -1623,6 +1638,8 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 self.query_one(UnderlingPanel).clear_highlighting(all_rows)
                 self.query_one(EventLog).error(f"Failed to generate prompt: {e}")
                 log.exception("Prompt generation failed")
+                import traceback
+                self.query_one(EventLog).error(f"Traceback: {traceback.format_exc()[:200]}")
 
         self._worker = asyncio.create_task(worker())
 
