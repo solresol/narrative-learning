@@ -1367,8 +1367,27 @@ class StandaloneApp(App[None]):
         height: auto;
         max-height: 10;
     }
+    #prompt-panel {
+        height: auto;
+        max-height: 15;
+        overflow-y: auto;
+    }
+    #underling-panel {
+        height: 2fr;
+    }
+    #underling-title {
+        height: auto;
+    }
+    #underling-status {
+        height: auto;
+    }
     #underling-table {
         height: 1fr;
+        min-height: 10;
+    }
+    #round-detail {
+        height: 1fr;
+        overflow-y: auto;
     }
     #prompt-editor {
         padding: 2;
