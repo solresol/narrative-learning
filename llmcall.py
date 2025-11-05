@@ -44,6 +44,8 @@ OPENAI_MODELS = {
     "gpt-4.1-mini",
     "gpt-4.5-preview",
     "gpt-3.5-turbo",
+    "gpt-5",
+    "gpt-5-mini",
 }
 
 
@@ -481,6 +483,10 @@ def openai_prediction(model, prompt, valid_predictions):
         cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
     elif 'o1' in model:
         cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
+    elif 'gpt-5-mini' in model:
+        cost = (3 * prompt_tokens + 12 * completion_tokens) / 1000000  # Placeholder pricing
+    elif 'gpt-5' in model:
+        cost = (20 * prompt_tokens + 80 * completion_tokens) / 1000000  # Placeholder pricing
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
@@ -548,6 +554,10 @@ def openai_reprompt(model, prompting_creation_prompt):
         cost = (2.5 * prompt_tokens + 10 * completion_tokens) / 1000000
     elif 'o1' in model:
         cost = (15 * prompt_tokens + 60 * completion_tokens) / 1000000
+    elif 'gpt-5-mini' in model:
+        cost = (3 * prompt_tokens + 12 * completion_tokens) / 1000000  # Placeholder pricing
+    elif 'gpt-5' in model:
+        cost = (20 * prompt_tokens + 80 * completion_tokens) / 1000000  # Placeholder pricing
     else:
         cost = None
     usage_obj = {'input_tokens': usage.prompt_tokens, 'output_tokens': usage.completion_tokens, 'cost': cost}
@@ -631,7 +641,7 @@ def dispatch_prediction_prompt(model, prompt, valid_predictions):
         return ollama_prediction(model, prompt, valid_predictions)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]:
         return claude_prediction(model, prompt, valid_predictions)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'o3', 'gpt-4.1', 'gpt-4.5-preview', 'gpt-3.5-turbo', 'gpt-4.1-mini', 'gpt-4o-2024-11-20']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1', 'o3', 'gpt-4.1', 'gpt-4.5-preview', 'gpt-3.5-turbo', 'gpt-4.1-mini', 'gpt-4o-2024-11-20', 'gpt-5', 'gpt-5-mini']:
         return openai_prediction(model, prompt, valid_predictions)
     if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp", "gemini-2.5-pro-exp-03-25"]:
         return gemini_prediction(model, prompt, valid_predictions)
@@ -719,7 +729,7 @@ def dispatch_reprompt_prompt(model, prompting_creation_prompt):
         return ollama_reprompt(model, prompting_creation_prompt)
     if model in ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219", "claude-sonnet-4-20250514", "claude-opus-4-20250514"]:
         return claude_reprompt(model, prompting_creation_prompt)
-    if model in ["gpt-4o", "gpt-4o-mini", 'o1',  'o3', 'gpt-4.1', 'gpt-4.5-preview', 'gpt-3.5-turbo', 'gpt-4o-2024-11-20']:
+    if model in ["gpt-4o", "gpt-4o-mini", 'o1',  'o3', 'gpt-4.1', 'gpt-4.5-preview', 'gpt-3.5-turbo', 'gpt-4o-2024-11-20', 'gpt-5', 'gpt-5-mini']:
         return openai_reprompt(model, prompting_creation_prompt)
     if model in ["gemini-2.0-flash", "gemini-2.0-pro", "gemma-3-27b-it", "gemini-2.0-pro-exp", "gemini-2.5-pro-exp-03-25"]:
         return gemini_reprompt(model, prompting_creation_prompt)
