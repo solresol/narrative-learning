@@ -1522,8 +1522,8 @@ def bootstrap(argv: Optional[Sequence[str]] = None) -> StandaloneApp:
     # Extract valid predictions from dataset for tool calling
     valid_predictions = extract_valid_predictions(dataset)
 
-    # Use RealLLMAdapter by default
-    model = RealLLMAdapter(config.model_name, valid_predictions)
+    # Use RealLLMAdapter with hard-coded gpt-5-mini
+    model = RealLLMAdapter("gpt-5-mini", valid_predictions)
 
     prompt_manager = PromptManager("Choose randomly")
     export_path = args.export_json
