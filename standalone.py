@@ -1146,23 +1146,40 @@ class UnderlingPanel(Static):
         """Highlight rows that match the given examples (used for prompt generation)."""
         log.info(f"highlight_examples: Starting with {len(examples)} examples")
 
+        # Get EventLog for debugging output
+        try:
+            event_log = self.app.query_one(EventLog)
+        except:
+            event_log = None
+
+        if event_log:
+            event_log.info(f"[DEBUG] highlight_examples: Starting with {len(examples)} examples")
+
         # Build a set of example signatures for quick lookup
         example_sigs = {(ex.feature_a, ex.feature_b, ex.label) for ex in examples}
         log.info(f"highlight_examples: Built signature set with {len(example_sigs)} unique sigs")
+        if event_log:
+            event_log.info(f"[DEBUG] Built signature set with {len(example_sigs)} unique sigs")
 
         highlighted_count = 0
 
         log.info(f"highlight_examples: About to iterate through {len(self.all_rows)} rows")
+        if event_log:
+            event_log.info(f"[DEBUG] About to iterate through {len(self.all_rows)} rows")
 
         # Iterate through stored rows and highlight matching ones
         for row_idx, row in enumerate(self.all_rows):
             # Check if this row matches any example (using original unformatted values)
             if (row.feature_a, row.feature_b, row.label) in example_sigs:
                 log.info(f"highlight_examples: Found match at row {row_idx}")
+                if event_log:
+                    event_log.info(f"[DEBUG] Found match at row {row_idx}")
 
                 row_key = self.data_table.get_row_at(row_idx)
                 if row_key is None:
                     log.info(f"highlight_examples: row_key is None for row {row_idx}, skipping")
+                    if event_log:
+                        event_log.warning(f"[DEBUG] row_key is None for row {row_idx}")
                     continue
 
                 log.info(f"highlight_examples: Getting row data for row {row_idx}")
@@ -1170,6 +1187,8 @@ class UnderlingPanel(Static):
                 row_data = self.data_table.get_row(row_key)
                 if len(row_data) < 4:
                     log.info(f"highlight_examples: row_data too short ({len(row_data)}), skipping")
+                    if event_log:
+                        event_log.warning(f"[DEBUG] row_data too short")
                     continue
 
                 log.info(f"highlight_examples: Extracting cell values for row {row_idx}")
@@ -1186,6 +1205,9 @@ class UnderlingPanel(Static):
                 highlight_style = "bold on yellow"
 
                 log.info(f"highlight_examples: About to update cells for row {row_idx}")
+                if event_log:
+                    event_log.info(f"[DEBUG] About to update cells for row {row_idx}")
+
                 # Update all cells in the row with highlight
                 self.data_table.update_cell_at((row_idx, 0), row_data[0])  # Keep marker as is
                 log.info(f"highlight_examples: Updated cell 0")
@@ -1195,6 +1217,8 @@ class UnderlingPanel(Static):
                 log.info(f"highlight_examples: Updated cell 2")
                 self.data_table.update_cell_at((row_idx, 3), Text(label, style=highlight_style))
                 log.info(f"highlight_examples: Updated cell 3")
+                if event_log:
+                    event_log.info(f"[DEBUG] Updated cells 0-3 for row {row_idx}")
 
                 # Keep prediction styling if it exists
                 if len(row_data) > 4:
@@ -1207,8 +1231,12 @@ class UnderlingPanel(Static):
 
                 highlighted_count += 1
                 log.info(f"highlight_examples: Completed row {row_idx}, total highlighted: {highlighted_count}")
+                if event_log:
+                    event_log.info(f"[DEBUG] Completed row {row_idx}, total: {highlighted_count}")
 
         log.info(f"highlight_examples: Finished, highlighted {highlighted_count} rows out of {len(examples)} examples")
+        if event_log:
+            event_log.info(f"[DEBUG] Finished highlighting {highlighted_count} rows")
 
     def clear_highlighting(self, all_rows: Sequence[DatasetRow]) -> None:
         """Remove highlighting from all rows, restoring normal appearance."""
