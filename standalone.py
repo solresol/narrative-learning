@@ -39,6 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
+import llmcall
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
@@ -259,6 +260,12 @@ def split_dataset(rows: Sequence[DatasetRow], seed: int, ratio: float = 0.8) -> 
     return DatasetSplit(train=train, validation=validation)
 
 
+def extract_valid_predictions(rows: Sequence[DatasetRow]) -> List[str]:
+    """Extract the unique labels from the dataset to use as valid predictions."""
+    unique_labels = sorted(set(row.label for row in rows))
+    return unique_labels
+
+
 ###############################################################################
 # SQLite persistence helpers
 ###############################################################################
@@ -474,6 +481,52 @@ class StubModelAdapter(ModelAdapter):
                 prediction = row.label
             outputs.append(prediction)
         return outputs
+
+
+class RealLLMAdapter(ModelAdapter):
+    """Real LLM adapter that uses llmcall to make actual predictions."""
+
+    def __init__(self, model_name: str, valid_predictions: List[str]) -> None:
+        self.name = model_name
+        self.valid_predictions = valid_predictions
+
+    def generate(self, prompt: str, rows: Sequence[DatasetRow]) -> List[str]:
+        """Generate predictions for the given rows using the LLM.
+
+        The prompt should be the narrative instructions. This method will construct
+        the full prompt for each row (instructions + entity data) and call the LLM.
+        """
+        predictions: List[str] = []
+
+        for row in rows:
+            # Construct the full prompt following predict.py pattern
+            entity_data = f"Feature A: {row.feature_a}\nFeature B: {row.feature_b}"
+            full_prompt = f"""This is an experiment in identifying whether an LLM can predict outcomes. Use the following methodology for predicting the outcome for this entity.
+
+```
+{prompt}
+```
+
+Entity Data:
+{entity_data}
+"""
+
+            # Handle the special case of random choice
+            if prompt.strip() == "Choose randomly":
+                prediction = random.choice(self.valid_predictions)
+            else:
+                try:
+                    prediction_output, run_info = llmcall.dispatch_prediction_prompt(
+                        self.name, full_prompt, self.valid_predictions
+                    )
+                    prediction = prediction_output['prediction']
+                except (llmcall.MissingPrediction, llmcall.InvalidPrediction) as e:
+                    log.warning(f"LLM prediction failed: {e}, choosing randomly")
+                    prediction = random.choice(self.valid_predictions)
+
+            predictions.append(prediction)
+
+        return predictions
 
 
 class PromptManager:
@@ -1391,7 +1444,13 @@ def bootstrap(argv: Optional[Sequence[str]] = None) -> StandaloneApp:
     split = split_dataset(dataset, args.shuffle_seed)
     database = StandaloneDatabase(db_path)
     database.store_dataset(dataset)
-    model = StubModelAdapter(config.model_name, config.temperature)
+
+    # Extract valid predictions from dataset for tool calling
+    valid_predictions = extract_valid_predictions(dataset)
+
+    # Use RealLLMAdapter by default
+    model = RealLLMAdapter(config.model_name, valid_predictions)
+
     prompt_manager = PromptManager("Choose randomly")
     export_path = args.export_json
     # Baselines will be calculated asynchronously when the app starts
