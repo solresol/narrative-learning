@@ -1140,6 +1140,90 @@ class UnderlingPanel(Static):
                         pred_text = message.prediction
                     self.data_table.update_cell_at((all_row_idx, 4), pred_text)
 
+    def highlight_examples(self, examples: List[RoundExample]) -> None:
+        """Highlight rows that match the given examples (used for prompt generation)."""
+        # Build a set of example signatures for quick lookup
+        example_sigs = {(ex.feature_a, ex.feature_b, ex.label) for ex in examples}
+
+        # Iterate through all rows and highlight matching ones
+        row_count = self.data_table.row_count
+        for row_idx in range(row_count):
+            row_key = self.data_table.get_row_at(row_idx)
+            if row_key is None:
+                continue
+
+            # Get the row data (columns: marker, feature_a, feature_b, label, prediction)
+            row_data = self.data_table.get_row(row_key)
+            if len(row_data) < 4:
+                continue
+
+            # Extract feature values (handling Text objects)
+            feat_a_cell = row_data[1]
+            feat_b_cell = row_data[2]
+            label_cell = row_data[3]
+
+            feat_a = str(feat_a_cell.plain) if isinstance(feat_a_cell, Text) else str(feat_a_cell)
+            feat_b = str(feat_b_cell.plain) if isinstance(feat_b_cell, Text) else str(feat_b_cell)
+            label = str(label_cell.plain) if isinstance(label_cell, Text) else str(label_cell)
+
+            # Check if this row matches any example
+            if (feat_a, feat_b, label) in example_sigs:
+                # Highlight this row with yellow background
+                is_validation = row_idx in self.validation_indices
+                highlight_style = "bold on yellow"
+
+                # Update all cells in the row with highlight
+                self.data_table.update_cell_at((row_idx, 0), row_data[0])  # Keep marker as is
+                self.data_table.update_cell_at((row_idx, 1), Text(feat_a, style=highlight_style))
+                self.data_table.update_cell_at((row_idx, 2), Text(feat_b, style=highlight_style))
+                self.data_table.update_cell_at((row_idx, 3), Text(label, style=highlight_style))
+
+                # Keep prediction styling if it exists
+                if len(row_data) > 4:
+                    pred_cell = row_data[4]
+                    pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
+                    if pred_text:
+                        self.data_table.update_cell_at((row_idx, 4), Text(pred_text, style=highlight_style))
+
+    def clear_highlighting(self, all_rows: Sequence[DatasetRow]) -> None:
+        """Remove highlighting from all rows, restoring normal appearance."""
+        for idx, row in enumerate(all_rows):
+            row_key = self.data_table.get_row_at(idx)
+            if row_key is None:
+                continue
+
+            is_validation = idx in self.validation_indices
+
+            feat_a = format_sig_figs(row.feature_a)
+            feat_b = format_sig_figs(row.feature_b)
+
+            # Restore normal styling
+            if is_validation:
+                style = "on blue"
+                feat_a_text = Text(feat_a, style=style)
+                feat_b_text = Text(feat_b, style=style)
+                label_text = Text(row.label, style=style)
+            else:
+                feat_a_text = feat_a
+                feat_b_text = feat_b
+                label_text = row.label
+
+            self.data_table.update_cell_at((idx, 1), feat_a_text)
+            self.data_table.update_cell_at((idx, 2), feat_b_text)
+            self.data_table.update_cell_at((idx, 3), label_text)
+
+            # Preserve prediction column if it exists
+            row_data = self.data_table.get_row(row_key)
+            if len(row_data) > 4:
+                pred_cell = row_data[4]
+                pred_text = str(pred_cell.plain) if isinstance(pred_cell, Text) else str(pred_cell)
+                if pred_text:
+                    # Restore prediction with appropriate styling
+                    if is_validation:
+                        self.data_table.update_cell_at((idx, 4), Text(pred_text, style="on blue"))
+                    else:
+                        self.data_table.update_cell_at((idx, 4), pred_text)
+
 
 class PromptPanel(Static):
     """Displays current prompt text."""
@@ -1391,10 +1475,14 @@ class StandaloneApp(App[None]):
 
         self._worker = asyncio.create_task(worker())
 
-    def _build_reprompt_prompt(self, record: RoundRecord) -> str:
+    def _build_reprompt_prompt(self, record: RoundRecord) -> Tuple[str, List[RoundExample]]:
         """Build a prompt asking gpt-5 to improve the current prompt based on results.
 
         Uses TRAINING data only (not validation data) to avoid training on the test set.
+
+        Returns:
+            Tuple of (prompt_text, examples_used) where examples_used are the specific
+            examples shown in the prompt (for UI highlighting).
         """
 
         # Use training examples for prompt generation
@@ -1403,9 +1491,12 @@ class StandaloneApp(App[None]):
             # Fallback to validation examples if training examples not available (old data)
             train_examples = record.examples
 
-        # Show incorrect examples (up to 5)
+        # Show incorrect examples (up to 5) and correct examples (up to 3)
         incorrect = [ex for ex in train_examples if not ex.correct]
         correct = [ex for ex in train_examples if ex.correct]
+
+        # Track which examples we're actually showing
+        shown_examples = incorrect[:5] + correct[:3]
 
         # Build confusion matrix from training data
         train_confusion: Dict[Tuple[str, str], int] = {}
@@ -1474,7 +1565,7 @@ Incorrect: {len(incorrect)}
 
 Based on this analysis of the TRAINING data, please generate an improved prompt that will perform better on this dataset.
 """
-        return prompt
+        return prompt, shown_examples
 
     async def action_generate_prompt(self) -> None:
         """Generate a new prompt using gpt-5 based on the latest round results (g key)."""
@@ -1494,7 +1585,13 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
 
         async def worker() -> None:
             try:
-                reprompt_prompt = self._build_reprompt_prompt(latest_round)
+                # Build the reprompt and get the examples that will be shown
+                reprompt_prompt, shown_examples = self._build_reprompt_prompt(latest_round)
+
+                # Highlight the rows that are being used as examples
+                underling = self.query_one(UnderlingPanel)
+                underling.highlight_examples(shown_examples)
+                self.query_one(EventLog).info(f"Highlighting {len(shown_examples)} example rows for prompt generation")
 
                 # Call gpt-5 to generate a new prompt
                 new_prompt_data, process_info = await loop.run_in_executor(
@@ -1507,7 +1604,11 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                 new_prompt = new_prompt_data['updated_prompt']
                 reasoning = new_prompt_data.get('reasoning', '')
 
-                # Update the prompt manager
+                # Clear the highlighting
+                all_rows = self.engine.get_all_rows()
+                underling.clear_highlighting(all_rows)
+
+                # Update the prompt manager and display
                 self.prompt_manager.set_prompt(new_prompt)
                 self.query_one(PromptPanel).update_prompt(new_prompt)
 
@@ -1517,6 +1618,9 @@ Based on this analysis of the TRAINING data, please generate an improved prompt 
                     self.query_one(EventLog).info(f"Reasoning: {reasoning[:100]}...")
 
             except Exception as e:
+                # Clear highlighting even on error
+                all_rows = self.engine.get_all_rows()
+                self.query_one(UnderlingPanel).clear_highlighting(all_rows)
                 self.query_one(EventLog).error(f"Failed to generate prompt: {e}")
                 log.exception("Prompt generation failed")
 
