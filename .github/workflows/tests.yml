@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
 
 jobs:
   test:
@@ -17,7 +21,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U root" --health-interval=10s --health-timeout=5s --health-retries=5
+          --health-cmd="pg_isready -U root -d narrative" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
       - uses: actions/checkout@v3
       - name: Setup Python
@@ -34,7 +38,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client graphviz
-          curl -L https://datadumps.ifost.org.au/narrative-learning/narrative.sql.gz -o narrative.sql.gz
+          curl --http1.1 -fL \
+            --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 \
+            https://datadumps.ifost.org.au/narrative-learning/narrative.sql.gz \
+            -o narrative.sql.gz
           gunzip -c narrative.sql.gz | psql -d narrative
       - name: Run tests
         env:

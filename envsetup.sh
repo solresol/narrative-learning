@@ -23,9 +23,11 @@ DUMP_URL="https://datadumps.ifost.org.au/narrative-learning/narrative.sql.gz"
 DUMP_DIR="dumps"
 DUMP_FILE="$DUMP_DIR/narrative.sql.gz"
 mkdir -p "$DUMP_DIR"
-curl -L "$DUMP_URL" -o "$DUMP_FILE"
+curl --http1.1 -fL \
+    --retry 5 --retry-all-errors --retry-delay 5 \
+    --connect-timeout 30 \
+    "$DUMP_URL" -o "$DUMP_FILE"
 
 sudo -u postgres dropdb --if-exists narrative
 sudo -u postgres createdb -O narrative narrative
 gunzip -c "$DUMP_FILE" | sudo -u postgres psql narrative
-
